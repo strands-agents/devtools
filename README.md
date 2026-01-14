@@ -1,11 +1,19 @@
-## My Project
+# Strands Agents - Shared Workflows & Tools
 
-TODO: Fill this README out!
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-Be sure to:
+This repository contains common GitHub workflows, actions, and shared tooling used across the [Strands Agents](https://strandsagents.com) organization.
 
-* Change the title in this README
-* Edit your repository description on GitHub
+## Overview
+
+This repo serves as a central location for:
+
+- **GitHub Actions & Workflows**: Reusable CI/CD workflows for building, testing, and releasing Strands Agents projects
+- **Shared Tooling**: Common scripts and utilities used across multiple repositories
+
+## Documentation
+
+For more information about Strands Agents, visit our [documentation](https://strandsagents.com/latest/documentation/docs/).
 
 ## Security
 
@@ -13,5 +21,4 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 
 ## License
 
-This project is licensed under the Apache-2.0 License.
-
+This project is licensed under the Apache-2.0 License - see the [LICENSE](LICENSE) file for details.
