@@ -1,30 +1,34 @@
-name: 'Strands Write Executor'
-description: 'Execute write GitHub operations from JSONL artifact files during workflow execution'
-inputs:
-  ref:
-    description: 'Ref to push changes to'
-    required: true
-  issue_id:
-    description: 'Issue ID for fallback operations'
-    required: false
+name: 'Strands Finalize'
+description: 'Execute write GitHub operations and cleanup after workflow completion'
 
 runs:
   using: 'composite'
   steps:
+    - name: Download parsed input artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: strands-parsed-input
+
+    - name: Read parsed input
+      id: read-input
+      shell: bash
+      run: |
+        echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "issue_id=$(jq -r .issue_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
 
     # Push code changes before running write commands in case we need to create a pull request
     # Pull requests cannot be created if a branch has no diff with main, so push changes first, then create pr
     - name: Log if ref equals main
       shell: bash
       run: |
-        if [ "${{ inputs.ref }}" = "${{ github.event.repository.default_branch }}" ]; then
+        if [ "${{ steps.read-input.outputs.ref }}" = "${{ github.event.repository.default_branch }}" ]; then
           echo "🚫 Ref is default - skipping push operations to prevent direct commits to default branch"
         else
-          echo "✅ Ref is '${{ inputs.ref }}' - push operations will proceed"
+          echo "✅ Ref is '${{ steps.read-input.outputs.ref }}' - push operations will proceed"
         fi
     
     - name: Download repository state artifact
-      if: inputs.ref != github.event.repository.default_branch
+      if: steps.read-input.outputs.ref != github.event.repository.default_branch
       uses: actions/download-artifact@v4
       with:
         name: repository-state
@@ -32,7 +36,7 @@ runs:
       continue-on-error: true
 
     - name: Apply Artifact and Push changes
-      if: inputs.ref != github.event.repository.default_branch
+      if: steps.read-input.outputs.ref != github.event.repository.default_branch
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
@@ -57,7 +61,7 @@ runs:
           git config --local http."https://github.com/".extraheader "AUTHORIZATION: basic $(echo -n x-access-token:${{ github.token }}| base64)"
 
           # Fetch the remote repository
-          git fetch origin ${{ inputs.ref }}
+          git fetch origin ${{ steps.read-input.outputs.ref }}
           
           # Stage and commit any changes first
           if [ -n "$(git status --porcelain)" ]; then
@@ -68,11 +72,11 @@ runs:
           fi
           
           # Push if there are differences from remote
-          if ! git diff --quiet HEAD origin/${{ inputs.ref }}; then
+          if ! git diff --quiet HEAD origin/${{ steps.read-input.outputs.ref }}; then
             echo "📝 Differences from remote:"
-            git diff HEAD origin/${{ inputs.ref }}
-            echo "📤 Pushing changes to ${{ inputs.ref }}"
-            git push --force origin ${{ inputs.ref }}
+            git diff HEAD origin/${{ steps.read-input.outputs.ref }}
+            echo "📤 Pushing changes to ${{ steps.read-input.outputs.ref }}"
+            git push --force origin ${{ steps.read-input.outputs.ref }}
           else
             echo "📭 No changes to push"
           fi
@@ -101,12 +105,15 @@ runs:
           echo "exists=false" >> $GITHUB_OUTPUT
         fi
     
-    - name: Checkout repo to temp dir
+    - name: Checkout devtools repo
       if: steps.check-write-ops.outputs.exists == 'true'
       uses: actions/checkout@v5
       with:
+        repository: strands-agents/devtools
+        ref: main
         sparse-checkout: |
-          .github
+          strands-command/scripts
+        path: devtools
       
     - name: Set up Python
       if: steps.check-write-ops.outputs.exists == 'true'
@@ -119,14 +126,14 @@ runs:
       uses: astral-sh/setup-uv@v3
       with:
         enable-cache: true
-        cache-dependency-glob: ./.github/scripts/python/requirements.txt
+        cache-dependency-glob: devtools/strands-command/scripts/python/requirements.txt
 
     - name: Install dependencies
       if: steps.check-write-ops.outputs.exists == 'true'
       shell: bash
       run: |
         echo "📦 Installing from requirements.txt"
-        uv pip install --system -r ./.github/scripts/python/requirements.txt --quiet
+        uv pip install --system -r devtools/strands-command/scripts/python/requirements.txt --quiet
 
     - name: Execute write operations
       if: steps.check-write-ops.outputs.exists == 'true'
@@ -140,8 +147,27 @@ runs:
         BYPASS_TOOL_CONSENT: 'true'
       run: |
         echo "🚀 Strands Write Executor - Processing write operations"
-        if [ -n "${{ inputs.issue_id }}" ]; then
-          python ./.github/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl" --issue-id "${{ inputs.issue_id }}"
+        if [ -n "${{ steps.read-input.outputs.issue_id }}" ]; then
+          python devtools/strands-command/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl" --issue-id "${{ steps.read-input.outputs.issue_id }}"
         else
-          python ./.github/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl"
+          python devtools/strands-command/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl"
         fi
+
+    - name: Remove strands-running label
+      if: always()
+      uses: actions/github-script@v8
+      with:
+        github-token: ${{ github.token }}
+        script: |
+          if ('${{ steps.read-input.outputs.issue_id }}') {
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: ${{ steps.read-input.outputs.issue_id }},
+                name: 'strands-running'
+              });
+            } catch (error) {
+              console.log('Label removal failed (may not exist):', error.message);
+            }
+          }

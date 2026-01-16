@@ -1,18 +1,6 @@
 name: 'Strands Agent Runner'
 description: 'Execute a Strands agent with the given prompts and configuration'
 inputs:
-  ref:
-    description: 'ref to checkout'
-    required: true
-  system_prompt:
-    description: 'System prompt for the agent'
-    required: true
-  session_id:
-    description: 'Session ID for the agent execution'
-    required: true
-  task_prompt:
-    description: 'Task prompt for the agent'
-    required: true
   aws_role_arn:
     description: 'AWS IAM role ARN for authentication'
     required: true
@@ -27,37 +15,47 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    # Checkout main repo .github directory
-    - name: Checkout repository
+    - name: Download parsed input artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: strands-parsed-input
+
+    - name: Read parsed input
+      id: read-input
+      shell: bash
+      run: |
+        echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "session_id=$(jq -r .session_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "system_prompt<<EOF" >> $GITHUB_OUTPUT
+        jq -r .system_prompt strands-parsed-input.json >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+        echo "task_prompt<<EOF" >> $GITHUB_OUTPUT
+        jq -r .prompt strands-parsed-input.json >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    # Checkout devtools repo for scripts
+    - name: Checkout devtools
       uses: actions/checkout@v5
       with:
+        repository: strands-agents/devtools
+        ref: main
         sparse-checkout: |
-          .github
+          strands-command/scripts
+          strands-command/agent-sops
+        path: devtools
 
-    # Copy the .github directory to the runner temp directory so the branch content cant overwrite the scripts executed here
-    - name: Copy .github to safe directory
+    # Copy the devtools directory to the runner temp directory so the branch content cant overwrite the scripts executed here
+    - name: Copy devtools to safe directory
       shell: bash
       run: |
         mkdir -p ${{ runner.temp }}/strands-agent-runner
-        cp -r .github ${{ runner.temp }}/strands-agent-runner
+        cp -r devtools/strands-command ${{ runner.temp }}/strands-agent-runner/
 
     # Checkout the branch repo to stage the directory for the agent
     - name: Checkout repository
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
-        ref: ${{ inputs.ref }}
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v6
-      with:
-        node-version: '20'
-
-    - name: Install dependencies
-      # If we have package.json then install the dependencies - this is for compatibility in multiple repos
-      if: hashFiles('package.json') != ''
-      shell: bash
-      run: npm install
-      continue-on-error: true # This step's failure will not stop the workflow
+        ref: ${{ steps.read-input.outputs.ref }}
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -68,13 +66,13 @@ runs:
       uses: astral-sh/setup-uv@v3
       with:
         enable-cache: true
-        cache-dependency-glob: '${{ runner.temp }}/strands-agent-runner/.github/scripts/python/requirements.txt'
+        cache-dependency-glob: '${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/requirements.txt'
 
     - name: Install Strands Agents
       shell: bash
       run: |
         echo "📦 Installing from requirements.txt"
-        uv pip install --system -r ${{ runner.temp }}/strands-agent-runner/.github/scripts/python/requirements.txt --quiet
+        uv pip install --system -r ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/requirements.txt --quiet
 
     - name: Configure Git
       shell: bash
@@ -91,12 +89,11 @@ runs:
         role-session-name: GitHubActions-StrandsAgent-${{ github.run_id }}
         aws-region: us-west-2
         mask-aws-account-id: true
-        inline_session_policy: >-
+        inline-session-policy: >-
           {
             "Version": "2012-10-17",
             "Statement": [
               {
-                "Sid":"Bedrock Access",
                 "Effect": "Allow",
                 "Action": [
                   "bedrock:InvokeModelWithResponseStream",
@@ -108,16 +105,16 @@ runs:
                 "Action": [
                   "s3:PutObject",
                   "s3:GetObject",
-                  "s3:DeleteObject",
+                  "s3:DeleteObject"
                 ],
                 "Resource": [
-                  "arn:aws:s3:::strands-typescript-project-sessions/*",
+                  "arn:aws:s3:::${{ inputs.sessions_bucket }}/*"
                 ]
               }, {
                 "Effect": "Allow",
                 "Action": "s3:ListBucket",
                 "Resource": [
-                  "arn:aws:s3:::strands-typescript-project-sessions",
+                  "arn:aws:s3:::${{ inputs.sessions_bucket }}"
                 ]
               }
             ]
@@ -135,21 +132,21 @@ runs:
         GITHUB_REPOSITORY: ${{ github.repository }}
 
         # Task Configuration
-        INPUT_TASK: ${{ inputs.task_prompt }}
-        INPUT_SYSTEM_PROMPT: ${{ inputs.system_prompt }}
+        INPUT_TASK: ${{ steps.read-input.outputs.task_prompt }}
+        INPUT_SYSTEM_PROMPT: ${{ steps.read-input.outputs.system_prompt }}
 
         # AWS Configuration
         AWS_REGION: 'us-west-2'
 
         # Session Manager
         S3_SESSION_BUCKET: ${{ inputs.sessions_bucket }}
-        SESSION_ID: ${{ inputs.session_id }}
+        SESSION_ID: ${{ steps.read-input.outputs.session_id }}
 
         # Strands Env Vars
         STRANDS_TOOL_CONSOLE_MODE: 'enabled'
         BYPASS_TOOL_CONSENT: 'true'
       run: |
-        uv run --no-project ${{ runner.temp }}/strands-agent-runner/.github/scripts/python/agent_runner.py "$INPUT_TASK"
+        uv run --no-project ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/agent_runner.py "$INPUT_TASK"
 
     - name: Capture repository state
       shell: bash

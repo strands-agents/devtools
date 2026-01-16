@@ -36,6 +36,7 @@ async function determineBranch(github, context, issueId, mode, isPullRequest) {
     });
     
     try {
+      console.log("Implementer started on an issue, attempting to create a branch for implementation.")
       await github.rest.git.createRef({
         owner: context.repo.owner,
         repo: context.repo.repo,
@@ -47,6 +48,7 @@ async function determineBranch(github, context, issueId, mode, isPullRequest) {
       if (error.status === 422 || error.message?.includes('already exists')) {
         console.log(`Branch ${branchName} already exists`);
       } else {
+        console.error("Unable to create branch. Make sure you have given this job step `content: write` permission.")
         throw error;
       }
     }
@@ -68,9 +70,9 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs)
     : `${mode}-${issueId}`);
 
   const scriptFiles = {
-    'implementer': '.github/agent-sops/task-implementer.sop.md',
-    'refiner': '.github/agent-sops/task-refiner.sop.md',
-    'release-notes': '.github/agent-sops/task-release-notes.sop.md'
+    'implementer': 'devtools/strands-command/agent-sops/task-implementer.sop.md',
+    'refiner': 'devtools/strands-command/agent-sops/task-refiner.sop.md',
+    'release-notes': 'devtools/strands-command/agent-sops/task-release-notes.sop.md'
   };
   
   const scriptFile = scriptFiles[mode] || scriptFiles['refiner'];
@@ -112,10 +114,16 @@ module.exports = async (context, github, core, inputs) => {
     console.log(`Session ID: ${sessionId}`);
     console.log(`Task prompt: "${prompt}"`);
 
-    core.setOutput('branch_name', branchName);
-    core.setOutput('session_id', sessionId);
-    core.setOutput('system_prompt', systemPrompt);
-    core.setOutput('prompt', prompt);
+    const outputs = {
+      branch_name: branchName,
+      session_id: sessionId,
+      system_prompt: systemPrompt,
+      prompt: prompt,
+      issue_id: issueId
+    };
+    
+    fs.writeFileSync('strands-parsed-input.json', JSON.stringify(outputs, null, 2));
+    console.log('Wrote strands-parsed-input.json');
 
   } catch (error) {
     const errorMsg = `Failed: ${error.message}`;
