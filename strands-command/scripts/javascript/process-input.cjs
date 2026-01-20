@@ -72,7 +72,8 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs)
   const scriptFiles = {
     'implementer': 'devtools/strands-command/agent-sops/task-implementer.sop.md',
     'refiner': 'devtools/strands-command/agent-sops/task-refiner.sop.md',
-    'release-notes': 'devtools/strands-command/agent-sops/task-release-notes.sop.md'
+    'release-notes': 'devtools/strands-command/agent-sops/task-release-notes.sop.md',
+    'reviewer': 'devtools/strands-command/agent-sops/task-reviewer.sop.md'
   };
   
   const scriptFile = scriptFiles[mode] || scriptFiles['refiner'];
@@ -98,6 +99,8 @@ module.exports = async (context, github, core, inputs) => {
       mode = 'release-notes';
     } else if (command.startsWith('implement')) {
       mode = 'implementer';
+    } else if (command.startsWith('review')) {
+      mode = 'reviewer';
     } else if (command.startsWith('refine')) {
       mode = 'refiner';
     } else {
