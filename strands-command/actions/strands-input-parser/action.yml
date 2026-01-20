@@ -1,0 +1,54 @@
+name: 'Strands Parse Input'
+description: 'Parse strands command input and prepare execution parameters'
+inputs:
+  issue_id:
+    description: 'Issue or PR number'
+    required: false
+  command:
+    description: 'Strands command'
+    required: false
+  session_id:
+    description: 'Session ID'
+    required: false
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout devtools
+      uses: actions/checkout@v6
+      with:
+        repository: strands-agents/devtools
+        ref: main
+        sparse-checkout: |
+          strands-command/scripts
+          strands-command/agent-sops
+        path: devtools
+
+    - name: Add strands-running label
+      uses: actions/github-script@v8
+      with:
+        github-token: ${{ github.token }}
+        script: |
+          await github.rest.issues.addLabels({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: ${{ inputs.issue_id || github.event.issue.number }},
+            labels: ['strands-running']
+          });
+
+    - name: Process input
+      uses: actions/github-script@v8
+      with:
+        script: |
+          const processInput = require('./devtools/strands-command/scripts/javascript/process-input.cjs');
+          await processInput(context, github, core, {
+            issue_id: '${{ inputs.issue_id }}',
+            command: '${{ inputs.command }}',
+            session_id: '${{ inputs.session_id }}'
+          });
+
+    - name: Upload parsed input artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: strands-parsed-input
+        path: strands-parsed-input.json
+        retention-days: 1
