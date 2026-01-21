@@ -1,0 +1,53 @@
+name: 'Authorization Check'
+description: 'Check user authorization and determine approval environment'
+
+inputs:
+  skip-check:
+    description: 'Skip collaborator check (for workflow_dispatch events)'
+    required: false
+    default: 'false'
+  username:
+    description: 'Username to check'
+    required: true
+  allowed-roles:
+    description: 'Comma-separated list of allowed roles (e.g., "triage,write,admin")'
+    required: true
+
+outputs:
+  approval-env:
+    description: 'Approval environment name (auto-approve or manual-approval)'
+    value: ${{ steps.collab-check.outputs.result || steps.auto-approve.outputs.result }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout action
+      if: inputs.skip-check != 'true'
+      uses: actions/checkout@v6
+      with:
+        repository: ${{ github.repository }}
+        path: _authorization-check
+        sparse-checkout: |
+          authorization-check/scripts
+
+    - name: Collaborator Check
+      if: inputs.skip-check != 'true'
+      uses: actions/github-script@v8
+      id: collab-check
+      with:
+        result-encoding: string
+        script: |
+          const checkAuthorization = require('./_authorization-check/authorization-check/scripts/check-authorization.cjs');
+          return await checkAuthorization(context, github, {
+            username: '${{ inputs.username }}',
+            allowedRoles: '${{ inputs.allowed-roles }}'
+          });
+
+    - name: Auto-approve
+      if: inputs.skip-check == 'true'
+      id: auto-approve
+      uses: actions/github-script@v8
+      with:
+        result-encoding: string
+        script: |
+          return "auto-approve"
