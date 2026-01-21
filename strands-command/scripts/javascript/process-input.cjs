@@ -45,7 +45,9 @@ async function determineBranch(github, context, issueId, mode, isPullRequest) {
       });
       console.log(`Created branch ${branchName}`);
     } catch (error) {
-      if (error.status === 422 || error.message?.includes('already exists')) {
+      console.log(`Error message: ${String(error)}`)
+      console.log(`Error JSON: ${JSON.stringify(error)}`)
+      if (error.message?.includes('already exists')) {
         console.log(`Branch ${branchName} already exists`);
       } else {
         console.error("Unable to create branch. Make sure you have given this job step `content: write` permission.")
