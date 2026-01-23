@@ -25,7 +25,8 @@ runs:
       if: inputs.skip-check != 'true'
       uses: actions/checkout@v6
       with:
-        repository: ${{ github.repository }}
+        repository: strands-agents/devtools
+        ref: main
         path: _authorization-check
         sparse-checkout: |
           authorization-check/scripts
