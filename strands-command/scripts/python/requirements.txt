@@ -6,3 +6,6 @@ strands-agents-tools
 colorama
 rich
 requests>=2.28.0
+
+# Telemetry export
+opentelemetry-exporter-otlp
