@@ -4,12 +4,15 @@ Strands GitHub Agent Runner
 A portable agent runner for use in GitHub Actions across different repositories.
 """
 
+import base64
 import json
 import os
 import sys
+from datetime import datetime
 from typing import Any
 
 from strands import Agent
+from strands.telemetry import StrandsTelemetry
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands.session import S3SessionManager
 from strands.models.bedrock import BedrockModel
@@ -49,6 +52,56 @@ STRANDS_REGION = "us-west-2"
 # Default values for environment variables used only in this file
 DEFAULT_SYSTEM_PROMPT = "You are an autonomous GitHub agent powered by Strands Agents SDK."
 
+
+def _setup_langfuse_telemetry() -> bool:
+    """Set up Langfuse telemetry if environment variables are configured.
+    
+    Returns:
+        True if telemetry was successfully configured, False otherwise.
+    """
+    langfuse_public_key = os.environ.get("LANGFUSE_PUBLIC_KEY")
+    langfuse_secret_key = os.environ.get("LANGFUSE_SECRET_KEY")
+    langfuse_host = os.environ.get("LANGFUSE_HOST")
+    
+    if not all([langfuse_public_key, langfuse_secret_key, langfuse_host]):
+        print("ℹ️ Langfuse telemetry not configured (missing environment variables)")
+        return False
+    
+    try:
+        langfuse_auth = base64.b64encode(
+            f"{langfuse_public_key}:{langfuse_secret_key}".encode()
+        ).decode()
+        
+        os.environ["OTEL_EXPORTER_OTLP_ENDPOINT"] = f"{langfuse_host}/api/public/otel"
+        os.environ["OTEL_EXPORTER_OTLP_HEADERS"] = f"Authorization=Basic {langfuse_auth}"
+        
+        StrandsTelemetry().setup_otlp_exporter()
+        print("✅ Langfuse telemetry configured successfully")
+        return True
+    except Exception as e:
+        print(f"⚠️ Failed to configure Langfuse telemetry: {e}")
+        return False
+
+
+def _get_trace_attributes() -> dict:
+    """Build trace attributes from environment context."""
+    session_id = os.getenv("SESSION_ID", "")
+    github_actor = os.getenv("GITHUB_ACTOR", "")
+    github_repository = os.getenv("GITHUB_REPOSITORY", "")
+    github_workflow = os.getenv("GITHUB_WORKFLOW", "")
+    github_run_id = os.getenv("GITHUB_RUN_ID", "")
+    
+    return {
+        "session.id": session_id or f"github_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "user.id": github_actor,
+        "langfuse.tags": [
+            f"repo:{github_repository}",
+            f"workflow:{github_workflow}",
+            f"run:{github_run_id}",
+            "strands-github-agent",
+        ],
+    }
+
 def _get_all_tools() -> list[Any]:
     return [
         # File editing
@@ -85,6 +138,10 @@ def _get_all_tools() -> list[Any]:
 def run_agent(query: str):
     """Run the agent with the provided query."""
     try:
+        # Set up Langfuse telemetry (optional - gracefully degrades if not configured)
+        telemetry_enabled = _setup_langfuse_telemetry()
+        trace_attributes = _get_trace_attributes() if telemetry_enabled else {}
+        
         # Get tools and create model
         tools = _get_all_tools()
         
@@ -125,13 +182,18 @@ def run_agent(query: str):
         else:
             raise ValueError("Both SESSION_ID and S3_SESSION_BUCKET must be set")
 
-        # Create agent
-        agent = Agent(
-            model=model,
-            system_prompt=system_prompt,
-            tools=tools,
-            session_manager=session_manager,
-        )
+        # Create agent with optional trace attributes for Langfuse
+        agent_kwargs = {
+            "model": model,
+            "system_prompt": system_prompt,
+            "tools": tools,
+            "session_manager": session_manager,
+        }
+        
+        if trace_attributes:
+            agent_kwargs["trace_attributes"] = trace_attributes
+        
+        agent = Agent(**agent_kwargs)
 
         print("Processing user query...")
         result = agent(query)
