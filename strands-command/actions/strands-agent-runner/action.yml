@@ -20,9 +20,9 @@ inputs:
     required: false
     default: ''
   langfuse_host:
-    description: 'Langfuse host URL for telemetry (optional, e.g., https://cloud.langfuse.com)'
+    description: 'Langfuse host URL for telemetry (optional, e.g., https://us.cloud.langfuse.com)'
     required: false
-    default: ''
+    default: 'https://us.cloud.langfuse.com'
 
 runs:
   using: 'composite'
