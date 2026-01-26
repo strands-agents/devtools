@@ -11,6 +11,18 @@ inputs:
     description: 'If this action runs with write permission. If this is false, you should run the `strands-write-executor` action after this one with write permission.'
     required: true
     default: 'false'
+  langfuse_public_key:
+    description: 'Langfuse public key for telemetry (optional)'
+    required: false
+    default: ''
+  langfuse_secret_key:
+    description: 'Langfuse secret key for telemetry (optional)'
+    required: false
+    default: ''
+  langfuse_host:
+    description: 'Langfuse host URL for telemetry (optional, e.g., https://cloud.langfuse.com)'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -145,6 +157,11 @@ runs:
         # Strands Env Vars
         STRANDS_TOOL_CONSOLE_MODE: 'enabled'
         BYPASS_TOOL_CONSENT: 'true'
+
+        # Langfuse Telemetry (optional)
+        LANGFUSE_PUBLIC_KEY: ${{ inputs.langfuse_public_key }}
+        LANGFUSE_SECRET_KEY: ${{ inputs.langfuse_secret_key }}
+        LANGFUSE_HOST: ${{ inputs.langfuse_host }}
       run: |
         uv run --no-project ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/agent_runner.py "$INPUT_TASK"
 
