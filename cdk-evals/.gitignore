@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# CDK output
+cdk.out/
+
+# TypeScript build output
+dist/
+*.js
+*.d.ts
+
+# Keep Lambda JS files
+!lambda/**/*.js
+
+# Package lock
+package-lock.json
+
+# OS files
+.DS_Store
+
+# IDE
+.idea/
+*.swp
+*.swo
