@@ -1,0 +1,14 @@
+# Core evaluation framework
+strands-agents-evals>=0.1.1
+
+# Langfuse for fetching sessions
+langfuse>=3.0.0
+
+# OpenTelemetry SDK (required for package metadata lookup)
+opentelemetry-sdk>=1.20.0
+
+# AWS SDK (included in Lambda runtime but pinning for consistency)
+boto3>=1.35.0
+
+# Environment variable support
+python-dotenv>=1.0.0

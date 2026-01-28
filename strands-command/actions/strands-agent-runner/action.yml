@@ -23,6 +23,10 @@ inputs:
     description: 'Langfuse host URL for telemetry (optional, e.g., https://us.cloud.langfuse.com)'
     required: false
     default: 'https://us.cloud.langfuse.com'
+  evals_sqs_queue_arn:
+    description: 'SQS queue ARN for eval triggers (optional)'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -128,6 +132,10 @@ runs:
                 "Resource": [
                   "arn:aws:s3:::${{ inputs.sessions_bucket }}"
                 ]
+              }, {
+                "Effect": "Allow",
+                "Action": "sqs:SendMessage",
+                "Resource": "${{ inputs.evals_sqs_queue_arn }}"
               }
             ]
           }
@@ -162,6 +170,9 @@ runs:
         LANGFUSE_PUBLIC_KEY: ${{ inputs.langfuse_public_key }}
         LANGFUSE_SECRET_KEY: ${{ inputs.langfuse_secret_key }}
         LANGFUSE_HOST: ${{ inputs.langfuse_host }}
+
+        # Evals Configuration (optional)
+        EVALS_SQS_QUEUE_ARN: ${{ inputs.evals_sqs_queue_arn }}
       run: |
         uv run --no-project ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/agent_runner.py "$INPUT_TASK"
 
