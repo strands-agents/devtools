@@ -1,5 +1,6 @@
 """Langfuse session mapper for fetching traces and converting to Session format."""
 
+import json
 import logging
 import os
 import time
@@ -23,10 +24,12 @@ from strands_evals.types.trace import (
     UserMessage,
 )
 
+from .session_mapper import SessionMapper
+
 logger = logging.getLogger(__name__)
 
 
-class LangfuseSessionMapper:
+class LangfuseSessionMapper(SessionMapper):
     """Fetches traces from Langfuse and converts to Session format for evaluation.
 
     This mapper enables post-hoc evaluation of agent runs by:
@@ -357,7 +360,6 @@ class LangfuseSessionMapper:
         - {"message": "..."} - Bedrock/OTLP format (may be JSON string)
         - "string" - raw string
         """
-        import json
         messages = []
 
         if isinstance(output_data, dict):

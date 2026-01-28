@@ -62,6 +62,9 @@ export class EvalPipelineStack extends cdk.Stack {
       environment: {
         CLOUDFRONT_DISTRIBUTION_ID: props.distributionId,
       },
+      bundling: {
+        assetExcludes: ['.venv'],
+      },
     });
 
     // Grant permissions to the Lambda function
