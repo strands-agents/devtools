@@ -39,7 +39,6 @@ setup_environment()
 from strands_evals import Case, Experiment
 
 from mappers import LangfuseSessionMapper, SessionMapper
-from post_hoc_eval import PostHocEvaluator
 from s3_export import export_reports_to_s3
 from eval_configs import get_eval_config
 
@@ -70,12 +69,9 @@ def run_session_evaluation(session_id: str, eval_type: str):
     print(f"  Session ID: {session_id}")
     print(f"  Eval type: {eval_type}")
     
-    # Initialize mapper and evaluator
     mapper = LangfuseSessionMapper()
-    langfuse_evaluator = PostHocEvaluator(mapper)
-    
     try:
-        session = langfuse_evaluator.fetch_session(session_id)
+        session = mapper.get_session(session_id)
     except Exception as e:
         print(f"Error fetching session: {e}")
         raise
@@ -83,9 +79,6 @@ def run_session_evaluation(session_id: str, eval_type: str):
     user_input, agent_output = SessionMapper.extract_input_output(session)
     if not agent_output:
         raise ValueError("Could not extract agent output from session")
-    
-    print(f"Extracted input preview: {user_input[:200]}..." if len(user_input) > 200 else f"Extracted input: {user_input}")
-    print(f"Extracted output preview: {agent_output[:200]}..." if len(agent_output) > 200 else f"Extracted output: {agent_output}")
     
     case_name = f"Session {session_id}"
     case_data = {
