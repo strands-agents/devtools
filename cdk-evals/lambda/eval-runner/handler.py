@@ -12,8 +12,11 @@ See eval_configs.py for the mapping of eval_type to evaluators.
 
 
 import json
+import logging
 import os
 import boto3
+
+logger = logging.getLogger(__name__)
 
 # Set up environment from Secrets Manager before imports
 def get_langfuse_secrets():
@@ -29,7 +32,7 @@ def setup_environment():
     os.environ["LANGFUSE_SECRET_KEY"] = secrets["LANGFUSE_SECRET_KEY"]
     os.environ["LANGFUSE_PUBLIC_KEY"] = secrets["LANGFUSE_PUBLIC_KEY"]
     os.environ["LANGFUSE_HOST"] = secrets["LANGFUSE_HOST"]
-    print(f"Configured Langfuse host: {secrets['LANGFUSE_HOST']}")
+    logger.info(f"Configured Langfuse host: {secrets['LANGFUSE_HOST']}")
 
 
 # Initialize environment on cold start
@@ -45,15 +48,13 @@ from eval_configs import get_eval_config
 
 def run_session_evaluation(session_id: str, eval_type: str):
     """Run evaluation on a single session by ID."""
-    print(f"Running direct session evaluation")
-    print(f"  Session ID: {session_id}")
-    print(f"  Eval type: {eval_type}")
+    logger.info(f"Running session evaluation: session_id={session_id}, eval_type={eval_type}")
     
     mapper = LangfuseSessionMapper()
     try:
         session = mapper.get_session(session_id)
     except Exception as e:
-        print(f"Error fetching session: {e}")
+        logger.error(f"Error fetching session: {e}")
         raise
     
     user_input, agent_output = SessionMapper.extract_input_output(session)
@@ -78,7 +79,7 @@ def run_session_evaluation(session_id: str, eval_type: str):
     evaluators = [e() for e in config.evaluators]
     experiment = Experiment(cases=[Case(**case_data)], evaluators=evaluators)
     
-    print(f"Evaluators: {[e.get_type_name() for e in experiment.evaluators]}")
+    logger.info(f"Evaluators: {[e.get_type_name() for e in experiment.evaluators]}")
     
     def task(case: Case) -> dict:
         return {
@@ -86,7 +87,7 @@ def run_session_evaluation(session_id: str, eval_type: str):
             "trajectory": session,
         }
     
-    print("Running evaluations...")
+    logger.info("Running evaluations...")
     reports = experiment.run_evaluations(task)
 
     # Export to S3
@@ -107,7 +108,7 @@ def run_session_evaluation(session_id: str, eval_type: str):
 
 def handler(event, context):
     """Lambda handler for SQS-triggered evaluations."""
-    print(f"Received event: {json.dumps(event)}")
+    logger.info(f"Received event: {json.dumps(event)}")
     
     results = []
     
@@ -130,9 +131,7 @@ def handler(event, context):
             results.append(result)
             
         except Exception as e:
-            print(f"Error processing record: {e}")
-            import traceback
-            traceback.print_exc()
+            logger.exception(f"Error processing record: {e}")
             results.append({
                 "error": str(e),
                 "record": record,

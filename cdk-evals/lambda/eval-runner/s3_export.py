@@ -20,7 +20,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# These values should match the deployed CDK infrastructure
+# TODO make env var
 BUCKET_NAME = "strands-agents-internal-evals-dashboard"
 REGION = "us-east-1"
 # CloudFront distribution ID is passed from CDK via environment variable
@@ -93,8 +93,7 @@ def export_reports_to_s3(
     # Invalidate CloudFront cache for runs_index.json
     _invalidate_cloudfront_cache()
 
-    logger.info(f"Run '{run_id}' exported successfully to S3")
-    print(f"\n✅ Results exported to S3: s3://{BUCKET_NAME}/runs/{run_id}/")
+    logger.info(f"Run '{run_id}' exported successfully to S3: s3://{BUCKET_NAME}/runs/{run_id}/")
 
     return run_id
 
@@ -170,7 +169,6 @@ def _invalidate_cloudfront_cache() -> None:
             },
         )
         invalidation_id = response["Invalidation"]["Id"]
-        logger.info(f"  CloudFront cache invalidation created: {invalidation_id}")
-        print(f"  📡 CloudFront cache invalidation: {invalidation_id}")
+        logger.info(f"CloudFront cache invalidation created: {invalidation_id}")
     except ClientError as e:
         logger.warning(f"Failed to invalidate CloudFront cache: {e}")
