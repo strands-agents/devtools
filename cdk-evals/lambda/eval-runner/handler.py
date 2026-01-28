@@ -43,26 +43,6 @@ from s3_export import export_reports_to_s3
 from eval_configs import get_eval_config
 
 
-def create_post_hoc_task(prefetched_sessions: dict):
-    """Create a task function that returns pre-fetched sessions as trajectories."""
-    
-    def post_hoc_task(case: Case) -> dict:
-        case_name = case.name
-        session_data = prefetched_sessions.get(case_name)        
-        session = session_data["session"]
-        _, output = SessionMapper.extract_input_output(session)
-        
-        if not output:
-            output = session_data.get("output_preview", "")
-        
-        return {
-            "output": output,
-            "trajectory": session,
-        }
-    
-    return post_hoc_task
-
-
 def run_session_evaluation(session_id: str, eval_type: str):
     """Run evaluation on a single session by ID."""
     print(f"Running direct session evaluation")
@@ -100,20 +80,14 @@ def run_session_evaluation(session_id: str, eval_type: str):
     
     print(f"Evaluators: {[e.get_type_name() for e in experiment.evaluators]}")
     
-    # Pre-fetch session data
-    prefetched_sessions = {
-        case_name: {
-            "session": session,
-            "session_id": session_id,
-            "output_preview": agent_output,
+    def task(case: Case) -> dict:
+        return {
+            "output": agent_output,
+            "trajectory": session,
         }
-    }
-    
-    # Create task function and run evaluations
-    task_fn = create_post_hoc_task(prefetched_sessions)
     
     print("Running evaluations...")
-    reports = experiment.run_evaluations(task_fn)
+    reports = experiment.run_evaluations(task)
 
     # Export to S3
     export_reports_to_s3(
