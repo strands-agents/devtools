@@ -11,6 +11,7 @@ import sys
 from datetime import datetime
 from typing import Any
 
+import boto3
 from strands import Agent
 from strands.telemetry import StrandsTelemetry
 from strands.agent.conversation_manager import SlidingWindowConversationManager
@@ -53,6 +54,45 @@ STRANDS_REGION = "us-west-2"
 DEFAULT_SYSTEM_PROMPT = "You are an autonomous GitHub agent powered by Strands Agents SDK."
 
 
+def _send_eval_trigger(session_id: str) -> None:
+    """Send evaluation trigger to SQS queue after agent completion.
+    
+    Only sends if EVALS_SQS_QUEUE_ARN environment variable is set.
+    Derives queue URL from ARN (format: arn:aws:sqs:{region}:{account_id}:{queue_name}).
+    Extracts eval_type from the first part of session_id (before the hyphen).
+    """
+    queue_arn = os.environ.get("EVALS_SQS_QUEUE_ARN")
+    if not queue_arn:
+        return
+    
+    # Parse ARN: arn:aws:sqs:{region}:{account_id}:{queue_name}
+    arn_parts = queue_arn.split(":")
+    if len(arn_parts) != 6:
+        print(f"⚠️ Invalid SQS ARN format: {queue_arn}")
+        return
+    
+    region = arn_parts[3]
+    account_id = arn_parts[4]
+    queue_name = arn_parts[5]
+    queue_url = f"https://sqs.{region}.amazonaws.com/{account_id}/{queue_name}"
+    
+    eval_type = session_id.split("-")[0] if "-" in session_id else session_id
+    
+    try:
+        sqs_client = boto3.client("sqs", region_name=region)
+        message_body = json.dumps({
+            "session_id": session_id,
+            "eval_type": eval_type
+        })
+        sqs_client.send_message(
+            QueueUrl=queue_url,
+            MessageBody=message_body
+        )
+        print(f"✅ Sent eval trigger to SQS: {message_body}")
+    except Exception as e:
+        print(f"⚠️ Failed to send eval trigger to SQS: {e}")
+
+
 def _setup_langfuse_telemetry() -> bool:
     """Set up Langfuse telemetry if environment variables are configured.
     
@@ -91,8 +131,13 @@ def _get_trace_attributes() -> dict:
     github_workflow = os.getenv("GITHUB_WORKFLOW", "")
     github_run_id = os.getenv("GITHUB_RUN_ID", "")
     
+    # Include repo name in session ID for uniqueness across repos
+    # Format: "owner_repo:session-id" (e.g., "strands-agents_sdk-typescript:reviewer-443")
+    repo_prefix = github_repository.replace("/", "_") if github_repository else "unknown"
+    unique_session_id = f"{repo_prefix}:{session_id}" if session_id else f"{repo_prefix}_{datetime.now().strftime('%Y%m%d%H%M%S')}"
+    
     return {
-        "session.id": session_id or f"github_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "session.id": unique_session_id,
         "user.id": github_actor,
         "langfuse.tags": [
             f"repo:{github_repository}",
@@ -199,6 +244,8 @@ def run_agent(query: str):
         result = agent(query)
 
         print(f"\n\nAgent Result 🤖\nStop Reason: {result.stop_reason}\nMessage: {json.dumps(result.message, indent=2)}")
+        
+        _send_eval_trigger(session_id)
     except Exception as e:
         error_msg = f"❌ Agent execution failed: {e}"
         print(error_msg)
