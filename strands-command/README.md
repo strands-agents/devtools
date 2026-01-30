@@ -166,6 +166,7 @@ jobs:
           write_permission: 'false'
 
   finalize:
+    if: always()
     needs: [setup-and-process, execute-readonly-agent]
     if: always()
     permissions:
