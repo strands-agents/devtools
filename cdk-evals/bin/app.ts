@@ -1,8 +1,12 @@
 #!/usr/bin/env node
 import "source-map-support/register";
+import * as dotenv from "dotenv";
 import * as cdk from "aws-cdk-lib";
 import { DashboardStack } from "../lib/dashboard-stack";
 import { EvalPipelineStack } from "../lib/eval-pipeline-stack";
+
+// Load environment variables from .env file (if present)
+dotenv.config();
 
 const app = new cdk.App();
 

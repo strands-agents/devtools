@@ -25,4 +25,8 @@ package-lock.json
 *.swp
 *.swo
 
+# Python virtual env
 .venv
+
+# Environment variables (contains secrets)
+.env

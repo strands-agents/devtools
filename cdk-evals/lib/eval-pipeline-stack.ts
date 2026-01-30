@@ -31,6 +31,24 @@ export class EvalPipelineStack extends cdk.Stack {
       receiveMessageWaitTime: cdk.Duration.seconds(20),
     });
 
+    // Add resource-based policy to allow AWS accounts to send messages
+    // Set GITHUB_ACTIONS_ACCOUNT_IDS in .env file (comma-separated for multiple accounts)
+    const accountIdsEnv = process.env.GITHUB_ACTIONS_ACCOUNT_IDS;
+    if (accountIdsEnv) {
+      const accountIds = accountIdsEnv.split(",").map((id) => id.trim()).filter(Boolean);
+      if (accountIds.length > 0) {
+        this.queue.addToResourcePolicy(
+          new iam.PolicyStatement({
+            sid: "AllowGitHubActionsSendMessage",
+            effect: iam.Effect.ALLOW,
+            principals: accountIds.map((id) => new iam.AccountPrincipal(id)),
+            actions: ["sqs:SendMessage"],
+            resources: [this.queue.queueArn],
+          })
+        );
+      }
+    }
+
     // Secrets Manager Secret for Langfuse credentials
     /**
      * After deployment populate the values (in the Console or via the below command)
