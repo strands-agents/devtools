@@ -15,7 +15,7 @@ The dev server proxies data requests to the production CloudFront distribution:
 - `/runs_index.json` → Production S3
 - `/runs/*` → Production S3
 
-**Note**: Production requires basic auth. If you get 401 errors, authenticate first by visiting the [production dashboard](https://d1wx2vtif3kbk1.cloudfront.net) in your browser.
+**Note**: Production requires basic auth.
 
 ## Deployment
 
