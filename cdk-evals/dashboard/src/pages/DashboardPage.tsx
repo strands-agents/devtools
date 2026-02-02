@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import Grid from "@cloudscape-design/components/grid";
 import Container from "@cloudscape-design/components/container";
 import Header from "@cloudscape-design/components/header";
@@ -14,22 +15,60 @@ import Link from "@cloudscape-design/components/link";
 import Layout from "../components/Layout";
 import EvaluatorScoresTable from "../components/EvaluatorScoresTable";
 import ConversationViewer from "../components/ConversationViewer";
+import RunComparisonModal from "../components/RunComparisonModal";
 import { isSession } from "../types/evaluation";
+import type { EvaluationReport } from "../types/evaluation";
 import {
   useEvaluation,
   getScoreColor,
   getStatusType,
   formatTimestamp,
   extractToolNames,
+  inferAgentType,
 } from "../context/EvaluationContext";
 import type { EvaluatorData, Manifest } from "../context/EvaluationContext";
+
+// Trend indicator component
+function TrendIndicator({ current, previous }: { current: number; previous: number | null }) {
+  if (previous === null) return null;
+
+  const diff = current - previous;
+  const pct = Math.round(diff * 100);
+
+  if (pct === 0) return <Box color="text-status-inactive">—</Box>;
+
+  return (
+    <span
+      style={{
+        color: pct >= 0 ? "#16a34a" : "#dc2626",
+        fontSize: "12px",
+        fontWeight: 500,
+      }}
+    >
+      {pct >= 0 ? "↑" : "↓"} {Math.abs(pct)}%
+    </span>
+  );
+}
+
+interface HistoricalData {
+  passRates: number[];
+  scores: number[];
+  previousPassRate: number | null;
+  previousScore: number | null;
+}
 
 function ServiceOverviewContainer({
   evaluators,
   manifest,
+  onShowFailures,
+  onCompareRuns,
+  historicalData,
 }: {
   evaluators: EvaluatorData[];
   manifest: Manifest | null;
+  onShowFailures: () => void;
+  onCompareRuns: () => void;
+  historicalData: HistoricalData;
 }) {
   const totalCases = evaluators.length > 0 ? evaluators[0].report.cases.length : 0;
   const totalEvaluators = evaluators.length;
@@ -42,7 +81,7 @@ function ServiceOverviewContainer({
     (sum, e) => sum + e.report.test_passes.length,
     0
   );
-  const overallPassRate = totalTests > 0 ? (totalPasses / totalTests) * 100 : 0;
+  const overallPassRate = totalTests > 0 ? totalPasses / totalTests : 0;
   const failedCount = totalTests - totalPasses;
 
   const avgScore =
@@ -53,63 +92,87 @@ function ServiceOverviewContainer({
   return (
     <Container
       header={
-        <Header description="Overall evaluation health and key metrics" variant="h2">
+        <Header
+          description="Overall evaluation health and key metrics"
+          variant="h2"
+          actions={
+            <Button onClick={onCompareRuns} iconName="view-full">
+              Compare Runs
+            </Button>
+          }
+        >
           Service overview
         </Header>
       }
     >
       <SpaceBetween size="l">
-        <KeyValuePairs
-          columns={4}
-          items={[
-            {
-              label: "Overall pass rate",
-              value: (
-                <Box fontSize="display-l" fontWeight="bold">
-                  {overallPassRate.toFixed(0)}%
+        <ColumnLayout columns={4}>
+          {/* Pass Rate Card */}
+          <Box>
+            <Box variant="awsui-key-label">Overall pass rate</Box>
+            <SpaceBetween size="xs" direction="horizontal" alignItems="center">
+              <Box fontSize="display-l" fontWeight="bold">
+                {(overallPassRate * 100).toFixed(0)}%
+              </Box>
+              <TrendIndicator current={overallPassRate} previous={historicalData.previousPassRate} />
+            </SpaceBetween>
+          </Box>
+
+          {/* Test Cases Card */}
+          <Box>
+            <Box variant="awsui-key-label">Test cases</Box>
+            <Box fontSize="display-l" fontWeight="bold">
+              {totalCases}
+            </Box>
+          </Box>
+
+          {/* Evaluators Card */}
+          <Box>
+            <Box variant="awsui-key-label">Evaluators</Box>
+            <Box fontSize="display-l" fontWeight="bold">
+              {totalEvaluators}
+            </Box>
+          </Box>
+
+          {/* Failed Evaluations Card - Clickable */}
+          <Box>
+            <Box variant="awsui-key-label">Failed evaluations</Box>
+            {failedCount > 0 ? (
+              <div
+                onClick={onShowFailures}
+                style={{
+                  cursor: "pointer",
+                  display: "inline-block",
+                }}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    onShowFailures();
+                  }
+                }}
+              >
+                <Box fontSize="display-l" fontWeight="bold" color="text-status-error">
+                  <span style={{ textDecoration: "underline" }}>{failedCount}</span>
                 </Box>
-              ),
-            },
-            {
-              label: "Test cases",
-              value: (
-                <Box fontSize="display-l" fontWeight="bold">
-                  {totalCases}
-                </Box>
-              ),
-            },
-            {
-              label: "Evaluators",
-              value: (
-                <Box fontSize="display-l" fontWeight="bold">
-                  {totalEvaluators}
-                </Box>
-              ),
-            },
-            {
-              label: "Failed evaluations",
-              value: (
-                <Box
-                  fontSize="display-l"
-                  fontWeight="bold"
-                  color={failedCount > 0 ? "text-status-error" : "text-status-success"}
-                >
-                  {failedCount}
-                </Box>
-              ),
-            },
-          ]}
-        />
+              </div>
+            ) : (
+              <Box fontSize="display-l" fontWeight="bold" color="text-status-success">
+                0
+              </Box>
+            )}
+          </Box>
+        </ColumnLayout>
+
         <ColumnLayout columns={2}>
           <Box>
-            <Box variant="awsui-key-label">Evaluation status</Box>
-            <StatusIndicator type={getStatusType(avgScore)}>
-              {avgScore >= 0.8
-                ? "Healthy - all evaluators above threshold"
-                : avgScore >= 0.5
-                ? "Partially healthy - some evaluators below threshold"
-                : "Unhealthy - multiple evaluators failing"}
-            </StatusIndicator>
+            <Box variant="awsui-key-label">Average Score</Box>
+            <SpaceBetween size="xs" direction="horizontal" alignItems="center">
+              <StatusIndicator type={getStatusType(avgScore)}>
+                {(avgScore * 100).toFixed(0)}%
+              </StatusIndicator>
+              <TrendIndicator current={avgScore} previous={historicalData.previousScore} />
+            </SpaceBetween>
           </Box>
           <Box>
             <Box variant="awsui-key-label">Last evaluation run</Box>
@@ -168,9 +231,13 @@ function EvaluatorPerformanceContainer({
 function TestResultsContainer({
   evaluators,
   onCaseSelect,
+  showOnlyFailed,
+  onToggleFilter,
 }: {
   evaluators: EvaluatorData[];
   onCaseSelect: (caseIndex: number) => void;
+  showOnlyFailed: boolean;
+  onToggleFilter: () => void;
 }) {
   if (evaluators.length === 0) {
     return (
@@ -186,21 +253,48 @@ function TestResultsContainer({
     name: string;
     caseIndex: number;
     results: { evaluator: string; score: number; passed: boolean; reason: string }[];
+    hasFailed: boolean;
   }
 
-  const tableItems: TestResultRow[] = cases.map((c, idx) => ({
-    name: c.name || `Case ${idx + 1}`,
-    caseIndex: idx,
-    results: evaluators.map((e) => ({
+  const allItems: TestResultRow[] = cases.map((c, idx) => {
+    const results = evaluators.map((e) => ({
       evaluator: e.name,
       score: e.report.scores[idx],
       passed: e.report.test_passes[idx],
       reason: e.report.reasons[idx] || "",
-    })),
-  }));
+    }));
+    return {
+      name: c.name || `Case ${idx + 1}`,
+      caseIndex: idx,
+      results,
+      hasFailed: results.some((r) => !r.passed),
+    };
+  });
+
+  const tableItems = showOnlyFailed ? allItems.filter((item) => item.hasFailed) : allItems;
+  const failedCount = allItems.filter((item) => item.hasFailed).length;
 
   return (
-    <Container header={<Header variant="h2">Test results by case</Header>}>
+    <Container
+      header={
+        <Header
+          variant="h2"
+          actions={
+            failedCount > 0 && (
+              <Button
+                variant={showOnlyFailed ? "primary" : "normal"}
+                onClick={onToggleFilter}
+                iconName={showOnlyFailed ? "filter" : undefined}
+              >
+                {showOnlyFailed ? `Showing ${failedCount} failed` : `Show only failed (${failedCount})`}
+              </Button>
+            )
+          }
+        >
+          Test results by case
+        </Header>
+      }
+    >
       <Table
         columnDefinitions={[
           {
@@ -232,6 +326,11 @@ function TestResultsContainer({
         trackBy="name"
         variant="embedded"
         stripedRows
+        empty={
+          <Box textAlign="center" color="text-status-inactive" padding="l">
+            {showOnlyFailed ? "No failed test cases!" : "No test cases"}
+          </Box>
+        }
       />
     </Container>
   );
@@ -422,7 +521,101 @@ function CaseDetailContainer({
 }
 
 export default function DashboardPage() {
-  const { evaluators, manifest, selectedCase, setSelectedCase } = useEvaluation();
+  const { evaluators, manifest, selectedCase, setSelectedCase, runsIndex, selectedRun } = useEvaluation();
+  const [showOnlyFailed, setShowOnlyFailed] = useState(false);
+  const [compareModalVisible, setCompareModalVisible] = useState(false);
+  const testResultsRef = useRef<HTMLDivElement>(null);
+  const [historicalData, setHistoricalData] = useState<HistoricalData>({
+    passRates: [],
+    scores: [],
+    previousPassRate: null,
+    previousScore: null,
+  });
+
+  // Determine current agent type from selected run
+  const currentAgentType = useMemo(() => {
+    if (!selectedRun?.value) return null;
+    return inferAgentType(selectedRun.value);
+  }, [selectedRun]);
+
+  // Load historical data for sparklines - filtered by agent type
+  const loadHistoricalData = useCallback(async () => {
+    if (!runsIndex || runsIndex.runs.length < 2) return;
+
+    // Filter runs by current agent type
+    const filteredRuns = currentAgentType
+      ? runsIndex.runs.filter((run) => inferAgentType(run.run_id, run.agent_type) === currentAgentType)
+      : runsIndex.runs;
+
+    if (filteredRuns.length < 2) {
+      setHistoricalData({
+        passRates: [],
+        scores: [],
+        previousPassRate: null,
+        previousScore: null,
+      });
+      return;
+    }
+
+    const passRates: number[] = [];
+    const scores: number[] = [];
+
+    // Load last 10 runs of same agent type for sparklines
+    const runsToLoad = filteredRuns.slice(0, 10).reverse();
+
+    for (const run of runsToLoad) {
+      try {
+        const manifestRes = await fetch(`/runs/${run.run_id}/manifest.json`);
+        if (!manifestRes.ok) continue;
+
+        const runManifest: Manifest = await manifestRes.json();
+        let totalScore = 0;
+        let totalPasses = 0;
+        let totalTests = 0;
+
+        for (const file of runManifest.files) {
+          const res = await fetch(`/runs/${run.run_id}/${file}`);
+          if (!res.ok) continue;
+
+          const report: EvaluationReport = await res.json();
+          totalScore += report.overall_score;
+          totalPasses += report.test_passes.filter(Boolean).length;
+          totalTests += report.test_passes.length;
+        }
+
+        const avgScore = runManifest.files.length > 0 ? totalScore / runManifest.files.length : 0;
+        const passRate = totalTests > 0 ? totalPasses / totalTests : 0;
+
+        passRates.push(passRate);
+        scores.push(avgScore);
+      } catch {
+        // Skip failed runs
+      }
+    }
+
+    // Get previous run's data (second to last in array)
+    const previousPassRate = passRates.length >= 2 ? passRates[passRates.length - 2] : null;
+    const previousScore = scores.length >= 2 ? scores[scores.length - 2] : null;
+
+    setHistoricalData({
+      passRates,
+      scores,
+      previousPassRate,
+      previousScore,
+    });
+  }, [runsIndex, currentAgentType]);
+
+  useEffect(() => {
+    loadHistoricalData();
+  }, [loadHistoricalData]);
+
+  const handleShowFailures = () => {
+    setShowOnlyFailed(true);
+    // Scroll to test results table after state update
+    setTimeout(() => {
+      testResultsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  };
 
   return (
     <Layout
@@ -437,15 +630,35 @@ export default function DashboardPage() {
           { colspan: { default: 12 } },
         ]}
       >
-        <ServiceOverviewContainer evaluators={evaluators} manifest={manifest} />
+        <ServiceOverviewContainer
+          evaluators={evaluators}
+          manifest={manifest}
+          onShowFailures={handleShowFailures}
+          onCompareRuns={() => setCompareModalVisible(true)}
+          historicalData={historicalData}
+        />
         <EvaluatorPerformanceContainer evaluators={evaluators} selectedCase={selectedCase} />
         <CaseDetailContainer
           evaluators={evaluators}
           selectedCase={selectedCase}
           onCaseChange={setSelectedCase}
         />
-        <TestResultsContainer evaluators={evaluators} onCaseSelect={setSelectedCase} />
+        <div ref={testResultsRef}>
+          <TestResultsContainer
+            evaluators={evaluators}
+            onCaseSelect={setSelectedCase}
+            showOnlyFailed={showOnlyFailed}
+            onToggleFilter={() => setShowOnlyFailed(!showOnlyFailed)}
+          />
+        </div>
       </Grid>
+
+      {/* Run Comparison Modal */}
+      <RunComparisonModal
+        visible={compareModalVisible}
+        onDismiss={() => setCompareModalVisible(false)}
+        runs={runsIndex?.runs || []}
+      />
     </Layout>
   );
 }

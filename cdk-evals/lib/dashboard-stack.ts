@@ -1,5 +1,6 @@
 import * as cdk from "aws-cdk-lib";
 import * as s3 from "aws-cdk-lib/aws-s3";
+import * as s3deploy from "aws-cdk-lib/aws-s3-deployment";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as lambda from "aws-cdk-lib/aws-lambda";
@@ -113,6 +114,23 @@ export class DashboardStack extends cdk.Stack {
         },
       ],
     });
+
+    // Deploy dashboard static assets to S3
+    // Requires: npm run build in dashboard/ directory before cdk deploy
+    const dashboardDistPath = path.join(__dirname, "../dashboard/dist");
+    if (fs.existsSync(dashboardDistPath)) {
+      new s3deploy.BucketDeployment(this, "DashboardDeployment", {
+        sources: [s3deploy.Source.asset(dashboardDistPath)],
+        destinationBucket: this.bucket,
+        distribution: this.distribution,
+        distributionPaths: ["/*"],
+        // Preserve S3 evaluation data - don't overwrite runs/ or runs_index.json
+        exclude: ["runs/*", "runs_index.json"],
+        prune: false, // Don't delete files not in the source
+      });
+    } else {
+      console.log("Dashboard not built. Run 'cd dashboard && npm run build' before deploy.");
+    }
 
     // Outputs
     new cdk.CfnOutput(this, "BucketName", {

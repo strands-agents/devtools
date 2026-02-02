@@ -11,6 +11,12 @@ npm run dev
 
 Open http://localhost:5173 in your browser.
 
+The dev server proxies data requests to the production CloudFront distribution:
+- `/runs_index.json` → Production S3
+- `/runs/*` → Production S3
+
+**Note**: Production requires basic auth. If you get 401 errors, authenticate first by visiting the [production dashboard](https://d1wx2vtif3kbk1.cloudfront.net) in your browser.
+
 ## Deployment
 
 ### Prerequisites

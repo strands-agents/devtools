@@ -15,17 +15,54 @@ export interface Manifest {
   evaluators: string[];
   total_cases: number;
   files: string[];
+  source?: string;
+  agent_type?: string;
 }
 
-interface RunIndexEntry {
+export interface RunIndexEntry {
   run_id: string;
   timestamp: string;
   total_cases: number;
   evaluator_count: number;
+  agent_type?: string;
 }
 
-interface RunsIndex {
+export interface RunsIndex {
   runs: RunIndexEntry[];
+}
+
+// Agent type inference from run_id
+export function inferAgentType(runId: string, agentType?: string): string {
+  if (agentType) return agentType;
+  if (runId.startsWith("release_notes_")) return "release-notes";
+  if (runId.startsWith("run_")) return "github-issues";
+  return "unknown";
+}
+
+// Get display name for agent type
+export function getAgentTypeDisplayName(agentType: string): string {
+  switch (agentType) {
+    case "release-notes":
+      return "Release Notes Agent";
+    case "github-issues":
+      return "GitHub Issues Agent";
+    default:
+      return agentType;
+  }
+}
+
+// Get unique agent types from runs
+export function getUniqueAgentTypes(runs: RunIndexEntry[]): string[] {
+  const types = new Set<string>();
+  for (const run of runs) {
+    types.add(inferAgentType(run.run_id, run.agent_type));
+  }
+  return Array.from(types).sort();
+}
+
+// Filter runs by agent type
+export function filterRunsByAgentType(runs: RunIndexEntry[], agentType: string): RunIndexEntry[] {
+  return runs.filter(run => inferAgentType(run.run_id, run.agent_type) === agentType);
 }
 
 // Helper functions
