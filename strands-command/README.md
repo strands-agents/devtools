@@ -43,7 +43,7 @@ graph LR
 2. **Set up AWS Resources** (see [Setup AWS Resources](#setup-aws-resources))
 3. **Configure GitHub Secrets**:
    - `AWS_ROLE_ARN`: Your IAM role ARN
-   - `AGENT_SESSIONS_BUCKET`: S3 bucket for session storage
+   - `AWS_SECRETS_MANAGER_SECRET_ID`: The ID of your AWS Secrets Manager secret containing agent configuration
 
 ### Setting Up Strands Command Workflow
 
@@ -162,7 +162,7 @@ jobs:
         uses: strands-agents/devtools/strands-command/actions/strands-agent-runner@main
         with:
           aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
-          sessions_bucket: ${{ secrets.STRANDS_SESSIONS_BUCKET }}
+          aws_secrets_manager_secret_id: ${{ secrets.AWS_SECRETS_MANAGER_SECRET_ID }}
           write_permission: 'false'
 
   finalize:
@@ -183,11 +183,37 @@ jobs:
 
 ### Setup AWS Resources
 
-The Strands Command Github workflow requires that two resources are prepared in an AWS Account:
-- **S3 Bucket**: Create a standard S3 bucket in your account, this is where the agents sessions will be stored.
-- **IAM Role**: See below section
+The Strands Command Github workflow requires the following resources in an AWS Account:
 
-#### IAM Role Setup
+#### 1. AWS Secrets Manager Secret
+
+Create a Secrets Manager secret containing your agent configuration. The secret should be a JSON object with the following keys:
+
+```json
+{
+  "AGENT_SESSIONS_BUCKET": "your-sessions-bucket-name",
+  "LANGFUSE_PUBLIC_KEY": "your-langfuse-public-key",
+  "LANGFUSE_SECRET_KEY": "your-langfuse-secret-key",
+  "LANGFUSE_HOST": "https://us.cloud.langfuse.com",
+  "EVALS_SQS_QUEUE_ARN": "arn:aws:sqs:us-west-2:123456789012:your-evals-queue"
+}
+```
+
+| Key | Required | Description |
+|-----|----------|-------------|
+| `AGENT_SESSIONS_BUCKET` | Yes | S3 bucket name for storing agent sessions |
+| `LANGFUSE_PUBLIC_KEY` | No | Langfuse public key for telemetry |
+| `LANGFUSE_SECRET_KEY` | No | Langfuse secret key for telemetry |
+| `LANGFUSE_HOST` | No | Langfuse host URL (defaults to `https://us.cloud.langfuse.com`) |
+| `EVALS_SQS_QUEUE_ARN` | No | SQS queue ARN for evaluation triggers |
+
+**Note:** All values from Secrets Manager can be overridden by providing explicit inputs to the `strands-agent-runner` action.
+
+#### 2. S3 Bucket
+
+Create a standard S3 bucket in your account for storing agent sessions.
+
+#### 3. IAM Role Setup
 
 - Create a Github OIDC in your account: https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws
 - Create a new IAM role with the following trust policy and permission policy:
@@ -224,7 +250,13 @@ Permission Policy:
   "Version": "2012-10-17",
   "Statement": [
     {
-      "Sid": "Bedrock Access",
+      "Sid": "SecretsManagerAccess",
+      "Effect": "Allow",
+      "Action": "secretsmanager:GetSecretValue",
+      "Resource": "arn:aws:secretsmanager:*:YOUR_ACCOUNT_ID:secret:YOUR_SECRET_NAME*"
+    },
+    {
+      "Sid": "BedrockAccess",
       "Effect": "Allow",
       "Action": [
         "bedrock:InvokeModelWithResponseStream",
@@ -233,6 +265,7 @@ Permission Policy:
       "Resource": "*"
     },
     {
+      "Sid": "S3SessionsAccess",
       "Effect": "Allow",
       "Action": [
         "s3:PutObject",
@@ -244,6 +277,7 @@ Permission Policy:
       ]
     },
     {
+      "Sid": "S3ListBucket",
       "Effect": "Allow",
       "Action": "s3:ListBucket",
       "Resource": [
@@ -287,7 +321,8 @@ Executes AI agents with AWS integration and controlled permissions.
 
 **Inputs:**
 - `aws_role_arn` (required): AWS IAM role ARN for authentication
-- `sessions_bucket` (required): S3 bucket for session storage
+- `aws_secrets_manager_secret_id` (required): AWS Secrets Manager secret ID containing agent configuration (fetches `sessions_bucket`, `langfuse_*`, and `evals_sqs_queue_arn`)
+- `sessions_bucket` (optional): S3 bucket for session storage. Overrides value from Secrets Manager if provided
 - `write_permission` (required): Permission level flag for Read-only Sandbox mode (`true`/`false`)
 
 **Outputs:**
@@ -417,7 +452,7 @@ Creates high-quality release notes highlighting major features and bug fixes.
 | Secret | Description | Example |
 |--------|-------------|---------|
 | `AWS_ROLE_ARN` | IAM role for AWS access | `arn:aws:iam::123456789012:role/GitHubActionsRole` |
-| `AGENT_SESSIONS_BUCKET` | S3 bucket for sessions | `my-strands-sessions-bucket` |
+| `AWS_SECRETS_MANAGER_SECRET_ID` | Secret ID containing agent configuration | `strands-agent-config` or `arn:aws:secretsmanager:us-east-1:123456789012:secret:strands-agent-config` |
 
 ### Environment Variables
 
