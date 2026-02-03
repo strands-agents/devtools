@@ -32,7 +32,6 @@ def setup_environment():
     os.environ["LANGFUSE_SECRET_KEY"] = secrets["LANGFUSE_SECRET_KEY"]
     os.environ["LANGFUSE_PUBLIC_KEY"] = secrets["LANGFUSE_PUBLIC_KEY"]
     os.environ["LANGFUSE_HOST"] = secrets["LANGFUSE_HOST"]
-    logger.info(f"Configured Langfuse host: {secrets['LANGFUSE_HOST']}")
 
 
 # Initialize environment on cold start
