@@ -5,9 +5,8 @@ inputs:
     description: 'AWS IAM role ARN for authentication'
     required: true
   aws_secrets_manager_secret_id:
-    description: 'AWS Secrets Manager secret ID containing agent configuration (optional). If provided, will fetch sessions_bucket, langfuse_*, and evals_sqs_queue_arn from this secret.'
-    required: false
-    default: 'strands-agent-config'
+    description: 'AWS Secrets Manager secret ID containing agent configuration. Will fetch sessions_bucket, langfuse_*, and evals_sqs_queue_arn from this secret.'
+    required: true
   sessions_bucket:
     description: 'S3 bucket for session storage (optional if using aws_secrets_manager_secret_id)'
     required: false
