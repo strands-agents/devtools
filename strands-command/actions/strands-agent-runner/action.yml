@@ -4,27 +4,31 @@ inputs:
   aws_role_arn:
     description: 'AWS IAM role ARN for authentication'
     required: true
-  sessions_bucket:
-    description: 'S3 bucket for session storage'
+  aws_secrets_manager_secret_id:
+    description: 'AWS Secrets Manager secret ID containing agent configuration. Will fetch sessions_bucket, langfuse_*, and evals_sqs_queue_arn from this secret.'
     required: true
+  sessions_bucket:
+    description: 'S3 bucket for session storage (optional if using aws_secrets_manager_secret_id)'
+    required: false
+    default: ''
   write_permission:
     description: 'If this action runs with write permission. If this is false, you should run the `strands-write-executor` action after this one with write permission.'
     required: true
     default: 'false'
   langfuse_public_key:
-    description: 'Langfuse public key for telemetry (optional)'
+    description: 'Langfuse public key for telemetry (optional, can be fetched from Secrets Manager)'
     required: false
     default: ''
   langfuse_secret_key:
-    description: 'Langfuse secret key for telemetry (optional)'
+    description: 'Langfuse secret key for telemetry (optional, can be fetched from Secrets Manager)'
     required: false
     default: ''
   langfuse_host:
-    description: 'Langfuse host URL for telemetry (optional, e.g., https://us.cloud.langfuse.com)'
+    description: 'Langfuse host URL for telemetry (optional, can be fetched from Secrets Manager)'
     required: false
-    default: 'https://us.cloud.langfuse.com'
+    default: ''
   evals_sqs_queue_arn:
-    description: 'SQS queue ARN for eval triggers (optional)'
+    description: 'SQS queue ARN for eval triggers (optional, can be fetched from Secrets Manager)'
     required: false
     default: ''
 
@@ -100,7 +104,42 @@ runs:
         git config --global core.pager cat
         PAGER=cat
 
-    - name: Configure AWS credentials
+    # Stage 1: Configure AWS credentials with minimal permissions to fetch secrets
+    - name: Configure AWS credentials (initial)
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_role_arn }}
+        role-session-name: GitHubActions-StrandsAgent-${{ github.run_id }}-init
+        aws-region: us-west-2
+        mask-aws-account-id: true
+        inline-session-policy: >-
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": "secretsmanager:GetSecretValue",
+                "Resource": "*"
+              }
+            ]
+          }
+
+    - name: Retrieve secrets from AWS Secrets Manager
+      id: secrets
+      shell: bash
+      run: |
+        if [ -n "${{ inputs.aws_secrets_manager_secret_id }}" ]; then
+          echo "Fetching configuration from AWS Secrets Manager..."
+          SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${{ inputs.aws_secrets_manager_secret_id }}" --query SecretString --output text --region us-east-1)
+          echo "sessions_bucket=$(echo $SECRET_JSON | jq -r '.AGENT_SESSIONS_BUCKET // empty')" >> $GITHUB_OUTPUT
+          echo "langfuse_public_key=$(echo $SECRET_JSON | jq -r '.LANGFUSE_PUBLIC_KEY // empty')" >> $GITHUB_OUTPUT
+          echo "langfuse_secret_key=$(echo $SECRET_JSON | jq -r '.LANGFUSE_SECRET_KEY // empty')" >> $GITHUB_OUTPUT
+          echo "langfuse_host=$(echo $SECRET_JSON | jq -r '.LANGFUSE_HOST // empty')" >> $GITHUB_OUTPUT
+          echo "evals_sqs_queue_arn=$(echo $SECRET_JSON | jq -r '.EVALS_SQS_QUEUE_ARN // empty')" >> $GITHUB_OUTPUT
+        fi
+
+    # Stage 2: Reconfigure AWS credentials with scoped permissions using fetched values
+    - name: Configure AWS credentials (scoped)
       uses: aws-actions/configure-aws-credentials@v4
       with:
         role-to-assume: ${{ inputs.aws_role_arn }}
@@ -126,22 +165,21 @@ runs:
                   "s3:DeleteObject"
                 ],
                 "Resource": [
-                  "arn:aws:s3:::${{ inputs.sessions_bucket }}/*"
+                  "arn:aws:s3:::${{ inputs.sessions_bucket || steps.secrets.outputs.sessions_bucket }}/*"
                 ]
               }, {
                 "Effect": "Allow",
                 "Action": "s3:ListBucket",
                 "Resource": [
-                  "arn:aws:s3:::${{ inputs.sessions_bucket }}"
+                  "arn:aws:s3:::${{ inputs.sessions_bucket || steps.secrets.outputs.sessions_bucket }}"
                 ]
               }, {
                 "Effect": "Allow",
                 "Action": "sqs:SendMessage",
-                "Resource": "${{ inputs.evals_sqs_queue_arn }}"
+                "Resource": "${{ inputs.evals_sqs_queue_arn || steps.secrets.outputs.evals_sqs_queue_arn }}"
               }
             ]
           }
-
 
     - name: Execute strands command
       shell: bash
@@ -160,21 +198,21 @@ runs:
         # AWS Configuration
         AWS_REGION: 'us-west-2'
 
-        # Session Manager
-        S3_SESSION_BUCKET: ${{ inputs.sessions_bucket }}
+        # Session Manager (input overrides Secrets Manager)
+        S3_SESSION_BUCKET: ${{ inputs.sessions_bucket || steps.secrets.outputs.sessions_bucket }}
         SESSION_ID: ${{ steps.read-input.outputs.session_id }}
 
         # Strands Env Vars
         STRANDS_TOOL_CONSOLE_MODE: 'enabled'
         BYPASS_TOOL_CONSENT: 'true'
 
-        # Langfuse Telemetry (optional)
-        LANGFUSE_PUBLIC_KEY: ${{ inputs.langfuse_public_key }}
-        LANGFUSE_SECRET_KEY: ${{ inputs.langfuse_secret_key }}
-        LANGFUSE_HOST: ${{ inputs.langfuse_host }}
+        # Langfuse Telemetry (input overrides Secrets Manager)
+        LANGFUSE_PUBLIC_KEY: ${{ inputs.langfuse_public_key || steps.secrets.outputs.langfuse_public_key }}
+        LANGFUSE_SECRET_KEY: ${{ inputs.langfuse_secret_key || steps.secrets.outputs.langfuse_secret_key }}
+        LANGFUSE_HOST: ${{ inputs.langfuse_host || steps.secrets.outputs.langfuse_host }}
 
-        # Evals Configuration (optional)
-        EVALS_SQS_QUEUE_ARN: ${{ inputs.evals_sqs_queue_arn }}
+        # Evals Configuration (input overrides Secrets Manager)
+        EVALS_SQS_QUEUE_ARN: ${{ inputs.evals_sqs_queue_arn || steps.secrets.outputs.evals_sqs_queue_arn }}
       run: |
         uv run --no-project ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/agent_runner.py "$INPUT_TASK"
 
