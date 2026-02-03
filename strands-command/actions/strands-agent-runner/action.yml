@@ -42,6 +42,7 @@ runs:
       run: |
         echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "session_id=$(jq -r .session_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "head_repo=$(jq -r '.head_repo // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "system_prompt<<EOF" >> $GITHUB_OUTPUT
         jq -r .system_prompt strands-parsed-input.json >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
@@ -72,6 +73,7 @@ runs:
       uses: actions/checkout@v6
       with:
         ref: ${{ steps.read-input.outputs.ref }}
+        repository: ${{ steps.read-input.outputs.head_repo || github.repository }}
 
     - name: Set up Python
       uses: actions/setup-python@v4
