@@ -113,11 +113,6 @@ Resources created:
 - IAM role: `strands-evals-dashboard-lambda-edge-role`
 - IAM role: `strands-evals-lambda-role`
 
-### Ada Burner Account
-
-```bash
-ada credentials update --account=<ACCOUNT_ID> --provider=conduit --role=IibsAdminAccess-DO-NOT-DELETE --once
-```
 
 ## Tech Stack
 
