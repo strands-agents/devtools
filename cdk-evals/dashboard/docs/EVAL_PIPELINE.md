@@ -256,19 +256,6 @@ aws sqs get-queue-attributes \
     --region us-east-1 \
     --attribute-names ApproximateNumberOfMessages
 ```
-
-## Cost Estimate
-
-For moderate usage (10-50 evaluations per day):
-
-| Service | Estimated Monthly Cost |
-|---------|----------------------|
-| Lambda | < $5 (depends on execution time) |
-| SQS | < $1 |
-| Secrets Manager | < $1 |
-| CloudWatch Logs | < $1 |
-| **Total** | **~$2-8/month** |
-
 ## Cleanup
 
 To remove all evaluation pipeline resources:

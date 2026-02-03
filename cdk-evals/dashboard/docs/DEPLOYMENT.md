@@ -111,16 +111,6 @@ aws cloudfront list-invalidations --distribution-id <DISTRIBUTION_ID> --region u
 
 For immediate testing, use browser incognito mode or add cache-busting query params.
 
-## Cost Estimate
-
-For internal team use with moderate traffic:
-
-| Service | Estimated Monthly Cost |
-|---------|----------------------|
-| S3 Storage | < $1 (few MB) |
-| S3 Requests | < $1 |
-| CloudFront | $0-5 depending on traffic |
-| **Total** | **~$1-5/month** |
 
 CloudFront provides 1TB free transfer per month under the free tier.
 

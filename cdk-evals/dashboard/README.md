@@ -52,8 +52,8 @@ This preserves evaluation data in S3 (`runs/` and `runs_index.json`) while updat
 ### Access
 
 The dashboard is protected by Basic Auth:
-- **Username:** `strands_evals_dashboard`
-- **Password:** See `infrastructure/basic-auth-lambda.js`
+- **Username:** `***`
+- **Password:** `***`
 
 ### Uploading Evaluation Results
 
