@@ -6,7 +6,7 @@ inputs:
     required: true
   aws_secrets_manager_secret_id:
     description: 'AWS Secrets Manager secret ID containing agent configuration. Will fetch sessions_bucket, langfuse_*, and evals_sqs_queue_arn from this secret.'
-    required: true
+    required: false
   sessions_bucket:
     description: 'S3 bucket for session storage (optional if using aws_secrets_manager_secret_id)'
     required: false
@@ -138,6 +138,47 @@ runs:
           echo "evals_sqs_queue_arn=$(echo $SECRET_JSON | jq -r '.EVALS_SQS_QUEUE_ARN // empty')" >> $GITHUB_OUTPUT
         fi
 
+    - name: Build scoped IAM policy
+      id: policy
+      shell: bash
+      run: |
+        SESSIONS_BUCKET="${{ inputs.sessions_bucket || steps.secrets.outputs.sessions_bucket }}"
+        EVALS_SQS_QUEUE_ARN="${{ inputs.evals_sqs_queue_arn || steps.secrets.outputs.evals_sqs_queue_arn }}"
+
+        # Base statements for Bedrock and S3
+        STATEMENTS='[
+          {
+            "Effect": "Allow",
+            "Action": ["bedrock:InvokeModelWithResponseStream", "bedrock:InvokeModel"],
+            "Resource": "*"
+          },
+          {
+            "Effect": "Allow",
+            "Action": ["s3:PutObject", "s3:GetObject", "s3:DeleteObject"],
+            "Resource": ["arn:aws:s3:::'"$SESSIONS_BUCKET"'/*"]
+          },
+          {
+            "Effect": "Allow",
+            "Action": "s3:ListBucket",
+            "Resource": ["arn:aws:s3:::'"$SESSIONS_BUCKET"'"]
+          }
+        ]'
+
+        # Conditionally add SQS statement if evals_sqs_queue_arn is set
+        if [ -n "$EVALS_SQS_QUEUE_ARN" ]; then
+          SQS_STATEMENT='{
+            "Effect": "Allow",
+            "Action": "sqs:SendMessage",
+            "Resource": "'"$EVALS_SQS_QUEUE_ARN"'"
+          }'
+          STATEMENTS=$(echo "$STATEMENTS" | jq --argjson sqs "$SQS_STATEMENT" '. + [$sqs]')
+        fi
+
+        POLICY=$(jq -n --argjson stmts "$STATEMENTS" '{"Version": "2012-10-17", "Statement": $stmts}')
+        echo "policy<<EOF" >> $GITHUB_OUTPUT
+        echo "$POLICY" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
     # Stage 2: Reconfigure AWS credentials with scoped permissions using fetched values
     - name: Configure AWS credentials (scoped)
       uses: aws-actions/configure-aws-credentials@v4
@@ -146,40 +187,7 @@ runs:
         role-session-name: GitHubActions-StrandsAgent-${{ github.run_id }}
         aws-region: us-west-2
         mask-aws-account-id: true
-        inline-session-policy: >-
-          {
-            "Version": "2012-10-17",
-            "Statement": [
-              {
-                "Effect": "Allow",
-                "Action": [
-                  "bedrock:InvokeModelWithResponseStream",
-                  "bedrock:InvokeModel"
-                ],
-                "Resource": "*"
-              }, {
-                "Effect": "Allow",
-                "Action": [
-                  "s3:PutObject",
-                  "s3:GetObject",
-                  "s3:DeleteObject"
-                ],
-                "Resource": [
-                  "arn:aws:s3:::${{ inputs.sessions_bucket || steps.secrets.outputs.sessions_bucket }}/*"
-                ]
-              }, {
-                "Effect": "Allow",
-                "Action": "s3:ListBucket",
-                "Resource": [
-                  "arn:aws:s3:::${{ inputs.sessions_bucket || steps.secrets.outputs.sessions_bucket }}"
-                ]
-              }, {
-                "Effect": "Allow",
-                "Action": "sqs:SendMessage",
-                "Resource": "${{ inputs.evals_sqs_queue_arn || steps.secrets.outputs.evals_sqs_queue_arn }}"
-              }
-            ]
-          }
+        inline-session-policy: ${{ steps.policy.outputs.policy }}
 
     - name: Execute strands command
       shell: bash
