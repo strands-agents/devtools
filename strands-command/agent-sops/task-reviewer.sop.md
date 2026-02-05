@@ -13,7 +13,7 @@ Initialize the review environment by checking out the main branch for guidance.
 **Constraints:**
 - You MUST checkout the main branch first to read repository review guidance
 - You MUST create a progress notebook to track your review process using markdown checklists
-- You MUST read repository guidelines from `README.md`, `CONTRIBUTING.md`, and `AGENTS.md` (if present)
+- You MUST read repository guidelines from `README.md`, `CONTRIBUTING.md`, `AGENTS.md` (if present), and `API_BAR_RAISING.md` (if present)
 - You MUST create a checklist of items to review based on the repository guidelines
 
 ### 2. Analyze Pull Request Context
@@ -51,7 +51,31 @@ Analyze the overall structure and architecture of the changes.
 - You MUST identify any potential breaking changes
 - You MUST check for proper separation of concerns
 
-#### 3.2 Code Quality Review
+#### 3.2 API Bar Raising Review
+
+If the PR introduces or modifies public APIs, evaluate the API design from a customer perspective.
+
+**Constraints:**
+- You MUST check if the PR has `needs-api-review` or `completed-api-review` labels
+- You MUST verify the PR includes API documentation in the description:
+  - Expected use cases for the new feature
+  - Example code snippets demonstrating usage
+  - Complete API signatures with default parameter values
+  - Module exports (what's exported from each module)
+- You MUST evaluate the API against SDK tenets and decision records
+- You MUST verify the API addresses documented use cases
+- You MUST check if default parameters/behavior represent the most common usage
+- You MUST assess the level of abstraction and extensibility:
+  - What is customizable and what is not?
+  - Is it the proper level of abstraction?
+- You MUST identify use cases that are not addressed and question why
+- You MUST flag if the PR requires API review but lacks the `needs-api-review` label for:
+  - New public classes or abstractions customers will use
+  - New primitives or frequently-used functionality
+  - Changes to existing public API contracts
+- You MAY suggest the change scope requires designated API reviewer or team consensus if substantial
+
+#### 3.3 Code Quality Review
 
 Examine the code for quality, readability, and maintainability issues.
 
@@ -65,7 +89,7 @@ Examine the code for quality, readability, and maintainability issues.
 - You MUST check for potential performance issues
 - You MUST verify design decisions are documented (why certain patterns were chosen, alternatives considered, tradeoffs made)
 
-#### 3.3 Testing Review
+#### 3.4 Testing Review
 
 Analyze the test coverage and quality of tests.
 
@@ -77,7 +101,7 @@ Analyze the test coverage and quality of tests.
 - You MUST identify missing edge cases or error scenarios
 - You MUST verify integration tests are included when appropriate
 
-#### 3.4 Documentation Review
+#### 3.5 Documentation Review
 
 Check documentation completeness and quality.
 
