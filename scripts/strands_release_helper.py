@@ -9,7 +9,7 @@ WHAT IT DOES:
   2. Gets latest tag and commits since that tag
   3. Auto-determines version bump (MAJOR/MINOR/PATCH) from commit messages
   4. Runs integration tests for each repo
-  5. Generates MCM parameters and release report
+  5. Generates release parameters and release report
 
 USAGE:
   python3 strands_release_helper.py                     # Full run with tests
@@ -21,7 +21,7 @@ USAGE:
 OUTPUT:
   {work_dir}/
     ├── release_report.md   # Human-readable summary
-    ├── mcm_params.txt      # Copy-paste ready MCM parameters
+    ├── release_params.txt  # Copy-paste ready release parameters
     ├── logs/               # Full test output logs
     │   ├── sdk-python_tests.log
     │   ├── sdk-typescript_tests.log
@@ -74,7 +74,7 @@ REPOS = {
     "sdk-python": {
         "url": "https://github.com/strands-agents/sdk-python",
         "test_cmd": "hatch run test-integ",
-        "mcm_params": {
+        "release_params": {
             "version": ["strands-sdk-python-version", "strands-agent-sdk-python-version"],
             "changelog": ["strands-agent-sdk-python-changelog"],
         },
@@ -82,7 +82,7 @@ REPOS = {
     "sdk-typescript": {
         "url": "https://github.com/strands-agents/sdk-typescript",
         "test_cmd": "npm install && npm run test:integ",
-        "mcm_params": {
+        "release_params": {
             "version": ["strands-sdk-typescript-version", "strands-agent-sdk-typescript-version"],
             "changelog": ["strands-agent-sdk-typescript-changelog"],
         },
@@ -90,16 +90,15 @@ REPOS = {
     "tools": {
         "url": "https://github.com/strands-agents/tools",
         "test_cmd": "hatch run test-integ",
-        "mcm_params": {
+        "release_params": {
             "version": ["strands-tools-version", "strands-agent-tools-version"],
             "changelog": ["strands-agent-tool-changelog"],
         },
     },
-
     "agent-sop": {
         "url": "https://github.com/strands-agents/agent-sop",
         "test_cmd": "cd python && hatch test",
-        "mcm_params": {
+        "release_params": {
             "version": ["strands-agent-sop-version"],
             "changelog": ["strands-agent-sop-changelog"],
         },
@@ -107,7 +106,7 @@ REPOS = {
     "agent-builder": {
         "url": "https://github.com/strands-agents/agent-builder",
         "test_cmd": "hatch test",
-        "mcm_params": {
+        "release_params": {
             "version": ["strands-agent-builder-version"],
             "changelog": ["strands-agent-builder-changelog"],
         },
@@ -115,7 +114,7 @@ REPOS = {
     "evals": {
         "url": "https://github.com/strands-agents/evals",
         "test_cmd": "hatch run test-integ",
-        "mcm_params": {
+        "release_params": {
             "version": ["strands-evals-version", "strands-agent-evals-version"],
             "changelog": ["strands-agent-sdk-evals-changelog"],
         },
@@ -123,7 +122,7 @@ REPOS = {
     "mcp-server": {
         "url": "https://github.com/strands-agents/mcp-server",
         "test_cmd": "hatch test",
-        "mcm_params": {
+        "release_params": {
             "version": ["strands-mcp-server-version", "strands-agent-mcp-server-version"],
             "changelog": ["strands-agent-mcp-server-changelog"],
         },
@@ -455,24 +454,24 @@ def generate_report(results: list[RepoResult], work_dir: Path) -> str:
     return "\n".join(lines)
 
 
-def generate_mcm_params(results: list[RepoResult]) -> str:
-    """Generate MCM parameters file"""
-    lines = ["# MCM Parameters", f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ""]
+def generate_release_params(results: list[RepoResult]) -> str:
+    """Generate release parameters file"""
+    lines = ["# Release Parameters", f"# Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ""]
 
     all_tests_pass = all(r.test_passed is not False for r in results)
-    lines.append(f"{{{{are-test-passing}}}} = {'YES' if all_tests_pass else 'NO'}")
+    lines.append(f"{{{{are-tests-passing}}}} = {'YES' if all_tests_pass else 'NO'}")
     lines.append("")
 
     for r in results:
         config = REPOS.get(r.name, {})
-        mcm = config.get("mcm_params", {})
+        params = config.get("release_params", {})
 
         # Version params
-        for param in mcm.get("version", []):
+        for param in params.get("version", []):
             lines.append(f"{{{{{param}}}}} = {r.new_version}")
 
         # Changelog params
-        for param in mcm.get("changelog", []):
+        for param in params.get("changelog", []):
             lines.append(f"{{{{{param}}}}} = ")
             lines.append(r.changelog)
             lines.append("")
@@ -548,10 +547,10 @@ def main():
     report_path.write_text(report)
     print(f"  Report: {report_path}")
 
-    mcm_params = generate_mcm_params(results)
-    params_path = work_dir / "mcm_params.txt"
-    params_path.write_text(mcm_params)
-    print(f"  MCM Params: {params_path}")
+    release_params = generate_release_params(results)
+    params_path = work_dir / "release_params.txt"
+    params_path.write_text(release_params)
+    print(f"  Release Params: {params_path}")
 
     # Print summary
     print("\n" + "=" * 60)
