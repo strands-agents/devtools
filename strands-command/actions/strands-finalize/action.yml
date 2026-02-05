@@ -157,20 +157,18 @@ runs:
         fi
 
     - name: Remove strands-running label
-      if: always()
+      if: always() && steps.read-input.outputs.issue_id != ''
       uses: actions/github-script@v8
       with:
         github-token: ${{ github.token }}
         script: |
-          if ('${{ steps.read-input.outputs.issue_id }}') {
-            try {
-              await github.rest.issues.removeLabel({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: ${{ steps.read-input.outputs.issue_id }},
-                name: 'strands-running'
-              });
-            } catch (error) {
-              console.log('Label removal failed (may not exist):', error.message);
-            }
+          try {
+            await github.rest.issues.removeLabel({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: ${{ steps.read-input.outputs.issue_id }},
+              name: 'strands-running'
+            });
+          } catch (error) {
+            console.log('Label removal failed (may not exist):', error.message);
           }
