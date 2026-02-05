@@ -5,7 +5,7 @@ Strands Agents Release Helper
 Automates the release preparation process for all Strands Agents repositories.
 
 WHAT IT DOES:
-  1. Clones all 8 repos (or pulls if already cloned)
+  1. Clones all repos (or pulls if already cloned)
   2. Gets latest tag and commits since that tag
   3. Auto-determines version bump (MAJOR/MINOR/PATCH) from commit messages
   4. Runs integration tests for each repo
@@ -15,7 +15,7 @@ USAGE:
   python3 strands_release_helper.py                     # Full run with tests
   python3 strands_release_helper.py --skip-tests        # Just changelogs, no tests
   python3 strands_release_helper.py --skip-tests --parallel  # Fast parallel mode
-  python3 strands_release_helper.py --repo sdk-python   # Single repo only
+  python3 strands_release_helper.py --repos sdk-python,tools  # Specific repos
   python3 strands_release_helper.py --work-dir /tmp/release  # Custom work dir
 
 OUTPUT:
@@ -482,7 +482,7 @@ def generate_release_params(results: list[RepoResult]) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Strands Agents Release Helper")
     parser.add_argument("--skip-tests", action="store_true", help="Skip running integration tests")
-    parser.add_argument("--repo", type=str, help="Process only a specific repo")
+    parser.add_argument("--repos", type=str, help="Comma-separated list of repos to process (e.g., sdk-python,tools)")
     parser.add_argument("--work-dir", type=str, default="./release_work", help="Working directory for clones")
     parser.add_argument("--parallel", action="store_true", help="Run repos in parallel (tests may conflict)")
     args = parser.parse_args()
@@ -499,7 +499,13 @@ def main():
     print()
 
     # Filter repos if specified
-    repos_to_process = {args.repo: REPOS[args.repo]} if args.repo else REPOS
+    repos_to_process = REPOS
+    if args.repos:
+        repo_names = [r.strip() for r in args.repos.split(",")]
+        repos_to_process = {name: REPOS[name] for name in repo_names if name in REPOS}
+        invalid = [name for name in repo_names if name not in REPOS]
+        if invalid:
+            print(f"Warning: Unknown repos ignored: {invalid}")
 
     results = []
 
