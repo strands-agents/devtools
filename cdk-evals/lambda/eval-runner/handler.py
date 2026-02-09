@@ -94,7 +94,8 @@ def run_session_evaluation(session_id: str, eval_type: str):
         reports, 
         experiment, 
         run_id_prefix=eval_type,
-        source="lambda_sqs_trigger"
+        source="lambda_sqs_trigger",
+        agent_type=eval_type,
     )
 
     return {
