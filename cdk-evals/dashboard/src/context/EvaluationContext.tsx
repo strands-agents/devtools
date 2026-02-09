@@ -31,21 +31,27 @@ export interface RunsIndex {
   runs: RunIndexEntry[];
 }
 
-// Agent type inference from run_id
+// Agent type inference from run_id (fallback for runs without explicit agent_type)
 export function inferAgentType(runId: string, agentType?: string): string {
   if (agentType) return agentType;
-  if (runId.startsWith("release_notes_")) return "release-notes";
-  if (runId.startsWith("run_")) return "github-issues";
+  if (runId.startsWith("release_notes_")) return "release_notes";
+  if (runId.startsWith("github_issue_")) return "github_issue";
+  if (runId.startsWith("reviewer_")) return "reviewer";
+  if (runId.startsWith("implementer_")) return "implementer";
   return "unknown";
 }
 
 // Get display name for agent type
 export function getAgentTypeDisplayName(agentType: string): string {
   switch (agentType) {
-    case "release-notes":
+    case "release_notes":
       return "Release Notes Agent";
-    case "github-issues":
+    case "github_issue":
       return "GitHub Issues Agent";
+    case "reviewer":
+      return "Reviewer Agent";
+    case "implementer":
+      return "Implementer Agent";
     default:
       return agentType;
   }
