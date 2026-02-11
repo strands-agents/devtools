@@ -32,6 +32,7 @@ def export_reports_to_s3(
     experiment: "Experiment",
     run_id_prefix: str = "run",
     source: str = "langfuse_post_hoc",
+    agent_type: str = "",
 ) -> str:
     """Export evaluation reports to S3 for the dashboard.
 
@@ -40,6 +41,7 @@ def export_reports_to_s3(
         experiment: The Experiment object containing cases and evaluators
         run_id_prefix: Prefix for the run ID (default: "run")
         source: Source identifier for the run (default: "langfuse_post_hoc")
+        agent_type: Agent type identifier for dashboard filtering (e.g., "reviewer", "github_issue")
 
     Returns:
         The run_id of the exported run
@@ -76,6 +78,7 @@ def export_reports_to_s3(
         "total_cases": len(experiment.cases),
         "files": [f"eval_{e.get_type_name()}.json" for e in experiment.evaluators],
         "source": source,
+        "agent_type": agent_type,
     }
 
     manifest_key = f"runs/{run_id}/manifest.json"
@@ -88,7 +91,7 @@ def export_reports_to_s3(
     )
 
     # Update runs_index.json
-    _update_runs_index(s3, run_id, timestamp, experiment)
+    _update_runs_index(s3, run_id, timestamp, experiment, agent_type)
 
     # Invalidate CloudFront cache for runs_index.json
     _invalidate_cloudfront_cache()
@@ -103,6 +106,7 @@ def _update_runs_index(
     run_id: str,
     timestamp: datetime,
     experiment: "Experiment",
+    agent_type: str = "",
 ) -> None:
     """Update the runs_index.json file in S3.
 
@@ -111,6 +115,7 @@ def _update_runs_index(
         run_id: The run identifier
         timestamp: Run timestamp
         experiment: The Experiment object
+        agent_type: Agent type identifier for dashboard filtering
     """
     runs_index_key = "runs_index.json"
 
@@ -131,6 +136,7 @@ def _update_runs_index(
         "timestamp": timestamp.isoformat(),
         "total_cases": len(experiment.cases),
         "evaluator_count": len(experiment.evaluators),
+        "agent_type": agent_type,
     }
 
     # Remove existing entry with same run_id (if re-uploading)
