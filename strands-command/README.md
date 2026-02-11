@@ -393,6 +393,24 @@ Creates high-quality release notes highlighting major features and bug fixes.
 **Trigger**:
 - `/strands release-notes` on an Issue
 
+### Documentation Writer (`task-doc-writer.sop.md`)
+
+Produces documentation updates based on tasks described in GitHub issues.
+
+**Workflow**: Understand Task → Research → Plan (with user approval) → Develop Examples → Write Docs → Commit → Pull Request
+
+**Capabilities:**
+- Handles any documentation task: new feature docs, fixes, restructuring, examples, tutorials
+- Clones source SDK repositories when needed to understand features
+- Studies existing docs structure to match style and depth
+- Writes documentation following the Strands style guide
+- Tests all code examples before inclusion
+- Creates pull requests with conventional commit messages
+- Iterates on review feedback
+
+**Trigger**:
+- `/strands docs` on an Issue
+
 
 ## Security
 
