@@ -53,11 +53,14 @@ Read the issue and research everything needed to complete the documentation task
 If the task involves documenting a feature or requires understanding SDK source code:
 
 **Constraints:**
-- You MUST clone the relevant source repository if needed:
-  ```
-  git clone https://github.com/<org>/<repo>.git /tmp/<repo>
-  ```
-  Common repositories: `strands-agents/sdk-python`, `strands-agents/sdk-typescript`, `strands-agents/tools`
+- You MUST clone the relevant source repository if needed. The Strands Agents repositories are:
+  - `strands-agents/sdk-python` — Python SDK (primary SDK)
+  - `strands-agents/sdk-typescript` — TypeScript SDK
+  - `strands-agents/tools` — Python tools package
+  - `strands-agents/evals` — Python evaluation framework
+  
+  Clone to `/tmp/<repo>`: `git clone https://github.com/strands-agents/<repo>.git /tmp/<repo>`
+- If the issue references a PR, determine which repository it belongs to from the PR URL or issue description
 - If the issue references a PR:
   - You MUST examine the PR diff, description, and review comments
   - When using `git diff`, add `| head -n 99999` to ensure it's not interactive
@@ -71,7 +74,26 @@ If the task involves documenting a feature or requires understanding SDK source 
 - You MUST record your findings in your notebook
 - You MAY skip this step if the task doesn't require source code analysis (e.g., fixing typos, restructuring existing content)
 
-#### 2.3 Research Existing Documentation
+#### 2.3 Check Cross-SDK Feature Parity
+
+When documenting a feature, verify whether it exists in both Python and TypeScript SDKs.
+
+**Constraints:**
+- You MUST check if the feature exists in both `sdk-python` and `sdk-typescript`
+  - Clone both repos if not already cloned
+  - Search for the equivalent API, class, or functionality in the other SDK
+- If the feature exists in both SDKs:
+  - You MUST include code examples for both Python and TypeScript using tabbed code blocks
+- If the feature exists only in Python:
+  - You MUST add the `{{ ts_not_supported() }}` macro
+- If the feature exists only in TypeScript:
+  - You MUST note this clearly and only include TypeScript examples
+- If the feature is experimental or partially implemented in one SDK:
+  - You MUST add the `{{ experimental_feature_warning() }}` macro for that SDK
+- You MUST record the parity status in your notebook
+- You MAY skip this step if the task doesn't involve SDK features (e.g., fixing typos, restructuring content)
+
+#### 2.4 Research Existing Documentation
 
 **Constraints:**
 - You MUST explore the existing docs repository structure to understand what already exists
