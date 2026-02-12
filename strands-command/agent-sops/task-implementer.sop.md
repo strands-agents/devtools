@@ -276,10 +276,18 @@ If you have received feedback from user reviews or PR comments, address them bef
   - Actionable code changes that can be implemented immediately
   - Clarifying questions that require user input
   - Suggestions to consider for future iterations
+- You MUST identify if feedback requires changes to test expectations (not just implementation)
+- When user feedback contradicts existing test assertions or requires behavior changes:
+  - You MUST prioritize user feedback over existing tests
+  - You MUST return to step 4.1 to update test expectations FIRST to match new requirements
+  - You MUST treat user feedback as new requirements that supersede old tests
+  - You MUST NOT attempt to satisfy both old tests and new requirements simultaneously
+  - You MUST NOT try to preserve old test logic that conflicts with new requirements
 - You MUST implement actionable code changes before proceeding
 - You MUST re-run tests after addressing feedback to ensure nothing is broken
 - You MUST return to step 4.3 after implementing changes to review the updated code
 - You MUST use the handoff_to_user tool if clarification is needed before you can proceed
+- You SHOULD note in your progress tracking when tests need to be rewritten vs. just implementation changes
 
 ### 5. Commit and Pull Request Phase
 
