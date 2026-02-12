@@ -160,7 +160,8 @@ Add the review comments to the pull request.
 - You MUST prioritize the most important feedback
 - You MUST be respectful and professional in all comments
 - You SHOULD limit to 10-15 comments per review to avoid overwhelming the author
-- You MUST focus on teaching moments that help the developer improve
+- You MUST focus on improvements and suggestions only
+- You MUST NOT add inline comments praising good coding practices
 
 ### 6. Summary Review Comment
 
@@ -169,15 +170,26 @@ Provide a concise overall summary of the review.
 **Constraints:**
 - You MUST create a pull request review using GitHub's review feature
 - You MUST provide an overall assessment (Approve, Request Changes, Comment)
-- You MUST keep the summary concise - rely on GitHub's UI to display individual comments
-- You MUST highlight key themes or patterns in the feedback
+- You MUST keep the summary concise, informative, and easy to read
+- You MUST NOT repeat information already covered in inline comments
+- You MUST focus on high-level themes and patterns, not individual issues
+- You MUST use collapsible `<details>` sections if the summary contains multiple categories or is longer than 5 lines
+- You MAY include a brief positive note at the end (1 sentence maximum)
 - You SHOULD use this format:
   ```
   **Assessment**: [Approve/Request Changes/Comment]
   
-  **Key Themes**: [High-level patterns or areas needing attention]
+  [Brief high-level summary of review themes - 1-2 sentences]
   
-  [Brief encouraging note]
+  <details>
+  <summary>Review Categories</summary>
+  
+  - **[Category]**: [High-level pattern or theme, not specific issues]
+  - **[Category]**: [High-level pattern or theme, not specific issues]
+  
+  </details>
+  
+  [Optional: Brief positive note - 1 sentence max]
   ```
 
 ## Review Focus Areas
