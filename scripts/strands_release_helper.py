@@ -69,6 +69,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
+os.environ['AWS_REGION'] = 'us-east-1'
+
 
 def ensure_uv_installed():
     """Ensure uv is installed, installing it if necessary."""
@@ -131,9 +134,6 @@ def setup_environment(work_dir: Path):
 
     print("Environment setup complete.\n")
 
-
-os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
-os.environ['AWS_REGION'] = 'us-east-1'
 
 # Repository configurations
 REPOS = {
