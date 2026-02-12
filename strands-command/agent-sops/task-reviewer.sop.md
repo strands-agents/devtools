@@ -81,7 +81,8 @@ If the PR introduces or modifies public APIs, evaluate the API design from a cus
 Examine the code for quality, readability, and maintainability issues.
 
 **Constraints:**
-- You MUST check for language-specific best practices as defined in repository guidelines
+- You MUST identify the programming language of each file being reviewed
+- You MUST check for language-specific best practices as defined in repository guidelines, ensuring conventions match the file's language (e.g., do not apply Python conventions to TypeScript)
 - You MUST verify code is readable with clear variable/function names and logical structure
 - You MUST check that code is maintainable with modular design and loose coupling
 - You MUST check for code complexity and suggest simplifications
