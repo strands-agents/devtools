@@ -69,6 +69,72 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
+
+def ensure_uv_installed():
+    """Ensure uv is installed, installing it if necessary."""
+    if shutil.which("uv"):
+        print("uv is already installed.")
+        return
+
+    print("uv not found. Installing uv...")
+    code, stdout, stderr = run_cmd("curl -LsSf https://astral.sh/uv/install.sh | sh")
+    if code != 0:
+        sys.exit(1)
+
+    # Add ~/.local/bin to PATH (where uv installer places the binary)
+    local_bin = Path.home() / ".local" / "bin"
+    if str(local_bin) not in os.environ.get("PATH", ""):
+        os.environ["PATH"] = f"{local_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+
+    if not shutil.which("uv"):
+        # Also try ~/.cargo/bin (alternative install location)
+        cargo_bin = Path.home() / ".cargo" / "bin"
+        if str(cargo_bin) not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = f"{cargo_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+
+    if not shutil.which("uv"):
+        print("ERROR: uv installation succeeded but binary not found in PATH.")
+        sys.exit(1)
+
+    print("uv installed successfully.")
+
+
+def setup_environment(work_dir: Path):
+    """Set up a virtual environment using uv and install hatch."""
+    ensure_uv_installed()
+
+    venv_path = work_dir / ".venv"
+
+    # Create virtual environment (skip if it already exists)
+    if venv_path.exists():
+        print("Virtual environment already exists, reusing it.")
+    else:
+        print("Creating virtual environment with uv...")
+        code, stdout, stderr = run_cmd("uv venv", cwd=work_dir)
+        if code != 0:
+            print(f"Failed to create venv: {stderr}")
+            sys.exit(1)
+
+    # Activate the venv by modifying environment variables
+    # (equivalent to: source .venv/bin/activate)
+    venv_bin = venv_path / "bin"
+    os.environ["VIRTUAL_ENV"] = str(venv_path)
+    os.environ["PATH"] = f"{venv_bin}{os.pathsep}{os.environ.get('PATH', '')}"
+    os.environ.pop("PYTHONHOME", None)
+
+    # Install hatch
+    print("Installing hatch via uv pip...")
+    code, stdout, stderr = run_cmd("uv pip install hatch", cwd=work_dir)
+    if code != 0:
+        print(f"Failed to install hatch: {stderr}")
+        sys.exit(1)
+
+    print("Environment setup complete.\n")
+
+
+os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
+os.environ['AWS_REGION'] = 'us-east-1'
+
 # Repository configurations
 REPOS = {
     "sdk-python": {
@@ -491,6 +557,9 @@ def main():
     work_dir.mkdir(parents=True, exist_ok=True)
     log_dir = work_dir / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
+
+    # Set up uv environment (install uv if needed, create venv, install hatch)
+    setup_environment(work_dir)
 
     print(f"Strands Agents Release Helper")
     print(f"Working directory: {work_dir}")
