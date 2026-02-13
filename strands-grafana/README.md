@@ -2,86 +2,129 @@
 
 GitHub metrics collection and Grafana dashboards for the [strands-agents](https://github.com/strands-agents) organization.
 
-This tool syncs GitHub data (issues, PRs, stars, commits, CI runs, etc.) into a local SQLite database, then visualizes it through pre-built Grafana dashboards. It provides org-wide health metrics including time-to-first-response, merge times, open item counts, star growth, and more.
+A unified Docker container syncs GitHub data (issues, PRs, stars, commits, CI runs, reviews, comments) into a local SQLite database on a daily cron schedule, and serves pre-built Grafana dashboards for org-wide health and triage visibility.
 
-> Originally created by [@chaynabors](https://github.com/chaynabors) — migrated from [chaynabors/strands](https://github.com/chaynabors/strands) (commit `0fbe13c`).
+> Originally created by [@chaynabors](https://github.com/chaynabors) — dashboards and metrics CLI migrated from [chaynabors/strands](https://github.com/chaynabors/strands) (commit `0fbe13c`).
 
 ## Directory Structure
 
 ```
 strands-grafana/
-├── README.md                  ← you are here
-├── docker-compose.yaml        ← Grafana container config
-├── provisioning/              ← Grafana auto-provisioning
+├── README.md                              ← you are here
+├── docker/
+│   ├── Dockerfile                         ← unified Grafana + metrics-sync image
+│   ├── entrypoint.sh                      ← initial backfill, cron, then Grafana
+│   └── docker-compose.local.yaml          ← local dev compose
+├── provisioning/                           ← Grafana auto-provisioning
 │   ├── datasources/
-│   │   └── automatic.yaml     ← SQLite datasource config
+│   │   └── automatic.yaml                 ← SQLite datasource
 │   └── dashboards/
-│       ├── dashboards.yaml    ← dashboard provider config
-│       ├── health.json        ← org health dashboard
-│       └── triage.json        ← triage dashboard
-└── strands-metrics/           ← Rust CLI for syncing GitHub data
-    ├── Cargo.toml
-    └── src/
-        ├── main.rs
-        ├── client.rs
-        ├── db.rs
-        └── aggregates.rs
+│       ├── dashboards.yaml                ← dashboard provider config
+│       ├── health.json                    ← org health dashboard
+│       └── triage.json                    ← triage dashboard
+├── strands-metrics/                        ← Rust CLI (syncs GitHub → SQLite)
+│   ├── Cargo.toml
+│   └── src/
+│       ├── main.rs
+│       ├── client.rs
+│       ├── db.rs
+│       └── aggregates.rs
+└── cdk/                                    ← AWS CDK deployment
+    ├── bin/app.ts
+    ├── lib/strands-grafana-stack.ts
+    ├── package.json
+    ├── tsconfig.json
+    ├── cdk.json
+    └── .env.example
 ```
 
 ## Prerequisites
 
-- **Rust toolchain** — install via [rustup](https://rustup.rs/)
-- **Docker** and **Docker Compose** — for running Grafana
-- **GitHub personal access token** — with read access to the `strands-agents` org (public repos)
+| Tool | Purpose |
+|------|---------|
+| **Docker** + **Docker Compose** | Build & run the unified container |
+| **GitHub PAT** | Token with read access to the `strands-agents` org (public repos) |
+| **Node.js** ≥ 18 | CDK CLI (AWS deployment only) |
+| **AWS CDK CLI** | `npm install -g aws-cdk` (AWS deployment only) |
+| **Rust toolchain** | Only needed if building strands-metrics locally outside Docker |
 
-## Usage
+## Local Development
 
-### 1. Sync GitHub metrics
+Build and run the unified container locally:
 
-From the `strands-grafana` directory:
+```bash
+cd strands-grafana
+GITHUB_TOKEN=ghp_your_token docker compose -f docker/docker-compose.local.yaml up --build
+```
+
+On first start the container will:
+1. Run a full GitHub sync (this takes a few minutes)
+2. Start a daily cron job (06:00 UTC) for incremental syncs
+3. Launch Grafana
+
+Open [http://localhost:3000](http://localhost:3000) — no login required (anonymous read-only).
+
+The SQLite database is persisted in `docker/data/` on the host so subsequent restarts skip the initial backfill.
+
+### Running strands-metrics standalone
+
+If you prefer to run the Rust CLI directly (without Docker):
 
 ```bash
 cd strands-metrics
-GITHUB_TOKEN=ghp_your_token_here cargo run --release -- sync
+GITHUB_TOKEN=ghp_xxx cargo run --release -- sync       # full/incremental sync
+GITHUB_TOKEN=ghp_xxx cargo run --release -- sweep      # reconcile stale open items
+cargo run --release -- query "SELECT date, stars FROM daily_metrics WHERE repo='sdk-python' ORDER BY date DESC LIMIT 10"
 ```
 
-This will:
-- Fetch all public repos in the `strands-agents` org
-- Sync issues, PRs, reviews, comments, stars, commits, and CI workflow runs
-- Compute daily aggregate metrics
-- Write everything to `../metrics.db` (i.e. `strands-grafana/metrics.db`)
+By default the CLI writes to `../metrics.db` (the `strands-grafana/` root).
 
-Subsequent runs are incremental — only new/updated data is fetched.
+## AWS Deployment
 
-#### Other commands
+The CDK stack deploys everything to AWS as a single Fargate service with EFS-backed persistent storage:
+
+```
+ALB (port 80) → ECS Fargate → unified Docker image → EFS (metrics.db)
+```
+
+### 1. Create the GitHub token secret
 
 ```bash
-# Sweep: reconcile locally-open items against GitHub (mark deleted/closed items)
-GITHUB_TOKEN=ghp_xxx cargo run --release -- sweep
-
-# Query: run arbitrary SQL against the database
-cargo run --release -- query "SELECT date, stars FROM daily_metrics WHERE repo = 'sdk-python' ORDER BY date DESC LIMIT 10"
+aws secretsmanager create-secret \
+  --name strands-grafana/github-token \
+  --secret-string "ghp_your_token" \
+  --region us-west-2
 ```
 
-### 2. Launch Grafana
-
-From the `strands-grafana` directory:
+### 2. Configure and deploy
 
 ```bash
-docker-compose up
+cd cdk
+cp .env.example .env
+# Edit .env — set GITHUB_SECRET_ARN to the ARN from step 1
+
+npm install
+npx cdk deploy
 ```
 
-Then open [http://localhost:3000](http://localhost:3000) in your browser.
+The stack creates:
+- **VPC** (2 AZs, 1 NAT gateway)
+- **EFS** file system with access point at `/grafana-data` (RETAIN policy)
+- **ECS Fargate** service (0.5 vCPU, 1 GB RAM)
+- **ALB** on port 80 with health check at `/api/health`
 
-Grafana is configured for anonymous read-only access — no login required. The SQLite database is mounted read-only into the container.
+The ALB URL is printed in the stack outputs.
 
-### 3. Dashboards
+### Tear down
 
-- **Health** — org-wide metrics: stars, open issues/PRs, merge times, CI health, code churn, response times
+```bash
+cd cdk
+npx cdk destroy
+```
+
+> **Note:** The EFS file system has a RETAIN removal policy — delete it manually if you want to remove the data.
+
+## Dashboards
+
+- **Health** — org-wide metrics: stars, open issues & PRs, merge times (internal vs external), CI health, code churn, time-to-first-response
 - **Triage** — focused view for issue/PR triage workflows
-
-## Notes
-
-- `metrics.db` is gitignored — you must run the sync yourself to populate it
-- The sync respects GitHub API rate limits and will pause automatically when limits are low
-- The default db path when running from `strands-metrics/` is `../metrics.db`, placing it in the `strands-grafana/` root where `docker-compose.yaml` expects it

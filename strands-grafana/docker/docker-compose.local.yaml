@@ -1,0 +1,21 @@
+# Local development docker-compose
+# Build and run the unified Grafana + metrics-sync container locally.
+#
+# Usage:
+#   GITHUB_TOKEN=ghp_xxx docker compose -f docker/docker-compose.local.yaml up --build
+#
+# Then open http://localhost:3000
+
+services:
+  grafana:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: strands-grafana
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/var/lib/grafana/data
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    restart: unless-stopped

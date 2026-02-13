@@ -3,3 +3,12 @@ metrics.db
 
 # Rust build artifacts
 strands-metrics/target/
+
+# CDK
+cdk/node_modules/
+cdk/cdk.out/
+cdk/dist/
+cdk/.env
+
+# Docker local data
+docker/data/
