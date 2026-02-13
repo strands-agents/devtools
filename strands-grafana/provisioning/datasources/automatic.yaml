@@ -1,0 +1,10 @@
+apiVersion: 1
+
+datasources:
+  - name: GitHub Metrics (SQLite)
+    type: frser-sqlite-datasource
+    access: proxy
+    isDefault: true
+    jsonData:
+      path: /var/lib/grafana/metrics.db
+      mode: ro
