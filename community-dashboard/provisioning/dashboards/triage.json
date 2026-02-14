@@ -1,0 +1,676 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": 0,
+  "links": [],
+  "panels": [
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on GitHub",
+                    "url": "${__data.fields.URL}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "URL"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom.viz",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 118
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Days Open"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 87
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Author"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 148
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Repo"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 161
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 22,
+        "x": 1,
+        "y": 0
+      },
+      "id": 1,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Days Open"
+          }
+        ]
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "frser-sqlite-datasource",
+            "uid": "P2289B60D79A89B0C"
+          },
+          "queryText": "SELECT \n  p.repo as \"Repo\", \n  p.author as \"Author\", \n  p.title as \"Title\", \n  json_extract(p.data, '$.html_url') as \"URL\",\n  CASE \n    WHEN r.state = 'APPROVED' THEN 'Approved' \n    WHEN r.state = 'CHANGES_REQUESTED' THEN 'Changes Requested' \n    ELSE 'Needs Review' \n  END as \"Status\", \n  CAST((julianday('now') - julianday(p.created_at)) as INTEGER) as \"Days Open\" \nFROM pull_requests p \nLEFT JOIN (\n    SELECT repo, pr_number, state FROM pr_reviews r1 \n    WHERE submitted_at = (SELECT MAX(submitted_at) FROM pr_reviews r2 WHERE r2.pr_number = r1.pr_number AND r2.repo = r1.repo)\n) r ON p.repo = r.repo AND p.number = r.pr_number \nWHERE p.state = 'open' \n  AND json_extract(p.data, '$.author_association') IN ('OWNER', 'MEMBER', 'COLLABORATOR') \n  AND p.repo IN ('agent-builder','agent-sop','docs','evals','mcp-server','private-docs-staging','private-sdk-python-staging','private-sdk-typescript-staging','private-tools-staging','samples','sdk-python','sdk-typescript','strands-action','strandsagents.com','tools','.github','private-samples-staging','private-strands-action-staging') \nORDER BY \"Days Open\" DESC",
+          "queryType": "table",
+          "rawQueryText": "SELECT \n  p.repo as \"Repo\", \n  p.author as \"Author\", \n  p.title as \"Title\", \n  json_extract(p.data, '$.html_url') as \"URL\",\n  CASE \n    WHEN r.state = 'APPROVED' THEN 'Approved' \n    WHEN r.state = 'CHANGES_REQUESTED' THEN 'Changes Requested' \n    ELSE 'Needs Review' \n  END as \"Status\", \n  CAST((julianday('now') - julianday(p.created_at)) as INTEGER) as \"Days Open\" \nFROM pull_requests p \nLEFT JOIN (\n    SELECT repo, pr_number, state FROM pr_reviews r1 \n    WHERE submitted_at = (SELECT MAX(submitted_at) FROM pr_reviews r2 WHERE r2.pr_number = r1.pr_number AND r2.repo = r1.repo)\n) r ON p.repo = r.repo AND p.number = r.pr_number \nWHERE p.state = 'open' \n  AND json_extract(p.data, '$.author_association') IN ('OWNER', 'MEMBER', 'COLLABORATOR') \n  AND p.repo IN (${repo:singlequote}) \nORDER BY \"Days Open\" DESC",
+          "refId": "A",
+          "timeColumns": ["time", "ts"]
+        }
+      ],
+      "title": "Team PRs",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on GitHub",
+                    "url": "${__data.fields.URL}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "URL"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom.viz",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Status"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 118
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Days Open"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 87
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Author"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 148
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Repo"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 161
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 22,
+        "x": 1,
+        "y": 8
+      },
+      "id": 2,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Days Open"
+          }
+        ]
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "queryText": "SELECT \n  p.repo as \"Repo\", \n  p.author as \"Author\", \n  p.title as \"Title\", \n  json_extract(p.data, '$.html_url') as \"URL\",\n  CASE \n    WHEN r.state = 'APPROVED' THEN 'Approved' \n    WHEN r.state = 'CHANGES_REQUESTED' THEN 'Changes Requested' \n    ELSE 'Needs Review' \n  END as \"Status\", \n  CAST((julianday('now') - julianday(p.created_at)) as INTEGER) as \"Days Open\" \nFROM pull_requests p \nLEFT JOIN (\n    SELECT repo, pr_number, state FROM pr_reviews r1 \n    WHERE submitted_at = (SELECT MAX(submitted_at) FROM pr_reviews r2 WHERE r2.pr_number = r1.pr_number AND r2.repo = r1.repo)\n) r ON p.repo = r.repo AND p.number = r.pr_number \nWHERE p.state = 'open' \n  AND json_extract(p.data, '$.author_association') NOT IN ('OWNER', 'MEMBER', 'COLLABORATOR') \n  AND p.repo IN (${repo:singlequote}) \nORDER BY \"Days Open\" DESC",
+          "queryType": "table",
+          "rawQueryText": "SELECT \n  p.repo as \"Repo\", \n  p.author as \"Author\", \n  p.title as \"Title\", \n  json_extract(p.data, '$.html_url') as \"URL\",\n  CASE \n    WHEN r.state = 'APPROVED' THEN 'Approved' \n    WHEN r.state = 'CHANGES_REQUESTED' THEN 'Changes Requested' \n    ELSE 'Needs Review' \n  END as \"Status\", \n  CAST((julianday('now') - julianday(p.created_at)) as INTEGER) as \"Days Open\" \nFROM pull_requests p \nLEFT JOIN (\n    SELECT repo, pr_number, state FROM pr_reviews r1 \n    WHERE submitted_at = (SELECT MAX(submitted_at) FROM pr_reviews r2 WHERE r2.pr_number = r1.pr_number AND r2.repo = r1.repo)\n) r ON p.repo = r.repo AND p.number = r.pr_number \nWHERE p.state = 'open' \n  AND json_extract(p.data, '$.author_association') NOT IN ('OWNER', 'MEMBER', 'COLLABORATOR') \n  AND p.repo IN (${repo:singlequote}) \nORDER BY \"Days Open\" DESC",
+          "refId": "A"
+        }
+      ],
+      "title": "Community PRs (External)",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on GitHub",
+                    "url": "${__data.fields.URL}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "URL"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom.viz",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Comments"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 90
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Repo"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 160
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 22,
+        "x": 1,
+        "y": 16
+      },
+      "id": 3,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Comments"
+          }
+        ]
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "queryText": "SELECT \n  repo as \"Repo\", \n  title as \"Title\", \n  json_extract(data, '$.html_url') as \"URL\",\n  json_extract(data, '$.comments') as \"Comments\" \nFROM issues \nWHERE state = 'open' AND json_extract(data, '$.milestone') IS NULL AND repo IN (${repo:singlequote}) \nORDER BY created_at ASC",
+          "queryType": "table",
+          "rawQueryText": "SELECT \n  repo as \"Repo\", \n  title as \"Title\", \n  json_extract(data, '$.html_url') as \"URL\",\n  json_extract(data, '$.comments') as \"Comments\" \nFROM issues \nWHERE state = 'open' AND json_extract(data, '$.milestone') IS NULL AND repo IN (${repo:singlequote}) \nORDER BY created_at ASC",
+          "refId": "A"
+        }
+      ],
+      "title": "Issues Needing Triage",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on GitHub",
+                    "url": "${__data.fields.URL}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "URL"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom.viz",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Upvotes"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 1,
+        "y": 24
+      },
+      "id": 4,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Upvotes"
+          }
+        ]
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "queryText": "SELECT \n  title as \"Title\", \n  json_extract(data, '$.html_url') as \"URL\",\n  json_extract(data, '$.reactions.\"+1\"') as \"Upvotes\" \nFROM issues WHERE state = 'open' AND repo IN (${repo:singlequote}) \nORDER BY \"Upvotes\" DESC LIMIT 20",
+          "queryType": "table",
+          "rawQueryText": "SELECT \n  title as \"Title\", \n  json_extract(data, '$.html_url') as \"URL\",\n  json_extract(data, '$.reactions.\"+1\"') as \"Upvotes\" \nFROM issues WHERE state = 'open' AND repo IN (${repo:singlequote}) \nORDER BY \"Upvotes\" DESC LIMIT 20",
+          "refId": "A",
+          "timeColumns": ["time", "ts"]
+        }
+      ],
+      "title": "Top Upvoted Issues",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "footer": {
+              "reducers": []
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Title"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open on GitHub",
+                    "url": "${__data.fields.URL}"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "URL"
+            },
+            "properties": [
+              {
+                "id": "custom.hideFrom.viz",
+                "value": true
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Comments"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 80
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 10,
+        "x": 13,
+        "y": 24
+      },
+      "id": 5,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Comments"
+          }
+        ]
+      },
+      "pluginVersion": "12.3.1",
+      "targets": [
+        {
+          "queryText": "SELECT \n  title as \"Title\", \n  json_extract(data, '$.html_url') as \"URL\",\n  json_extract(data, '$.comments') as \"Comments\" \nFROM issues WHERE state = 'open' AND repo IN (${repo:singlequote}) \nORDER BY \"Comments\" DESC LIMIT 20",
+          "queryType": "table",
+          "rawQueryText": "SELECT \n  title as \"Title\", \n  json_extract(data, '$.html_url') as \"URL\",\n  json_extract(data, '$.comments') as \"Comments\" \nFROM issues WHERE state = 'open' AND repo IN (${repo:singlequote}) \nORDER BY \"Comments\" DESC LIMIT 20",
+          "refId": "A"
+        }
+      ],
+      "title": "Most Discussed Issues",
+      "type": "table"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 42,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": ["All"],
+          "value": ["$__all"]
+        },
+        "definition": "SELECT DISTINCT repo FROM daily_metrics",
+        "includeAll": true,
+        "multi": true,
+        "name": "repo",
+        "options": [],
+        "query": "SELECT DISTINCT repo FROM daily_metrics",
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Strands Triage",
+  "uid": "advqxqk",
+  "version": 4
+}
