@@ -1,0 +1,641 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 208,
+      "panels": [],
+      "title": "Team Performance",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "\u23f1\ufe0f Follows date range. PRs Authored, Reviews Given, Balance, and Score per team member. Uses team_members table - run 'strands-metrics load-team' to configure.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "auto",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Score"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "mode": "gradient",
+                  "type": "gauge"
+                }
+              },
+              {
+                "id": "min",
+                "value": 0
+              },
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-BlYlRd"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Balance"
+            },
+            "properties": [
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "red",
+                      "value": null
+                    },
+                    {
+                      "color": "orange",
+                      "value": -10
+                    },
+                    {
+                      "color": "yellow",
+                      "value": -3
+                    },
+                    {
+                      "color": "green",
+                      "value": 3
+                    },
+                    {
+                      "color": "blue",
+                      "value": 15
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Team Member"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 150
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "PRs Authored"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 110
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Reviews Given"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 120
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 12,
+        "w": 16,
+        "x": 0,
+        "y": 1
+      },
+      "id": 209,
+      "options": {
+        "cellHeight": "sm",
+        "showHeader": true,
+        "sortBy": [
+          {
+            "desc": true,
+            "displayName": "Score"
+          }
+        ]
+      },
+      "targets": [
+        {
+          "queryText": "WITH team_prs AS (\n  SELECT \n    author,\n    COUNT(*) as prs_authored\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL\n    AND author IN (SELECT username FROM team_members)\n    AND CAST(strftime('%s', date(merged_at)) as INTEGER) >= $__from / 1000\n    AND CAST(strftime('%s', date(merged_at)) as INTEGER) <= $__to / 1000\n    AND repo IN ('agent-builder','agent-sop','docs','evals','mcp-server','private-docs-staging','private-sdk-python-staging','private-sdk-typescript-staging','private-tools-staging','samples','sdk-python','sdk-typescript','strands-action','strandsagents.com','tools','.github','private-samples-staging','private-strands-action-staging')\n  GROUP BY author\n),\nreviews AS (\n  SELECT \n    author as reviewer,\n    COUNT(DISTINCT repo || '-' || pr_number) as reviews_given\n  FROM pr_reviews\n  WHERE author IN (SELECT username FROM team_members)\n    AND CAST(strftime('%s', date(submitted_at)) as INTEGER) >= $__from / 1000\n    AND CAST(strftime('%s', date(submitted_at)) as INTEGER) <= $__to / 1000\n    AND repo IN ('agent-builder','agent-sop','docs','evals','mcp-server','private-docs-staging','private-sdk-python-staging','private-sdk-typescript-staging','private-tools-staging','samples','sdk-python','sdk-typescript','strands-action','strandsagents.com','tools','.github','private-samples-staging','private-strands-action-staging')\n  GROUP BY author\n)\nSELECT \n  COALESCE(tp.author, r.reviewer) as \"Team Member\",\n  COALESCE(tp.prs_authored, 0) as \"PRs Authored\",\n  COALESCE(r.reviews_given, 0) as \"Reviews Given\",\n  COALESCE(r.reviews_given, 0) - COALESCE(tp.prs_authored, 0) as \"Balance\",\n  COALESCE(tp.prs_authored, 0) * 2 + COALESCE(r.reviews_given, 0) as \"Score\"\nFROM team_prs tp\nFULL OUTER JOIN reviews r ON tp.author = r.reviewer\nWHERE COALESCE(tp.prs_authored, 0) + COALESCE(r.reviews_given, 0) > 0\nORDER BY \"Score\" DESC",
+          "queryType": "table",
+          "rawQueryText": "WITH team_prs AS (\n  SELECT \n    author,\n    COUNT(*) as prs_authored\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL\n    AND author IN (SELECT username FROM team_members)\n    AND CAST(strftime('%s', date(merged_at)) as INTEGER) >= $__from / 1000\n    AND CAST(strftime('%s', date(merged_at)) as INTEGER) <= $__to / 1000\n    AND repo IN (${repo:singlequote})\n  GROUP BY author\n),\nreviews AS (\n  SELECT \n    author as reviewer,\n    COUNT(DISTINCT repo || '-' || pr_number) as reviews_given\n  FROM pr_reviews\n  WHERE author IN (SELECT username FROM team_members)\n    AND CAST(strftime('%s', date(submitted_at)) as INTEGER) >= $__from / 1000\n    AND CAST(strftime('%s', date(submitted_at)) as INTEGER) <= $__to / 1000\n    AND repo IN (${repo:singlequote})\n  GROUP BY author\n)\nSELECT \n  COALESCE(tp.author, r.reviewer) as \"Team Member\",\n  COALESCE(tp.prs_authored, 0) as \"PRs Authored\",\n  COALESCE(r.reviews_given, 0) as \"Reviews Given\",\n  COALESCE(r.reviews_given, 0) - COALESCE(tp.prs_authored, 0) as \"Balance\",\n  COALESCE(tp.prs_authored, 0) * 2 + COALESCE(r.reviews_given, 0) as \"Score\"\nFROM team_prs tp\nFULL OUTER JOIN reviews r ON tp.author = r.reviewer\nWHERE COALESCE(tp.prs_authored, 0) + COALESCE(r.reviews_given, 0) > 0\nORDER BY \"Score\" DESC",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "\ud83d\udcca Team Scorecard",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "⏱️ Follows date range. Git Gladiator = Most PRs. Relentless Reviewer = Most Reviews.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "custom": {
+            "align": "center",
+            "cellOptions": {
+              "type": "auto"
+            },
+            "inspect": false
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Category"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 170
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Leader"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 130
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Count"
+            },
+            "properties": [
+              {
+                "id": "custom.width",
+                "value": 70
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 1
+      },
+      "id": 210,
+      "options": {
+        "cellHeight": "md",
+        "showHeader": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT * FROM (\n  SELECT '\ud83c\udfc6 Git Gladiator' as \"Category\", author as \"Leader\", COUNT(*) as \"Count\"\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL\n    AND author IN (SELECT username FROM team_members)\n    AND CAST(strftime('%s', date(merged_at)) as INTEGER) >= $__from / 1000\n    AND CAST(strftime('%s', date(merged_at)) as INTEGER) <= $__to / 1000\n    AND repo IN ('agent-builder','agent-sop','docs','evals','mcp-server','private-docs-staging','private-sdk-python-staging','private-sdk-typescript-staging','private-tools-staging','samples','sdk-python','sdk-typescript','strands-action','strandsagents.com','tools','.github','private-samples-staging','private-strands-action-staging')\n  GROUP BY author ORDER BY COUNT(*) DESC LIMIT 1\n)\nUNION ALL\nSELECT * FROM (\n  SELECT '\ud83d\udd0d Relentless Reviewer' as \"Category\", author as \"Leader\", COUNT(DISTINCT repo || '-' || pr_number) as \"Count\"\n  FROM pr_reviews\n  WHERE author IN (SELECT username FROM team_members)\n    AND CAST(strftime('%s', date(submitted_at)) as INTEGER) >= $__from / 1000\n    AND CAST(strftime('%s', date(submitted_at)) as INTEGER) <= $__to / 1000\n    AND repo IN ('agent-builder','agent-sop','docs','evals','mcp-server','private-docs-staging','private-sdk-python-staging','private-sdk-typescript-staging','private-tools-staging','samples','sdk-python','sdk-typescript','strands-action','strandsagents.com','tools','.github','private-samples-staging','private-strands-action-staging')\n  GROUP BY author ORDER BY COUNT(DISTINCT repo || '-' || pr_number) DESC LIMIT 1\n)",
+          "queryType": "table",
+          "rawQueryText": "SELECT * FROM (\n  SELECT '\ud83c\udfc6 Git Gladiator' as \"Category\", author as \"Leader\", COUNT(*) as \"Count\"\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL\n    AND author IN (SELECT username FROM team_members)\n    AND CAST(strftime('%s', date(merged_at)) as INTEGER) >= $__from / 1000\n    AND CAST(strftime('%s', date(merged_at)) as INTEGER) <= $__to / 1000\n    AND repo IN (${repo:singlequote})\n  GROUP BY author ORDER BY COUNT(*) DESC LIMIT 1\n)\nUNION ALL\nSELECT * FROM (\n  SELECT '\ud83d\udd0d Relentless Reviewer' as \"Category\", author as \"Leader\", COUNT(DISTINCT repo || '-' || pr_number) as \"Count\"\n  FROM pr_reviews\n  WHERE author IN (SELECT username FROM team_members)\n    AND CAST(strftime('%s', date(submitted_at)) as INTEGER) >= $__from / 1000\n    AND CAST(strftime('%s', date(submitted_at)) as INTEGER) <= $__to / 1000\n    AND repo IN (${repo:singlequote})\n  GROUP BY author ORDER BY COUNT(DISTINCT repo || '-' || pr_number) DESC LIMIT 1\n)",
+          "refId": "A"
+        }
+      ],
+      "title": "\ud83c\udfc5 Category Leaders",
+      "type": "table"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "\u23f1\ufe0f Follows date range. Weekly (reviews given - PRs authored). Positive = team reviewing more.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": true,
+            "axisColorMode": "text",
+            "axisLabel": "Balance",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "area"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 8,
+        "x": 16,
+        "y": 7
+      },
+      "id": 211,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "queryText": "WITH weekly_stats AS (\n  SELECT \n    strftime('%Y-%m-%d', date(merged_at, 'weekday 0', '-6 days')) as week_start,\n    COUNT(*) as pr_count,\n    0 as review_count\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL\n    AND author IN (SELECT username FROM team_members)\n    AND repo IN ('agent-builder','agent-sop','docs','evals','mcp-server','private-docs-staging','private-sdk-python-staging','private-sdk-typescript-staging','private-tools-staging','samples','sdk-python','sdk-typescript','strands-action','strandsagents.com','tools','.github','private-samples-staging','private-strands-action-staging')\n  GROUP BY week_start\n  \n  UNION ALL\n  \n  SELECT \n    strftime('%Y-%m-%d', date(submitted_at, 'weekday 0', '-6 days')) as week_start,\n    0 as pr_count,\n    COUNT(DISTINCT repo || '-' || pr_number) as review_count\n  FROM pr_reviews\n  WHERE author IN (SELECT username FROM team_members)\n    AND repo IN ('agent-builder','agent-sop','docs','evals','mcp-server','private-docs-staging','private-sdk-python-staging','private-sdk-typescript-staging','private-tools-staging','samples','sdk-python','sdk-typescript','strands-action','strandsagents.com','tools','.github','private-samples-staging','private-strands-action-staging')\n  GROUP BY week_start\n)\nSELECT \n  CAST(strftime('%s', week_start) as INTEGER) as time,\n  'Review Balance' as metric,\n  SUM(review_count) - SUM(pr_count) as value\nFROM weekly_stats\nWHERE CAST(strftime('%s', week_start) as INTEGER) >= $__from / 1000\n  AND CAST(strftime('%s', week_start) as INTEGER) <= $__to / 1000\nGROUP BY week_start\nORDER BY week_start",
+          "queryType": "table",
+          "rawQueryText": "WITH weekly_stats AS (\n  SELECT \n    strftime('%Y-%m-%d', date(merged_at, 'weekday 0', '-6 days')) as week_start,\n    COUNT(*) as pr_count,\n    0 as review_count\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL\n    AND author IN (SELECT username FROM team_members)\n    AND repo IN (${repo:singlequote})\n  GROUP BY week_start\n  \n  UNION ALL\n  \n  SELECT \n    strftime('%Y-%m-%d', date(submitted_at, 'weekday 0', '-6 days')) as week_start,\n    0 as pr_count,\n    COUNT(DISTINCT repo || '-' || pr_number) as review_count\n  FROM pr_reviews\n  WHERE author IN (SELECT username FROM team_members)\n    AND repo IN (${repo:singlequote})\n  GROUP BY week_start\n)\nSELECT \n  CAST(strftime('%s', week_start) as INTEGER) as time,\n  'Review Balance' as metric,\n  SUM(review_count) - SUM(pr_count) as value\nFROM weekly_stats\nWHERE CAST(strftime('%s', week_start) as INTEGER) >= $__from / 1000\n  AND CAST(strftime('%s', week_start) as INTEGER) <= $__to / 1000\nGROUP BY week_start\nORDER BY week_start",
+          "refId": "A",
+          "timeColumns": [
+            "time"
+          ]
+        }
+      ],
+      "title": "\ud83d\udcc8 Team Review Balance (Weekly)",
+      "transformations": [
+        {
+          "id": "prepareTimeSeries",
+          "options": {
+            "format": "multi"
+          }
+        }
+      ],
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "\u23f1\ufe0f Follows date range. Pie chart of merged PRs by source: Team (from team_members table), Community, Dependabot. Run 'strands-metrics load-team' to configure.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Team"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Community"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Dependabot"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 6,
+        "x": 0,
+        "y": 13
+      },
+      "id": 212,
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": [
+            "value",
+            "percent"
+          ]
+        },
+        "pieType": "donut",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  CASE \n    WHEN author IN (SELECT username FROM team_members) THEN 'Team'\n    WHEN author LIKE '%[bot]%' OR author = 'dependabot' THEN 'Dependabot'\n    ELSE 'Community'\n  END as category,\n  COUNT(*) as count\nFROM pull_requests\nWHERE merged_at IS NOT NULL\n  AND CAST(strftime('%s', date(merged_at)) as INTEGER) >= $__from / 1000\n  AND CAST(strftime('%s', date(merged_at)) as INTEGER) <= $__to / 1000\n  AND repo IN ('agent-builder','agent-sop','docs','evals','mcp-server','private-docs-staging','private-sdk-python-staging','private-sdk-typescript-staging','private-tools-staging','samples','sdk-python','sdk-typescript','strands-action','strandsagents.com','tools','.github','private-samples-staging','private-strands-action-staging')\nGROUP BY category",
+          "queryType": "table",
+          "rawQueryText": "SELECT \n  CASE \n    WHEN author IN (SELECT username FROM team_members) THEN 'Team'\n    WHEN author LIKE '%[bot]%' OR author = 'dependabot' THEN 'Dependabot'\n    ELSE 'Community'\n  END as category,\n  COUNT(*) as count\nFROM pull_requests\nWHERE merged_at IS NOT NULL\n  AND CAST(strftime('%s', date(merged_at)) as INTEGER) >= $__from / 1000\n  AND CAST(strftime('%s', date(merged_at)) as INTEGER) <= $__to / 1000\n  AND repo IN (${repo:singlequote})\nGROUP BY category",
+          "refId": "A"
+        }
+      ],
+      "title": "PR Source Breakdown",
+      "transformations": [
+        {
+          "id": "rowsToFields",
+          "options": {
+            "mappings": [
+              {
+                "fieldName": "category",
+                "handlerKey": "field.name"
+              },
+              {
+                "fieldName": "count",
+                "handlerKey": "field.value"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "piechart"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "\u23f1\ufe0f Follows date range. Bar chart of review counts per team member.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisLabel": "Reviews Given",
+            "axisPlacement": "auto",
+            "fillOpacity": 80,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineWidth": 1,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 13
+      },
+      "id": 214,
+      "options": {
+        "barRadius": 0.1,
+        "barWidth": 0.8,
+        "fullHighlight": false,
+        "groupWidth": 0.7,
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "orientation": "horizontal",
+        "showValue": "always",
+        "stacking": "none",
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  author as reviewer,\n  COUNT(DISTINCT repo || '-' || pr_number) as reviews_given\nFROM pr_reviews\nWHERE author IN (SELECT username FROM team_members)\n  AND CAST(strftime('%s', date(submitted_at)) as INTEGER) >= $__from / 1000\n  AND CAST(strftime('%s', date(submitted_at)) as INTEGER) <= $__to / 1000\n  AND repo IN ('agent-builder','agent-sop','docs','evals','mcp-server','private-docs-staging','private-sdk-python-staging','private-sdk-typescript-staging','private-tools-staging','samples','sdk-python','sdk-typescript','strands-action','strandsagents.com','tools','.github','private-samples-staging','private-strands-action-staging')\nGROUP BY author\nORDER BY reviews_given DESC\nLIMIT 10",
+          "queryType": "table",
+          "rawQueryText": "SELECT \n  author as reviewer,\n  COUNT(DISTINCT repo || '-' || pr_number) as reviews_given\nFROM pr_reviews\nWHERE author IN (SELECT username FROM team_members)\n  AND CAST(strftime('%s', date(submitted_at)) as INTEGER) >= $__from / 1000\n  AND CAST(strftime('%s', date(submitted_at)) as INTEGER) <= $__to / 1000\n  AND repo IN (${repo:singlequote})\nGROUP BY author\nORDER BY reviews_given DESC\nLIMIT 10",
+          "refId": "A"
+        }
+      ],
+      "title": "\ud83d\udd0d Reviews per Team Member",
+      "type": "barchart"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 42,
+  "tags": [],
+  "templating": {
+    "list": [
+      {
+        "allowCustomValue": false,
+        "current": {
+          "text": [
+            "All"
+          ],
+          "value": [
+            "$__all"
+          ]
+        },
+        "definition": "SELECT DISTINCT repo FROM daily_metrics",
+        "includeAll": true,
+        "multi": true,
+        "name": "repo",
+        "options": [],
+        "query": "SELECT DISTINCT repo FROM daily_metrics",
+        "refresh": 1,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Strands Team",
+  "uid": "team-perf",
+  "version": 1
+}

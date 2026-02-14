@@ -1,0 +1,111 @@
+# Strands Project Goals Configuration
+# These thresholds appear as goal lines in Grafana dashboards
+# Edit values here and run `strands-metrics load-goals` to update
+#
+# NOTE: Only rate/percentage/time-based metrics have goals.
+# Count-based metrics (open PRs, contributors, etc.) are excluded
+# because they scale with the number of repos selected.
+#
+# ============================================================================
+# Configuration Reference
+# ============================================================================
+#
+# Each goal requires:
+#   - value: The target threshold value
+#   - label: Display label for the goal line (shown in Grafana legend)
+#   - direction: How to interpret values relative to the goal
+#       * "lower_is_better" - green below goal, red above (e.g., time metrics)
+#       * "higher_is_better" - green above goal, red below (e.g., percentages)
+#   - warning_ratio: (optional) Multiplier for warning threshold
+#       * Default: 0.75 for lower_is_better, 0.70 for higher_is_better
+#       * Example: warning_ratio: 0.75 with goal 24 = warning at 18
+#
+# ============================================================================
+# Metric Definitions
+# ============================================================================
+#
+# Time Metrics (hours):
+#   avg_merge_time_hours   - Average time from PR open to merge
+#   cycle_time_hours       - Time from first commit to merge (rolling average)
+#   time_to_first_review   - Time until first review is submitted on a PR
+#   time_to_first_response - Time until first comment/review on issues/PRs
+#
+# Quality Metrics (percentages):
+#   ci_failure_rate_percent - Percentage of PRs with failed CI checks
+#   pr_acceptance_rate_min  - Percentage of PRs merged vs closed without merge
+#
+# Community Metrics (percentages):
+#   community_pr_percent_min   - Percentage of merged PRs from non-org members
+#   contributor_retention_min  - Percentage of contributors who return
+#
+# Aggregate Metrics (counts):
+#   stale_prs_max - Maximum acceptable stale PRs (open 7+ days without activity)
+#
+# ============================================================================
+
+goals:
+  # ---------------------------------------------------------------------------
+  # Time Metrics (hours) - lower is better
+  # ---------------------------------------------------------------------------
+  avg_merge_time_hours:
+    value: 24
+    label: "Goal (24h)"
+    direction: lower_is_better
+    # warning at 18h (default 0.75 ratio)
+
+  cycle_time_hours:
+    value: 336
+    label: "Goal (14d)"
+    direction: lower_is_better
+    # warning at 252h / 10.5d (default 0.75 ratio)
+
+  time_to_first_review_hours:
+    value: 72
+    label: "Goal (72h)"
+    direction: lower_is_better
+    # warning at 54h (default 0.75 ratio)
+
+  time_to_first_response_hours:
+    value: 24
+    label: "Goal (24h)"
+    direction: lower_is_better
+    warning_ratio: 0.75  # warning at 18h
+
+  # ---------------------------------------------------------------------------
+  # Quality Metrics (percentages)
+  # ---------------------------------------------------------------------------
+  ci_failure_rate_percent:
+    value: 30
+    label: "Goal (30%)"
+    direction: lower_is_better
+    # warning at 22.5% (default 0.75 ratio)
+
+  pr_acceptance_rate_min:
+    value: 60
+    label: "Goal (60%)"
+    direction: higher_is_better
+    # warning at 42% (default 0.70 ratio)
+
+  # ---------------------------------------------------------------------------
+  # Community Metrics (percentages)
+  # ---------------------------------------------------------------------------
+  community_pr_percent_min:
+    value: 20
+    label: "Goal (20%)"
+    direction: higher_is_better
+    warning_ratio: 0.70  # warning at 14%
+
+  contributor_retention_min:
+    value: 25
+    label: "Goal (25%)"
+    direction: higher_is_better
+    # warning at 17.5% (default 0.70 ratio)
+
+  # ---------------------------------------------------------------------------
+  # Executive Dashboard Thresholds (org-level aggregates)
+  # ---------------------------------------------------------------------------
+  stale_prs_max:
+    value: 15
+    label: "Goal (<15)"
+    direction: lower_is_better
+    warning_ratio: 0.33  # warning at 5

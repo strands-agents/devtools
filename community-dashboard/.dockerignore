@@ -1,0 +1,4 @@
+cdk/cdk.out
+cdk/node_modules
+target/
+.git

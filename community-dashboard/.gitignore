@@ -1,0 +1,16 @@
+metrics.db
+target/
+Cargo.lock
+
+# CDK
+cdk/node_modules/
+cdk/cdk.out/
+cdk/dist/
+cdk/.env
+
+# Docker
+docker/data/
+
+# IDE
+.idea/
+.DS_Store
