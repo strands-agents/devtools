@@ -2,7 +2,7 @@
 import "source-map-support/register";
 import * as dotenv from "dotenv";
 import * as cdk from "aws-cdk-lib";
-import { StrandsGrafanaStack } from "../lib/strands-grafana-stack";
+import { CommunityDashboardStack } from "../lib/community-dashboard-stack";
 
 // Load environment variables from .env file (if present)
 dotenv.config();
@@ -14,11 +14,11 @@ const env = {
   region: process.env.CDK_DEFAULT_REGION ?? process.env.AWS_REGION ?? "us-west-2",
 };
 
-new StrandsGrafanaStack(app, "StrandsGrafanaStack", {
+new CommunityDashboardStack(app, "CommunityDashboardStack", {
   env,
   description:
-    "Strands Grafana — GitHub metrics collection and dashboards for strands-agents org",
+    "Community Dashboard — GitHub metrics collection and dashboards for strands-agents org",
   tags: {
-    Project: "strands-grafana",
+    Project: "community-dashboard",
   },
 });

@@ -1,4 +1,4 @@
-# strands-grafana
+# community-dashboard
 
 GitHub metrics collection and Grafana dashboards for the [strands-agents](https://github.com/strands-agents) organization.
 
@@ -8,7 +8,7 @@ A unified Docker container syncs GitHub data (issues, PRs, stars, commits, CI ru
 ## Directory Structure
 
 ```
-strands-grafana/
+community-dashboard/
 ├── README.md                              ← you are here
 ├── docker/
 │   ├── Dockerfile                         ← unified Grafana + metrics-sync image
@@ -30,7 +30,7 @@ strands-grafana/
 │       └── aggregates.rs
 └── cdk/                                    ← AWS CDK deployment
     ├── bin/app.ts
-    ├── lib/strands-grafana-stack.ts
+    ├── lib/community-dashboard-stack.ts
     ├── package.json
     ├── tsconfig.json
     ├── cdk.json
@@ -52,7 +52,7 @@ strands-grafana/
 Build and run the unified container locally:
 
 ```bash
-cd strands-grafana
+cd community-dashboard
 GITHUB_TOKEN=ghp_your_token docker compose -f docker/docker-compose.local.yaml up --build
 ```
 
@@ -76,14 +76,14 @@ GITHUB_TOKEN=ghp_xxx cargo run --release -- sweep      # reconcile stale open it
 cargo run --release -- query "SELECT date, stars FROM daily_metrics WHERE repo='sdk-python' ORDER BY date DESC LIMIT 10"
 ```
 
-By default the CLI writes to `../metrics.db` (the `strands-grafana/` root).
+By default the CLI writes to `../metrics.db` (the `community-dashboard/` root).
 
 ## AWS Deployment
 
 The CDK stack deploys everything to AWS as a single Fargate service with EFS-backed persistent storage:
 
 ```
-ALB (port 80) → ECS Fargate → unified Docker image → EFS (metrics.db)
+CloudFront (HTTPS) → ALB (HTTP:80) → ECS Fargate → unified Docker image → EFS (metrics.db)
 ```
 
 ### 1. Create the GitHub token secret
@@ -111,8 +111,9 @@ The stack creates:
 - **EFS** file system with access point at `/grafana-data` (RETAIN policy)
 - **ECS Fargate** service (0.5 vCPU, 1 GB RAM)
 - **ALB** on port 80 with health check at `/api/health`
+- **CloudFront** distribution for HTTPS access
 
-The ALB URL is printed in the stack outputs.
+The Grafana URL (HTTPS) is printed in the stack outputs.
 
 ### Tear down
 

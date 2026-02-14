@@ -10,7 +10,7 @@ import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
 import * as path from "path";
 
-export class StrandsGrafanaStack extends cdk.Stack {
+export class CommunityDashboardStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 
@@ -106,7 +106,7 @@ export class StrandsGrafanaStack extends cdk.Stack {
         }
       ),
       logging: ecs.LogDrivers.awsLogs({
-        streamPrefix: "strands-grafana",
+        streamPrefix: "community-dashboard",
         logRetention: logs.RetentionDays.TWO_WEEKS,
       }),
       portMappings: [{ containerPort: 3000 }],

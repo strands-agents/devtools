@@ -1,7 +1,7 @@
 {
-  "name": "strands-grafana-cdk",
+  "name": "community-dashboard-cdk",
   "version": "1.0.0",
-  "description": "AWS CDK infrastructure for Strands Grafana dashboards and metrics sync",
+  "description": "AWS CDK infrastructure for community dashboard — GitHub metrics and Grafana",
   "bin": {
     "cdk": "bin/app.js"
   },

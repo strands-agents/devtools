@@ -11,7 +11,7 @@ services:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: strands-grafana
+    container_name: community-dashboard
     ports:
       - "3000:3000"
     volumes:
