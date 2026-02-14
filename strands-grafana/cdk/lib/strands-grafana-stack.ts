@@ -3,6 +3,8 @@ import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as efs from "aws-cdk-lib/aws-efs";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
+import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
+import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import { Construct } from "constructs";
@@ -100,6 +102,7 @@ export class StrandsGrafanaStack extends cdk.Stack {
         path.join(__dirname, "../../"),
         {
           file: "docker/Dockerfile",
+          platform: cdk.aws_ecr_assets.Platform.LINUX_AMD64,
         }
       ),
       logging: ecs.LogDrivers.awsLogs({
@@ -152,6 +155,7 @@ export class StrandsGrafanaStack extends cdk.Stack {
 
     listener.addTargets("GrafanaTarget", {
       port: 3000,
+      protocol: elbv2.ApplicationProtocol.HTTP,
       targets: [service],
       healthCheck: {
         path: "/api/health",
@@ -163,9 +167,27 @@ export class StrandsGrafanaStack extends cdk.Stack {
     });
 
     // ── Outputs ─────────────────────────────────────────────────────────
+    // CloudFront distribution — provides HTTPS on *.cloudfront.net
+    const distribution = new cloudfront.Distribution(this, "Distribution", {
+      defaultBehavior: {
+        origin: new origins.HttpOrigin(alb.loadBalancerDnsName, {
+          protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+        }),
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+      },
+    });
+
+    new cdk.CfnOutput(this, "GrafanaUrl", {
+      value: `https://${distribution.distributionDomainName}`,
+      description: "Grafana dashboard URL (HTTPS via CloudFront)",
+    });
+
     new cdk.CfnOutput(this, "AlbUrl", {
       value: `http://${alb.loadBalancerDnsName}`,
-      description: "Grafana dashboard URL (ALB)",
+      description: "Grafana dashboard URL (ALB, HTTP only)",
     });
 
     new cdk.CfnOutput(this, "EfsFileSystemId", {

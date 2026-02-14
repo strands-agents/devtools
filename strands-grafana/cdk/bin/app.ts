@@ -11,7 +11,7 @@ const app = new cdk.App();
 
 const env = {
   account: process.env.CDK_DEFAULT_ACCOUNT,
-  region: "us-west-2",
+  region: process.env.CDK_DEFAULT_REGION ?? process.env.AWS_REGION ?? "us-west-2",
 };
 
 new StrandsGrafanaStack(app, "StrandsGrafanaStack", {

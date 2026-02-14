@@ -4,7 +4,6 @@ GitHub metrics collection and Grafana dashboards for the [strands-agents](https:
 
 A unified Docker container syncs GitHub data (issues, PRs, stars, commits, CI runs, reviews, comments) into a local SQLite database on a daily cron schedule, and serves pre-built Grafana dashboards for org-wide health and triage visibility.
 
-> Originally created by [@chaynabors](https://github.com/chaynabors) — dashboards and metrics CLI migrated from [chaynabors/strands](https://github.com/chaynabors/strands) (commit `0fbe13c`).
 
 ## Directory Structure
 
