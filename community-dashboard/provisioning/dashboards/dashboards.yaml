@@ -1,0 +1,29 @@
+apiVersion: 1
+
+providers:
+  - name: "General"
+    orgId: 1
+    folder: ""
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    options:
+      path: /etc/grafana/provisioning/dashboards/general
+
+  - name: "SDKs"
+    orgId: 1
+    folder: "SDKs"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    options:
+      path: /etc/grafana/provisioning/dashboards/sdks
+
+  - name: "Operations"
+    orgId: 1
+    folder: "Operations"
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    options:
+      path: /etc/grafana/provisioning/dashboards/operations

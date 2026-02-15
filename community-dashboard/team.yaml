@@ -1,0 +1,20 @@
+# Strands Team Configuration
+# Team members listed here are used by the Team Dashboard for performance tracking.
+# Edit this file and run `strands-metrics load-team` to update.
+#
+# NOTE: This is different from GitHub org membership (author_association).
+# - team.yaml: Specific people you want to track in Team Dashboard
+# - author_association: All GitHub org members/collaborators (used by other dashboards)
+
+members:
+  - username: afarntrog
+  - username: lizradway
+  - username: JackYPCOnline
+  - username: chaynabors
+  - username: dbschmigelski
+  - username: zastrowm
+  - username: mehtarac
+  - username: mkmeral
+  - username: Unshure
+  - username: pgrayy
+  - username: poshinchen
