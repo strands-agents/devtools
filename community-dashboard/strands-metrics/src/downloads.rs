@@ -2,7 +2,6 @@ use anyhow::{Context, Result};
 use chrono::{Duration, Utc};
 use rusqlite::{params, Connection};
 use serde::Deserialize;
-use std::collections::HashMap;
 
 // ============================================================================
 // PyPI API Types
@@ -19,11 +18,6 @@ struct PyPIDataPoint {
     downloads: i64,
 }
 
-#[derive(Debug, Deserialize)]
-struct PyPIVersionResponse {
-    data: HashMap<String, Vec<PyPIDataPoint>>,
-}
-
 // ============================================================================
 // npm API Types
 // ============================================================================
@@ -37,16 +31,6 @@ struct NpmRangeResponse {
 struct NpmDownloadPoint {
     day: String,
     downloads: i64,
-}
-
-#[derive(Debug, Deserialize)]
-struct NpmVersionsResponse {
-    versions: HashMap<String, String>, // version -> tarball url
-}
-
-#[derive(Debug, Deserialize)]
-struct NpmPackageInfo {
-    time: HashMap<String, String>, // version -> publish date
 }
 
 // ============================================================================
@@ -247,41 +231,3 @@ pub fn load_repo_mappings(conn: &Connection, config: &PackagesConfig) -> Result<
     Ok(count)
 }
 
-// ============================================================================
-// Query Helpers
-// ============================================================================
-
-pub fn get_total_downloads(conn: &Connection, package: &str, registry: &str) -> Result<i64> {
-    let total: i64 = conn.query_row(
-        "SELECT COALESCE(SUM(downloads), 0) FROM package_downloads
-         WHERE package = ?1 AND registry = ?2 AND version = 'total'",
-        params![package, registry],
-        |row| row.get(0),
-    )?;
-    Ok(total)
-}
-
-pub fn get_downloads_by_date(
-    conn: &Connection,
-    package: &str,
-    registry: &str,
-    start_date: &str,
-    end_date: &str,
-) -> Result<Vec<(String, i64)>> {
-    let mut stmt = conn.prepare(
-        "SELECT date, downloads FROM package_downloads
-         WHERE package = ?1 AND registry = ?2 AND version = 'total'
-         AND date >= ?3 AND date <= ?4
-         ORDER BY date",
-    )?;
-
-    let rows = stmt.query_map(params![package, registry, start_date, end_date], |row| {
-        Ok((row.get(0)?, row.get(1)?))
-    })?;
-
-    let mut results = Vec::new();
-    for row in rows {
-        results.push(row?);
-    }
-    Ok(results)
-}

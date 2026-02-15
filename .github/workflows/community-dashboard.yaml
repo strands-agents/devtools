@@ -10,7 +10,7 @@ permissions:
 
 defaults:
   run:
-    working-directory: community-dashboard
+    working-directory: community-dashboard/strands-metrics
 
 jobs:
   update-metrics:
@@ -29,8 +29,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-            community-dashboard/target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('community-dashboard/Cargo.toml') }}
+            community-dashboard/strands-metrics/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('community-dashboard/strands-metrics/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
 
@@ -52,10 +52,10 @@ jobs:
         run: cargo run --release -- sync-downloads
 
       - name: Load Goals Configuration
-        run: cargo run --release -- load-goals goals.yaml
+        run: cargo run --release -- load-goals
 
       - name: Load Team Configuration
-        run: cargo run --release -- load-team team.yaml
+        run: cargo run --release -- load-team
 
       - name: Commit and Push to Main
         working-directory: .

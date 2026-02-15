@@ -1,6 +1,5 @@
 metrics.db
-target/
-Cargo.lock
+strands-metrics/target/
 
 # CDK
 cdk/node_modules/

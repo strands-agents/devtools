@@ -20,7 +20,7 @@ const ORG: &str = "strands-agents";
 #[derive(Parser)]
 #[clap(author, version, about)]
 struct Cli {
-    #[clap(long, short, default_value = "metrics.db")]
+    #[clap(long, short, default_value = "../metrics.db")]
     db_path: PathBuf,
     #[clap(subcommand)]
     command: Commands,
@@ -37,7 +37,7 @@ enum Commands {
     /// Load goals from YAML config file into the database.
     LoadGoals {
         /// Path to goals.yaml file
-        #[clap(default_value = "goals.yaml")]
+        #[clap(default_value = "../goals.yaml")]
         config_path: PathBuf,
     },
     /// List all configured goals.
@@ -45,7 +45,7 @@ enum Commands {
     /// Load team members into the database for dashboard queries.
     LoadTeam {
         /// Path to team.yaml config file
-        #[clap(default_value = "team.yaml")]
+        #[clap(default_value = "../team.yaml")]
         config_path: PathBuf,
         /// Comma-separated list of GitHub usernames (overrides config file)
         #[clap(long, value_delimiter = ',')]
@@ -54,7 +54,7 @@ enum Commands {
     /// Sync package download stats from PyPI and npm.
     SyncDownloads {
         /// Path to packages.yaml config file
-        #[clap(long, default_value = "packages.yaml")]
+        #[clap(long, default_value = "../packages.yaml")]
         config_path: PathBuf,
         /// Number of days to fetch (default: 30)
         #[clap(long, default_value = "30")]
@@ -63,7 +63,7 @@ enum Commands {
     /// Backfill historical download data (PyPI: ~180 days, npm: ~365 days).
     BackfillDownloads {
         /// Path to packages.yaml config file
-        #[clap(long, default_value = "packages.yaml")]
+        #[clap(long, default_value = "../packages.yaml")]
         config_path: PathBuf,
     },
 }
@@ -154,8 +154,8 @@ async fn main() -> Result<()> {
         Commands::ListGoals => {
             let all_goals = goals::list_goals(&conn)?;
             println!(
-                "{:<40} | {:>10} | {:<20} | {:<15} | {}",
-                "Metric", "Value", "Label", "Direction", "Warning Ratio"
+                "{:<40} | {:>10} | {:<20} | {:<15} | Warning Ratio",
+                "Metric", "Value", "Label", "Direction"
             );
             println!("{}", "-".repeat(110));
             for goal in all_goals {

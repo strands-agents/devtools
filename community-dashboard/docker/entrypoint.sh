@@ -35,7 +35,6 @@ else
 fi
 
 # ── Load configuration ─────────────────────────────────────────────────────
-# Load goals and team config into the database on every startup
 echo "[entrypoint] Loading goals configuration..."
 strands-metrics --db-path "$DB_PATH" load-goals "$CONFIG_DIR/goals.yaml" || \
     echo "[entrypoint] WARNING: Failed to load goals."
@@ -54,7 +53,7 @@ strands-metrics --db-path "$DB_PATH" sync-downloads --config-path "$CONFIG_DIR/p
 # via /proc/1/fd/1 so it shows up in docker logs / CloudWatch.
 CRONTAB="/tmp/crontab"
 cat > "$CRONTAB" <<'CRONEOF'
-0 6 * * * strands-metrics --db-path /var/lib/grafana/data/metrics.db sync >> /proc/1/fd/1 2>&1 && strands-metrics --db-path /var/lib/grafana/data/metrics.db sweep >> /proc/1/fd/1 2>&1 && strands-metrics --db-path /var/lib/grafana/data/metrics.db sync-downloads --config-path /etc/strands/packages.yaml >> /proc/1/fd/1 2>&1 && strands-metrics --db-path /var/lib/grafana/data/metrics.db load-goals /etc/strands/goals.yaml >> /proc/1/fd/1 2>&1 && strands-metrics --db-path /var/lib/grafana/data/metrics.db load-team /etc/strands/team.yaml >> /proc/1/fd/1 2>&1
+0 6 * * * sync-all.sh >> /proc/1/fd/1 2>&1
 CRONEOF
 
 echo "[entrypoint] Starting supercronic (daily sync at 06:00 UTC)..."

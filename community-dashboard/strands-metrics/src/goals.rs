@@ -23,6 +23,7 @@ impl Direction {
         }
     }
 
+    #[cfg(test)]
     fn default_warning_ratio(&self) -> f64 {
         match self {
             Direction::LowerIsBetter => 0.75,
@@ -57,6 +58,7 @@ pub struct Goal {
 
 impl Goal {
     /// Calculate the warning threshold value
+    #[cfg(test)]
     pub fn warning_value(&self) -> f64 {
         let ratio = self.warning_ratio.unwrap_or_else(|| self.direction.default_warning_ratio());
         self.value * ratio

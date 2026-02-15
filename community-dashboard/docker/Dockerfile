@@ -8,8 +8,8 @@ RUN apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static
 WORKDIR /build
 
 # Copy the Rust project source
-COPY Cargo.toml Cargo.lock* ./
-COPY src/ ./src/
+COPY strands-metrics/Cargo.toml strands-metrics/Cargo.lock* ./
+COPY strands-metrics/src/ ./src/
 
 # Build in release mode (statically linked against musl)
 RUN cargo build --release
@@ -42,9 +42,10 @@ COPY goals.yaml /etc/strands/goals.yaml
 COPY team.yaml /etc/strands/team.yaml
 COPY packages.yaml /etc/strands/packages.yaml
 
-# Copy entrypoint script
+# Copy entrypoint and sync scripts
 COPY docker/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY docker/sync-all.sh /usr/local/bin/sync-all.sh
+RUN chmod +x /entrypoint.sh /usr/local/bin/sync-all.sh
 
 # Create the data directory for EFS / local mount
 RUN mkdir -p /var/lib/grafana/data
