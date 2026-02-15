@@ -50,7 +50,7 @@ community-dashboard/
 
 ## Quick Start
 
-### Local dev with auto-sync
+### Local dev with auto-sync (Docker)
 
 Build the unified image that syncs GitHub data automatically:
 
@@ -59,6 +59,41 @@ GITHUB_TOKEN=ghp_xxx docker compose -f docker/docker-compose.local.yaml up --bui
 ```
 
 Open [http://localhost:3000](http://localhost:3000). This builds the Rust CLI, runs an initial sync on startup, and schedules daily updates at 06:00 UTC via supercronic.
+
+### Local dev with auto-sync (Podman)
+
+Podman works as a drop-in replacement. Build and run manually:
+
+```bash
+# Build the image
+podman build -t community-dashboard -f docker/Dockerfile .
+
+# Run the container
+podman run -d --name community-dashboard \
+  -p 3000:3000 \
+  -e GITHUB_TOKEN=ghp_xxx \
+  -v community-dashboard-data:/var/lib/grafana/data \
+  community-dashboard
+```
+
+Or use `podman-compose` with the existing compose file:
+
+```bash
+GITHUB_TOKEN=ghp_xxx podman-compose -f docker/docker-compose.local.yaml up --build
+```
+
+To persist data across container restarts, the named volume `community-dashboard-data` stores `metrics.db` at `/var/lib/grafana/data`. You can also bind-mount a local directory instead:
+
+```bash
+mkdir -p docker/data
+podman run -d --name community-dashboard \
+  -p 3000:3000 \
+  -e GITHUB_TOKEN=ghp_xxx \
+  -v ./docker/data:/var/lib/grafana/data:Z \
+  community-dashboard
+```
+
+The `:Z` suffix is needed on SELinux-enabled systems (Fedora, RHEL) to relabel the mount for container access.
 
 ### Standalone CLI
 
