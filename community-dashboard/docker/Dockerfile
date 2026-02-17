@@ -50,10 +50,11 @@ RUN chmod +x /entrypoint.sh /usr/local/bin/sync-all.sh
 # Create the data directory for EFS / local mount
 RUN mkdir -p /var/lib/grafana/data
 
-# Bundle a pre-built metrics.db so the first boot doesn't need a long backfill.
-# The entrypoint will copy this to the EFS volume if no DB exists yet.
-# The wildcard pattern makes this a no-op if the file doesn't exist.
-COPY docker/data/metrics.d[b] /seed/
+# Optionally bundle a pre-built metrics.db so the first boot doesn't need
+# a long backfill. Place metrics.db in docker/data/ before building.
+# The entrypoint will copy it to the EFS volume if no DB exists yet.
+RUN mkdir -p /seed
+COPY docker/data/ /seed/
 
 # Grafana configuration via environment variables
 ENV GF_INSTALL_PLUGINS=frser-sqlite-datasource

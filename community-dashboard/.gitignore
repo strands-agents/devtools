@@ -7,8 +7,9 @@ cdk/cdk.out/
 cdk/dist/
 cdk/.env
 
-# Docker
-docker/data/
+# Docker (ignore DB snapshots but keep the directory)
+docker/data/*
+!docker/data/.gitkeep
 
 # IDE
 .idea/
