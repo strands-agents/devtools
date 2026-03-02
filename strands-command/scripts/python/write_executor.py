@@ -35,6 +35,51 @@ logging.basicConfig(
 logger = logging.getLogger("write_executor")
 
 
+def read_parsed_input() -> Dict[str, Any] | None:
+    """Read parsed input artifact if it exists.
+    
+    Returns:
+        Dictionary with parsed input data or None if not found
+    """
+    artifact_path = Path("strands-parsed-input.json")
+    if not artifact_path.exists():
+        logger.debug("Parsed input artifact not found")
+        return None
+    
+    try:
+        with open(artifact_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to read parsed input: {e}")
+        return None
+
+
+def post_fork_commit_comment(issue_id: int, branch_name: str, head_repo: str):
+    """Post a comment with fork commit instructions.
+    
+    Args:
+        issue_id: Issue number to comment on
+        branch_name: Branch name created by agent
+        head_repo: Fork repository name
+    """
+    comment = f"""## 🔀 Fork Changes Ready
+
+The agent has completed its work on your fork. To commit these changes to your fork, run:
+
+```bash
+git fetch origin {branch_name}
+git checkout {branch_name}
+git add .
+git commit -m "Apply agent changes"
+git push origin {branch_name}
+```
+
+This will push the changes to your fork at `{head_repo}`."""
+    
+    logger.info(f"Posting fork commit instructions to issue #{issue_id}")
+    add_issue_comment(issue_id, comment)
+
+
 def get_function_mapping() -> Dict[str, Any]:
     """Get mapping of function names to actual functions."""
     return {
@@ -149,6 +194,18 @@ def main():
     
     # Process the JSONL file
     process_jsonl_file(artifact_path, args.issue_id)
+    
+    # Check if this is a fork PR and post commit instructions
+    parsed_input = read_parsed_input()
+    if parsed_input and args.issue_id:
+        head_repo = parsed_input.get("head_repo")
+        branch_name = parsed_input.get("branch_name")
+        
+        if head_repo and branch_name:
+            logger.info("Fork PR detected - posting commit instructions")
+            post_fork_commit_comment(args.issue_id, branch_name, head_repo)
+        else:
+            logger.debug("Not a fork PR or missing required fields")
 
 if __name__ == "__main__":
     main()
