@@ -1,0 +1,25 @@
+# =============================================================================
+# Grafana-only image — no Rust build, no sync logic
+# =============================================================================
+FROM grafana/grafana:latest
+
+USER root
+
+# Copy Grafana provisioning configs
+COPY provisioning/datasources/ /etc/grafana/provisioning/datasources/
+COPY provisioning/dashboards/ /etc/grafana/provisioning/dashboards/
+
+# Create the data directory for EFS / local mount
+RUN mkdir -p /var/lib/grafana/data
+
+# Grafana configuration via environment variables
+ENV GF_INSTALL_PLUGINS=frser-sqlite-datasource
+ENV GF_PLUGIN_FRSER_SQLITE_DATASOURCE_ALLOW_LOCAL_MODE=true
+ENV GF_AUTH_ANONYMOUS_ENABLED=true
+ENV GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+ENV GF_AUTH_BASIC_ENABLED=false
+ENV GF_AUTH_DISABLE_LOGIN_FORM=true
+ENV GF_USERS_ALLOW_SIGN_UP=false
+ENV GF_SECURITY_ALLOW_EMBEDDING=true
+
+EXPOSE 3000

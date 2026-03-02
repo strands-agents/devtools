@@ -9,6 +9,9 @@ CONFIG_DIR="/etc/strands"
 echo "[sync-all] Starting GitHub data sync..."
 strands-metrics --db-path "$DB_PATH" sync
 
+echo "[sync-all] Backfilling triage timestamps..."
+strands-metrics --db-path "$DB_PATH" backfill-triage
+
 echo "[sync-all] Running garbage collection..."
 strands-metrics --db-path "$DB_PATH" sweep
 
