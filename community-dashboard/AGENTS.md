@@ -11,8 +11,9 @@ Compose or deploys to AWS with CDK (Fargate + EFS + CloudFront).
 
 - `strands-metrics/` — Rust CLI that syncs GitHub/PyPI/npm data into
   SQLite and computes daily aggregate metrics.
-- `docker/` — Dockerfile (multi-stage: Rust build → Grafana image),
-  Compose file, entrypoint, and daily sync script.
+- `docker/` — Split Dockerfiles (`Dockerfile.grafana` for serving,
+  `Dockerfile.metrics` for Rust build + sync), Compose file,
+  entrypoint, and daily sync script.
 - `provisioning/` — Grafana provisioning configs: datasource
   (SQLite) and seven dashboard JSON files in three folders.
 - `cdk/` — AWS CDK stack (TypeScript): VPC, ECS Fargate, EFS,
@@ -139,8 +140,8 @@ npx tsc --noEmit
 
 | Module | Responsibility |
 |---|---|
-| `main.rs` | CLI entry point (clap), dispatches subcommands |
-| `client.rs` | GitHub API client via octocrab, GraphQL with retry/backoff |
+| `main.rs` | CLI entry point (clap), dispatches subcommands, TTY-aware logging |
+| `client.rs` | GitHub API client via octocrab, GraphQL with retry/backoff, dual progress (spinner + tracing) |
 | `db.rs` | SQLite schema init and migrations |
 | `downloads.rs` | PyPI / npm download stat fetching |
 | `goals.rs` | Goal thresholds and team member management |
@@ -149,15 +150,21 @@ npx tsc --noEmit
 ### AWS deployment path
 
 ```
-CloudFront (HTTPS)
+CloudFront (HTTPS, WAF rate-limit: 300 req/5min per IP)
   → API Gateway HTTP API (VPC Link)
-    → ECS Fargate (0.5 vCPU / 1 GB)
-      → Grafana + strands-metrics
+    → ECS Fargate — Grafana Service (always-on, 0.5 vCPU / 1 GB)
         → EFS (metrics.db, RETAIN policy)
+
+EventBridge (daily 06:00 UTC)
+  → ECS Fargate — Metrics Task (on-demand, 0.5 vCPU / 1 GB)
+      → EFS (writes metrics.db)
+      → Secrets Manager (GITHUB_TOKEN)
 ```
 
-Secrets Manager holds the GitHub PAT. Supercronic runs the daily
-sync inside the container at 06:00 UTC.
+The architecture splits serving from syncing: Grafana runs as an
+always-on service, while the metrics sync runs as a scheduled
+Fargate task triggered by EventBridge. WAF rate-limiting on
+CloudFront prevents runaway costs from external traffic spikes.
 
 ## Testing Strategy
 
@@ -188,10 +195,13 @@ and `read:project` scope for project items sync).
   (`GF_AUTH_ANONYMOUS_ENABLED=true`, `GF_AUTH_BASIC_ENABLED=false`).
   No login form, no sign-up.
 - EFS volume is encrypted at rest with `RETAIN` removal policy.
-- Docker image is multi-stage; final image is based on
-  `grafana/grafana:latest` (Alpine).
+- Docker images are split: `Dockerfile.grafana` is based on
+  `grafana/grafana:latest` (Alpine); `Dockerfile.metrics` is a
+  multi-stage Rust build → minimal Alpine runner.
 - SQLite datasource is mounted read-only in Grafana
   (`mode: ro` in `automatic.yaml`).
+- WAF WebACL on CloudFront rate-limits to 300 requests per
+  5-minute window per IP, preventing cost spikes from abuse.
 
 > TODO: No dependency scanning (e.g., `cargo audit`, Dependabot)
 > is configured.
@@ -224,8 +234,6 @@ and `read:project` scope for project items sync).
 - Add team members via `team.yaml` and running `load-team`.
 - Environment variables:
   - `GITHUB_TOKEN` — required for sync/sweep commands.
-  - `RECOMPUTE_METRICS=true` — triggers full daily_metrics
-    recomputation on container startup.
   - `GF_*` — standard Grafana env var overrides.
 
 ## Further Reading
