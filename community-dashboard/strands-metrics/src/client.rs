@@ -32,6 +32,12 @@ impl<'a> GitHubClient<'a> {
         Self { gh, db, pb }
     }
 
+    /// Update spinner message and also log to tracing (visible in non-TTY/container mode).
+    fn log_progress(&self, msg: &str) {
+        self.pb.set_message(msg.to_string());
+        tracing::info!("{}", msg);
+    }
+
     pub async fn check_limits(&self) -> Result<()> {
         let rate = self.gh.ratelimit().get().await?;
 
@@ -41,8 +47,7 @@ impl<'a> GitHubClient<'a> {
             let reset = core.reset;
             let now = Utc::now().timestamp() as u64;
             let wait_secs = reset.saturating_sub(now) + 10;
-            self.pb
-                .set_message(format!("REST rate limit low. Sleeping {}s...", wait_secs));
+            self.log_progress(&format!("REST rate limit low. Sleeping {}s...", wait_secs));
             tokio::time::sleep(tokio::time::Duration::from_secs(wait_secs)).await;
         }
 
@@ -52,8 +57,7 @@ impl<'a> GitHubClient<'a> {
                 let reset = graphql.reset;
                 let now = Utc::now().timestamp() as u64;
                 let wait_secs = reset.saturating_sub(now) + 10;
-                self.pb
-                    .set_message(format!("GraphQL rate limit low. Sleeping {}s...", wait_secs));
+                self.log_progress(&format!("GraphQL rate limit low. Sleeping {}s...", wait_secs));
                 tokio::time::sleep(tokio::time::Duration::from_secs(wait_secs)).await;
             }
         }
@@ -80,7 +84,7 @@ impl<'a> GitHubClient<'a> {
                             && attempt < max_retries
                         {
                             let wait = 2u64.pow(attempt) * 10;
-                            self.pb.set_message(format!(
+                            self.log_progress(&format!(
                                 "GraphQL rate limited, retrying in {}s...", wait
                             ));
                             tokio::time::sleep(tokio::time::Duration::from_secs(wait)).await;
@@ -93,7 +97,7 @@ impl<'a> GitHubClient<'a> {
                 Err(e) => {
                     if attempt < max_retries {
                         let wait = 2u64.pow(attempt) * 5;
-                        self.pb.set_message(format!(
+                        self.log_progress(&format!(
                             "GraphQL error (attempt {}/{}), retrying in {}s: {}",
                             attempt + 1, max_retries, wait, e
                         ));
@@ -112,10 +116,10 @@ impl<'a> GitHubClient<'a> {
         let repos = self.fetch_repos(org).await?;
         let mut failures: Vec<String> = Vec::new();
         for repo in repos {
-            self.pb.set_message(format!("Syncing {}", repo.name));
+            self.log_progress(&format!("Syncing {}", repo.name));
             if let Err(e) = self.sync_repo(org, &repo).await {
                 tracing::error!("Failed to sync {}: {}", repo.name, e);
-                self.pb.set_message(format!("WARN: {} sync failed, continuing...", repo.name));
+                self.log_progress(&format!("WARN: {} sync failed, continuing...", repo.name));
                 failures.push(repo.name.clone());
             }
         }
@@ -137,7 +141,7 @@ impl<'a> GitHubClient<'a> {
         self.check_limits().await?;
         let repos = self.fetch_repos(org).await?;
         for repo in repos {
-            self.pb.set_message(format!("Sweeping {}", repo.name));
+            self.log_progress(&format!("Sweeping {}", repo.name));
             self.sweep_repo(org, &repo).await?;
         }
         Ok(())
@@ -796,7 +800,7 @@ impl<'a> GitHubClient<'a> {
     /// Sync GitHub Project V2 items (org-level, not per-repo).
     /// Fetches priority and status fields from the specified project number.
     pub async fn sync_project_items(&self, org: &str, project_number: i32) -> Result<()> {
-        self.pb.set_message(format!("Syncing project #{} items...", project_number));
+        self.log_progress(&format!("Syncing project #{} items...", project_number));
 
         // Snapshot existing priorities so we can detect NULL → non-NULL transitions
         let mut old_priorities: HashMap<String, Option<String>> = HashMap::new();
@@ -946,15 +950,14 @@ impl<'a> GitHubClient<'a> {
 
                 // Determine triaged_at:
                 // 1. If we already had a triaged_at, preserve it
-                // 2. If priority was NULL before and is now non-NULL, set triaged_at = now
-                // 3. Otherwise leave NULL
+                // 2. If item existed before with NULL priority and now has priority, set triaged_at = now
+                // 3. Brand new items (not in old_priorities) → leave NULL for backfill to handle
+                // 4. Otherwise leave NULL
                 let triaged_at = if let Some(existing) = old_triaged.get(node_id).and_then(|t| t.as_deref()) {
                     Some(existing.to_string())
-                } else if priority.is_some() {
-                    let was_null = old_priorities
-                        .get(node_id)
-                        .map(|p| p.is_none())
-                        .unwrap_or(true); // new item with priority = treat as newly triaged
+                } else if priority.is_some() && old_priorities.contains_key(node_id) {
+                    // Item existed before — check if priority transitioned from NULL
+                    let was_null = old_priorities.get(node_id).map(|p| p.is_none()).unwrap_or(false);
                     if was_null { Some(now.clone()) } else { None }
                 } else {
                     None
@@ -984,8 +987,7 @@ impl<'a> GitHubClient<'a> {
             }
         }
 
-        self.pb
-            .set_message(format!("Synced {} project items", total));
+        self.log_progress(&format!("Synced {} project items", total));
         Ok(())
     }
 
@@ -1011,11 +1013,11 @@ impl<'a> GitHubClient<'a> {
         };
 
         let total = items.len();
-        self.pb.set_message(format!("Backfilling triage timestamps for {} items...", total));
+        self.log_progress(&format!("Backfilling triage timestamps for {} items...", total));
 
         for (i, (node_id, repo, issue_number)) in items.iter().enumerate() {
             if i % 10 == 0 {
-                self.pb.set_message(format!(
+                self.log_progress(&format!(
                     "Backfilling triage timestamps... {}/{}", i, total
                 ));
             }
@@ -1049,7 +1051,7 @@ impl<'a> GitHubClient<'a> {
             }
         }
 
-        self.pb.set_message(format!("Backfilled triage timestamps for {} items", total));
+        self.log_progress(&format!("Backfilled triage timestamps for {} items", total));
         Ok(())
     }
 

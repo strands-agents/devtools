@@ -5,6 +5,7 @@ mod downloads;
 mod goals;
 
 use anyhow::Result;
+use atty::Stream;
 use clap::{Parser, Subcommand};
 use client::GitHubClient;
 use db::init_db;
@@ -70,23 +71,34 @@ enum Commands {
     BackfillTriage,
 }
 
-/// Create a spinner progress bar with consistent styling
+/// Create a spinner progress bar with consistent styling.
+/// In non-TTY environments (containers, CI), uses a hidden progress bar
+/// and logs messages to stderr instead.
 fn create_spinner(m: &Arc<MultiProgress>, message: &str) -> ProgressBar {
-    let sty = ProgressStyle::with_template("{spinner:.green} {msg}")
-        .unwrap()
-        .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ");
-    let pb = m.add(ProgressBar::new_spinner());
-    pb.set_style(sty);
-    pb.enable_steady_tick(std::time::Duration::from_millis(120));
-    pb.set_message(message.to_string());
-    pb
+    if atty::is(Stream::Stderr) {
+        let sty = ProgressStyle::with_template("{spinner:.green} {msg}")
+            .unwrap()
+            .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ");
+        let pb = m.add(ProgressBar::new_spinner());
+        pb.set_style(sty);
+        pb.enable_steady_tick(std::time::Duration::from_millis(120));
+        pb.set_message(message.to_string());
+        pb
+    } else {
+        eprintln!("[metrics] {}", message);
+        let pb = m.add(ProgressBar::hidden());
+        pb
+    }
 }
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let is_tty = atty::is(Stream::Stderr);
+
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
-        .with_max_level(LevelFilter::WARN)
+        .with_max_level(if is_tty { LevelFilter::WARN } else { LevelFilter::INFO })
+        .with_ansi(is_tty)
         .init();
 
     let args = Cli::parse();
@@ -106,9 +118,11 @@ async fn main() -> Result<()> {
             client.sync_org(ORG).await?;
 
             pb.set_message("Calculating metrics...");
+            tracing::info!("Calculating metrics...");
             aggregates::compute_metrics(&conn)?;
 
             pb.finish_with_message("Done!");
+            tracing::info!("Sync complete.");
         }
         Commands::Sweep => {
             let gh_token = std::env::var("GITHUB_TOKEN").expect("GITHUB_TOKEN must be set");
@@ -121,6 +135,7 @@ async fn main() -> Result<()> {
             client.sweep_org(ORG).await?;
 
             pb.finish_with_message("Sweep complete.");
+            tracing::info!("Sweep complete.");
         }
         Commands::Query { sql } => {
             let mut stmt = conn.prepare(&sql)?;
@@ -249,6 +264,7 @@ async fn main() -> Result<()> {
             client.backfill_triage_timestamps(ORG).await?;
 
             pb.finish_with_message("Triage backfill complete.");
+            tracing::info!("Triage backfill complete.");
         }
     }
 
