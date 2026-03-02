@@ -1,0 +1,33 @@
+# =============================================================================
+# Stage 1: Build the strands-metrics Rust binary
+# =============================================================================
+FROM rust:1.88-alpine AS builder
+
+RUN apk add --no-cache musl-dev pkgconfig openssl-dev openssl-libs-static
+
+WORKDIR /build
+
+COPY strands-metrics/Cargo.toml strands-metrics/Cargo.lock* ./
+COPY strands-metrics/src/ ./src/
+
+RUN cargo build --release
+
+# =============================================================================
+# Stage 2: Minimal metrics runner
+# =============================================================================
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates sqlite
+
+COPY --from=builder /build/target/release/strands-metrics /usr/local/bin/strands-metrics
+
+# Copy configuration files
+COPY goals.yaml /etc/strands/goals.yaml
+COPY team.yaml /etc/strands/team.yaml
+COPY packages.yaml /etc/strands/packages.yaml
+
+# Copy the sync script
+COPY docker/sync-all.sh /usr/local/bin/sync-all.sh
+RUN chmod +x /usr/local/bin/sync-all.sh
+
+ENTRYPOINT ["sync-all.sh"]

@@ -1,0 +1,26 @@
+# Package Download Tracking Configuration
+# Maps GitHub repos to their published packages for download tracking
+# Used for filtering the Adoption dashboard by repo
+
+repo_mappings:
+  sdk-python:
+    - package: strands-agents
+      registry: pypi
+  sdk-typescript:
+    - package: "@strands-agents/sdk"
+      registry: npm
+  tools:
+    - package: strands-agents-tools
+      registry: pypi
+  agent-sop:
+    - package: strands-agents-sops
+      registry: pypi
+  agent-builder:
+    - package: strands-agents-builder
+      registry: pypi
+  evals:
+    - package: strands-agents-evals
+      registry: pypi
+  mcp-server:
+    - package: strands-agents-mcp-server
+      registry: pypi
