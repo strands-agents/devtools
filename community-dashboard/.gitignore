@@ -4,6 +4,7 @@ strands-metrics/target/
 # CDK
 cdk/node_modules/
 cdk/cdk.out/
+cdk/cdk.context.json
 cdk/dist/
 cdk/.env
 

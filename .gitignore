@@ -20,6 +20,10 @@ package-lock.json
 # OS files
 .DS_Store
 
+# Development artifacts
+diff.txt
+pr_description.md
+
 # IDE
 .idea/
 *.swp

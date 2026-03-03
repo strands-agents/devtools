@@ -10,12 +10,16 @@ import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as logs from "aws-cdk-lib/aws-logs";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as servicediscovery from "aws-cdk-lib/aws-servicediscovery";
-import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import { Construct } from "constructs";
 import * as path from "path";
 
+interface CommunityDashboardStackProps extends cdk.StackProps {
+  /** ARN of the WAF WebACL (must be created in us-east-1 for CloudFront). */
+  wafAclArn: string;
+}
+
 export class CommunityDashboardStack extends cdk.Stack {
-  constructor(scope: Construct, id: string, props?: cdk.StackProps) {
+  constructor(scope: Construct, id: string, props: CommunityDashboardStackProps) {
     super(scope, id, props);
 
     // ── Secrets Manager ──────────────────────────────────────────────────
@@ -254,39 +258,9 @@ export class CommunityDashboardStack extends cdk.Stack {
       cdk.Fn.split("/", httpApi.attrApiEndpoint)
     );
 
-    // ── WAF rate-limit rule (protect against runaway CloudFront/API GW costs)
-    // Blocks any single IP exceeding 300 requests per 5-minute window.
-    // WAF for CloudFront must be in us-east-1, so we use a CfnWebACL directly.
-    const waf = new wafv2.CfnWebACL(this, "RateLimitAcl", {
-      scope: "CLOUDFRONT",
-      defaultAction: { allow: {} },
-      visibilityConfig: {
-        cloudWatchMetricsEnabled: true,
-        metricName: "CommunityDashboardWAF",
-        sampledRequestsEnabled: false,
-      },
-      rules: [
-        {
-          name: "RateLimitPerIP",
-          priority: 1,
-          action: { block: {} },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: "RateLimitPerIP",
-            sampledRequestsEnabled: false,
-          },
-          statement: {
-            rateBasedStatement: {
-              limit: 300,
-              aggregateKeyType: "IP",
-            },
-          },
-        },
-      ],
-    });
-
+    // ── CloudFront distribution with WAF from cross-region stack ────────
     const distribution = new cloudfront.Distribution(this, "Distribution", {
-      webAclId: waf.attrArn,
+      webAclId: props.wafAclArn,
       defaultBehavior: {
         origin: new origins.HttpOrigin(apiDomain, {
           protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,

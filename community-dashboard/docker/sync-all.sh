@@ -10,7 +10,12 @@ echo "[sync-all] Starting GitHub data sync..."
 strands-metrics --db-path "$DB_PATH" sync
 
 echo "[sync-all] Backfilling triage timestamps..."
-strands-metrics --db-path "$DB_PATH" backfill-triage
+if [ "${RESET_TRIAGE:-}" = "true" ]; then
+  echo "[sync-all] RESET_TRIAGE=true, clearing bad triaged_at data first..."
+  strands-metrics --db-path "$DB_PATH" backfill-triage --reset
+else
+  strands-metrics --db-path "$DB_PATH" backfill-triage
+fi
 
 echo "[sync-all] Running garbage collection..."
 strands-metrics --db-path "$DB_PATH" sweep

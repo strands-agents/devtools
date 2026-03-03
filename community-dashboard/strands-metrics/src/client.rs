@@ -832,7 +832,34 @@ impl<'a> GitHubClient<'a> {
             }
         }
 
-        // Clear and re-sync fully
+        // Clear and re-sync fully — wrapped in a transaction so a mid-sync
+        // failure (network error, rate limit) doesn't lose all project items.
+        self.db.execute_batch("BEGIN")?;
+
+        let result = self
+            .sync_project_items_inner(org, project_number, &old_priorities, &old_triaged)
+            .await;
+
+        match result {
+            Ok(total) => {
+                self.db.execute_batch("COMMIT")?;
+                self.log_progress(&format!("Synced {} project items", total));
+                Ok(())
+            }
+            Err(e) => {
+                let _ = self.db.execute_batch("ROLLBACK");
+                Err(e)
+            }
+        }
+    }
+
+    async fn sync_project_items_inner(
+        &self,
+        org: &str,
+        project_number: i32,
+        old_priorities: &HashMap<String, Option<String>>,
+        old_triaged: &HashMap<String, Option<String>>,
+    ) -> Result<u64> {
         self.db.execute("DELETE FROM project_items", [])?;
 
         let now = Utc::now().to_rfc3339();
@@ -987,8 +1014,7 @@ impl<'a> GitHubClient<'a> {
             }
         }
 
-        self.log_progress(&format!("Synced {} project items", total));
-        Ok(())
+        Ok(total)
     }
 
     /// Backfill triaged_at timestamps by checking issue timeline events.

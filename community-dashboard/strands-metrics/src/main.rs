@@ -5,13 +5,13 @@ mod downloads;
 mod goals;
 
 use anyhow::Result;
-use atty::Stream;
 use clap::{Parser, Subcommand};
 use client::GitHubClient;
 use db::init_db;
 use goals::Direction;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use octocrab::OctocrabBuilder;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tracing::level_filters::LevelFilter;
@@ -68,14 +68,18 @@ enum Commands {
         config_path: PathBuf,
     },
     /// Backfill triaged_at timestamps from issue timeline events.
-    BackfillTriage,
+    BackfillTriage {
+        /// Reset all triaged_at values before backfilling (use on first run or to fix bad data)
+        #[clap(long)]
+        reset: bool,
+    },
 }
 
 /// Create a spinner progress bar with consistent styling.
 /// In non-TTY environments (containers, CI), uses a hidden progress bar
 /// and logs messages to stderr instead.
 fn create_spinner(m: &Arc<MultiProgress>, message: &str) -> ProgressBar {
-    if atty::is(Stream::Stderr) {
+    if std::io::stderr().is_terminal() {
         let sty = ProgressStyle::with_template("{spinner:.green} {msg}")
             .unwrap()
             .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ");
@@ -93,7 +97,7 @@ fn create_spinner(m: &Arc<MultiProgress>, message: &str) -> ProgressBar {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let is_tty = atty::is(Stream::Stderr);
+    let is_tty = std::io::stderr().is_terminal();
 
     tracing_subscriber::fmt()
         .with_writer(std::io::stderr)
@@ -253,9 +257,14 @@ async fn main() -> Result<()> {
 
             println!("\nBackfill complete!");
         }
-        Commands::BackfillTriage => {
+        Commands::BackfillTriage { reset } => {
             let gh_token = std::env::var("GITHUB_TOKEN").expect("GITHUB_TOKEN must be set");
             let octocrab = OctocrabBuilder::new().personal_token(gh_token).build()?;
+
+            if reset {
+                let cleared = conn.execute("UPDATE project_items SET triaged_at = NULL", [])?;
+                eprintln!("[metrics] Reset triaged_at on {} items", cleared);
+            }
 
             let m = Arc::new(MultiProgress::new());
             let pb = create_spinner(&m, "Backfilling triage timestamps...");

@@ -59,6 +59,12 @@ pub fn compute_metrics(conn: &Connection) -> Result<()> {
         [],
     )?;
 
+    // Index the temp table for efficient lookups in the daily loop
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_temp_response ON temp_response_times(repo, created_date)",
+        [],
+    )?;
+
     let now = Utc::now();
     let num_days = (now - start_date).num_days();
 
