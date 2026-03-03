@@ -131,11 +131,24 @@ runs:
         if [ -n "${{ inputs.aws_secrets_manager_secret_id }}" ]; then
           echo "Fetching configuration from AWS Secrets Manager..."
           SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${{ inputs.aws_secrets_manager_secret_id }}" --query SecretString --output text --region us-east-1)
-          echo "sessions_bucket=$(echo $SECRET_JSON | jq -r '.AGENT_SESSIONS_BUCKET // empty')" >> $GITHUB_OUTPUT
-          echo "langfuse_public_key=$(echo $SECRET_JSON | jq -r '.LANGFUSE_PUBLIC_KEY // empty')" >> $GITHUB_OUTPUT
-          echo "langfuse_secret_key=$(echo $SECRET_JSON | jq -r '.LANGFUSE_SECRET_KEY // empty')" >> $GITHUB_OUTPUT
-          echo "langfuse_host=$(echo $SECRET_JSON | jq -r '.LANGFUSE_HOST // empty')" >> $GITHUB_OUTPUT
-          echo "evals_sqs_queue_arn=$(echo $SECRET_JSON | jq -r '.EVALS_SQS_QUEUE_ARN // empty')" >> $GITHUB_OUTPUT
+
+          SESSIONS_BUCKET=$(echo $SECRET_JSON | jq -r '.AGENT_SESSIONS_BUCKET // empty')
+          LANGFUSE_PUBLIC_KEY=$(echo $SECRET_JSON | jq -r '.LANGFUSE_PUBLIC_KEY // empty')
+          LANGFUSE_SECRET_KEY=$(echo $SECRET_JSON | jq -r '.LANGFUSE_SECRET_KEY // empty')
+          LANGFUSE_HOST=$(echo $SECRET_JSON | jq -r '.LANGFUSE_HOST // empty')
+          EVALS_SQS_QUEUE_ARN=$(echo $SECRET_JSON | jq -r '.EVALS_SQS_QUEUE_ARN // empty')
+
+          [ -n "$SESSIONS_BUCKET" ] && echo "::add-mask::$SESSIONS_BUCKET"
+          [ -n "$LANGFUSE_PUBLIC_KEY" ] && echo "::add-mask::$LANGFUSE_PUBLIC_KEY"
+          [ -n "$LANGFUSE_SECRET_KEY" ] && echo "::add-mask::$LANGFUSE_SECRET_KEY"
+          [ -n "$LANGFUSE_HOST" ] && echo "::add-mask::$LANGFUSE_HOST"
+          [ -n "$EVALS_SQS_QUEUE_ARN" ] && echo "::add-mask::$EVALS_SQS_QUEUE_ARN"
+
+          echo "sessions_bucket=$SESSIONS_BUCKET" >> $GITHUB_OUTPUT
+          echo "langfuse_public_key=$LANGFUSE_PUBLIC_KEY" >> $GITHUB_OUTPUT
+          echo "langfuse_secret_key=$LANGFUSE_SECRET_KEY" >> $GITHUB_OUTPUT
+          echo "langfuse_host=$LANGFUSE_HOST" >> $GITHUB_OUTPUT
+          echo "evals_sqs_queue_arn=$EVALS_SQS_QUEUE_ARN" >> $GITHUB_OUTPUT
         fi
 
     - name: Build scoped IAM policy
