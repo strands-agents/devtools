@@ -54,12 +54,15 @@ STRANDS_REGION = "us-west-2"
 DEFAULT_SYSTEM_PROMPT = "You are an autonomous GitHub agent powered by Strands Agents SDK."
 
 
-def _send_eval_trigger(session_id: str) -> None:
+def _send_eval_trigger(session_id: str, eval_type: str) -> None:
     """Send evaluation trigger to SQS queue after agent completion.
     
     Only sends if EVALS_SQS_QUEUE_ARN environment variable is set.
     Derives queue URL from ARN (format: arn:aws:sqs:{region}:{account_id}:{queue_name}).
-    Extracts eval_type from the first part of session_id (before the hyphen).
+    
+    Args:
+        session_id: The unique session ID as stored in Langfuse (may include repo prefix).
+        eval_type: The evaluation type (e.g., "reviewer", "implementer").
     """
     queue_arn = os.environ.get("EVALS_SQS_QUEUE_ARN")
     if not queue_arn:
@@ -75,8 +78,6 @@ def _send_eval_trigger(session_id: str) -> None:
     account_id = arn_parts[4]
     queue_name = arn_parts[5]
     queue_url = f"https://sqs.{region}.amazonaws.com/{account_id}/{queue_name}"
-    
-    eval_type = session_id.split("-")[0] if "-" in session_id else session_id
     
     try:
         sqs_client = boto3.client("sqs", region_name=region)
@@ -245,7 +246,10 @@ def run_agent(query: str):
 
         print(f"\n\nAgent Result 🤖\nStop Reason: {result.stop_reason}\nMessage: {json.dumps(result.message, indent=2)}")
         
-        _send_eval_trigger(session_id)
+        # Use the unique session ID from trace attributes (includes repo prefix)
+        unique_session_id = trace_attributes.get("session.id", session_id)
+        eval_type = session_id.split("-")[0] if "-" in session_id else session_id
+        _send_eval_trigger(unique_session_id, eval_type)
     except Exception as e:
         error_msg = f"❌ Agent execution failed: {e}"
         print(error_msg)
