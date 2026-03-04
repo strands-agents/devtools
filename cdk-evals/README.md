@@ -22,6 +22,7 @@ AWS CDK infrastructure for the Strands Evals Dashboard and Evaluation Pipeline.
 2. **AWS CLI** configured with credentials
 3. **AWS CDK CLI**: `npm install -g aws-cdk`
 4. **Docker** (required for Python Lambda bundling - must be running during deployment)
+   - If using **Podman** instead of Docker: `export CDK_DOCKER=podman`
 
 ## Setup
 

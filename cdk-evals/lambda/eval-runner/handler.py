@@ -39,8 +39,8 @@ setup_environment()
 
 # Now import evaluation modules after environment is set
 from strands_evals import Case, Experiment
+from strands_evals.providers import LangfuseProvider
 
-from mappers import LangfuseSessionMapper, SessionMapper
 from s3_export import export_reports_to_s3
 from eval_configs import get_eval_config
 
@@ -49,21 +49,17 @@ def run_session_evaluation(session_id: str, eval_type: str):
     """Run evaluation on a single session by ID."""
     logger.info(f"Running session evaluation: session_id={session_id}, eval_type={eval_type}")
     
-    mapper = LangfuseSessionMapper()
+    provider = LangfuseProvider()
     try:
-        session = mapper.get_session(session_id)
+        eval_data = provider.get_evaluation_data(session_id)
     except Exception as e:
         logger.error(f"Error fetching session: {e}")
         raise
     
-    user_input, agent_output = SessionMapper.extract_input_output(session)
-    if not agent_output:
-        raise ValueError("Could not extract agent output from session")
-    
     case_name = f"Session {session_id}"
     case_data = {
         "name": case_name,
-        "input": user_input,
+        "input": session_id,
         "expected_output": "",
         "expected_trajectory": [],
         "metadata": {
@@ -81,10 +77,7 @@ def run_session_evaluation(session_id: str, eval_type: str):
     logger.info(f"Evaluators: {[e.get_type_name() for e in experiment.evaluators]}")
     
     def task(case: Case) -> dict:
-        return {
-            "output": agent_output,
-            "trajectory": session,
-        }
+        return eval_data
     
     logger.info("Running evaluations...")
     reports = experiment.run_evaluations(task)
