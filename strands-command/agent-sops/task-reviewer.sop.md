@@ -113,6 +113,18 @@ Check documentation completeness and quality.
 - You MUST verify that README.md updates are included if needed
 - You MUST check that development documentation is updated if patterns changed
 
+#### 3.6 Documentation PR Check
+
+Verify that a corresponding documentation PR exists in the [strands-agents/docs](https://github.com/strands-agents/docs) repository, or that the author has provided a valid justification for why documentation updates are not needed.
+
+**Constraints:**
+- You MUST check the PR description for a "Documentation PR" section containing a link to a PR in the `strands-agents/docs` repository
+- You MUST verify the linked documentation PR is a valid URL pointing to `https://github.com/strands-agents/docs/pull/...`
+- If no documentation PR is linked, you MUST check whether the PR description contains a clear and valid explanation under a "Documentation PR" heading for why documentation updates are not required (e.g., internal refactor with no public API changes, test-only changes, CI/config changes)
+- If neither a documentation PR link nor a valid justification is present, you MUST NOT approve the PR because documentation coverage is required for all user-facing changes
+- You MUST post a review comment requesting the author to add a "Documentation PR" section to the PR description containing either a link to a documentation PR in [strands-agents/docs](https://github.com/strands-agents/docs) or a clear explanation of why documentation updates are not necessary
+- You MUST treat a missing or inadequate documentation PR justification as a blocking issue (Request Changes)
+
 ### 4. Generate Review Comments
 
 Create specific, actionable review comments for identified issues.
@@ -170,6 +182,7 @@ Provide a concise overall summary of the review.
 **Constraints:**
 - You MUST create a pull request review using GitHub's review feature
 - You MUST provide an overall assessment (Approve, Request Changes, Comment)
+- You MUST NOT approve the PR if the Documentation PR Check (step 3.6) has failed
 - You MUST keep the summary concise, informative, and easy to read
 - You MUST NOT repeat information already covered in inline comments
 - You MUST focus on high-level themes and patterns, not individual issues
