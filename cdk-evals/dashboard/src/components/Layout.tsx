@@ -28,6 +28,7 @@ const ROUTE_TITLES: Record<string, string> = {
   "/trends": "Score Trends",
   "/cases": "Test Cases",
   "/agent-progress": "Agent Progress",
+  "/insights": "Insights",
   "/settings": "Settings",
 };
 
@@ -69,6 +70,7 @@ export default function Layout({ children, title, description, breadcrumbs }: La
       type: "section" as const,
       defaultExpanded: true,
       items: [
+        { href: "/insights", text: "Insights", type: "link" as const },
         { href: "/agent-progress", text: "Agent Progress", type: "link" as const },
         { href: "/trends", text: "Score Trends", type: "link" as const },
         { href: "/cases", text: "Test Cases", type: "link" as const },

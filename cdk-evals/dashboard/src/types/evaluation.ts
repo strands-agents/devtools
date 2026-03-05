@@ -138,6 +138,29 @@ export interface EvaluatorResult {
   report: EvaluationReport;
 }
 
+// Insights types
+export interface Insight {
+  category: "sop_improvement" | "tool_usage" | "behavior_pattern" | "efficiency";
+  severity: "high" | "medium" | "low";
+  title: string;
+  description: string;
+  sop_section: string | null;
+  suggested_change: string;
+}
+
+export interface InsightsData {
+  run_id: string;
+  agent_type: string;
+  timestamp: string;
+  summary: string;
+  insights: Insight[];
+  score_analysis: {
+    lowest_scoring_evaluator: string;
+    lowest_score: number;
+    primary_weakness: string;
+  };
+}
+
 // Helper type guards
 export function isSession(trajectory: Session | string[] | undefined): trajectory is Session {
   return trajectory !== undefined && 

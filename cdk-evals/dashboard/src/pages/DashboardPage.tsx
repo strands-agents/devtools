@@ -17,7 +17,7 @@ import EvaluatorScoresTable from "../components/EvaluatorScoresTable";
 import ConversationViewer from "../components/ConversationViewer";
 import RunComparisonModal from "../components/RunComparisonModal";
 import { isSession } from "../types/evaluation";
-import type { EvaluationReport } from "../types/evaluation";
+import type { EvaluationReport, InsightsData } from "../types/evaluation";
 import {
   useEvaluation,
   getScoreColor,
@@ -336,14 +336,90 @@ function TestResultsContainer({
   );
 }
 
+function InsightsTabContent({ insights }: { insights: InsightsData }) {
+  return (
+    <SpaceBetween size="m">
+      <Box>{insights.summary}</Box>
+
+      <ColumnLayout columns={3}>
+        <Box>
+          <Box variant="awsui-key-label">Weakest Evaluator</Box>
+          <Box>{insights.score_analysis.lowest_scoring_evaluator}</Box>
+        </Box>
+        <Box>
+          <Box variant="awsui-key-label">Score</Box>
+          <StatusIndicator type={getStatusType(insights.score_analysis.lowest_score)}>
+            {(insights.score_analysis.lowest_score * 100).toFixed(0)}%
+          </StatusIndicator>
+        </Box>
+        <Box>
+          <Box variant="awsui-key-label">Primary Weakness</Box>
+          <Box>{insights.score_analysis.primary_weakness}</Box>
+        </Box>
+      </ColumnLayout>
+
+      {insights.insights.map((insight, idx) => (
+        <Container
+          key={idx}
+          header={
+            <Header variant="h3">
+              <SpaceBetween direction="horizontal" size="xs">
+                <StatusIndicator
+                  type={
+                    insight.severity === "high"
+                      ? "error"
+                      : insight.severity === "medium"
+                        ? "warning"
+                        : "info"
+                  }
+                >
+                  {insight.severity}
+                </StatusIndicator>
+                <span>{insight.title}</span>
+              </SpaceBetween>
+            </Header>
+          }
+        >
+          <SpaceBetween size="s">
+            <Box>{insight.description}</Box>
+            {insight.suggested_change && (
+              <Box>
+                <Box variant="awsui-key-label">
+                  Suggested Change{insight.sop_section ? ` (${insight.sop_section})` : ""}
+                </Box>
+                <pre
+                  style={{
+                    whiteSpace: "pre-wrap",
+                    fontFamily: "monospace",
+                    fontSize: "13px",
+                    background: "#f0fdf4",
+                    padding: "12px",
+                    borderRadius: "4px",
+                    border: "1px solid #bbf7d0",
+                    margin: 0,
+                  }}
+                >
+                  {insight.suggested_change}
+                </pre>
+              </Box>
+            )}
+          </SpaceBetween>
+        </Container>
+      ))}
+    </SpaceBetween>
+  );
+}
+
 function CaseDetailContainer({
   evaluators,
   selectedCase,
   onCaseChange,
+  insights,
 }: {
   evaluators: EvaluatorData[];
   selectedCase: number;
   onCaseChange: (index: number) => void;
+  insights: InsightsData | null;
 }) {
   if (evaluators.length === 0) {
     return (
@@ -514,6 +590,15 @@ function CaseDetailContainer({
                 },
               ]
             : []),
+          ...(insights
+            ? [
+                {
+                  id: "insights",
+                  label: "Insights",
+                  content: <InsightsTabContent insights={insights} />,
+                },
+              ]
+            : []),
         ]}
       />
     </Container>
@@ -521,7 +606,7 @@ function CaseDetailContainer({
 }
 
 export default function DashboardPage() {
-  const { evaluators, manifest, selectedCase, setSelectedCase, runsIndex, selectedRun } = useEvaluation();
+  const { evaluators, manifest, insights, selectedCase, setSelectedCase, runsIndex, selectedRun } = useEvaluation();
   const [showOnlyFailed, setShowOnlyFailed] = useState(false);
   const [compareModalVisible, setCompareModalVisible] = useState(false);
   const testResultsRef = useRef<HTMLDivElement>(null);
@@ -642,6 +727,7 @@ export default function DashboardPage() {
           evaluators={evaluators}
           selectedCase={selectedCase}
           onCaseChange={setSelectedCase}
+          insights={insights}
         />
         <div ref={testResultsRef}>
           <TestResultsContainer

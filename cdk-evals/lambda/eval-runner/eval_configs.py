@@ -3,8 +3,8 @@
 Maps eval_type strings to their evaluator configurations.
 """
 
-from dataclasses import dataclass
-from typing import Type
+from dataclasses import dataclass, field
+from typing import Optional, Type
 from strands_evals.evaluators import (
     Evaluator,
     HelpfulnessEvaluator,
@@ -24,6 +24,7 @@ class EvalConfig:
     """Configuration for a specific evaluation type."""
     evaluators: list[Type[Evaluator]]
     description: str
+    sop_file: Optional[str] = None
 
 
 EVAL_CONFIGS: dict[str, EvalConfig] = {
@@ -35,7 +36,8 @@ EVAL_CONFIGS: dict[str, EvalConfig] = {
             TurnEfficiencyEvaluator,
             ConciseResponseEvaluator,
         ],
-        description="Evaluates github issue resolution agents"
+        description="Evaluates github issue resolution agents",
+        sop_file="task-implementer.sop.md",
     ),
     "release_notes": EvalConfig(
         evaluators=[
@@ -43,7 +45,8 @@ EVAL_CONFIGS: dict[str, EvalConfig] = {
             HelpfulnessEvaluator,
             ConciseResponseEvaluator,
         ],
-        description="Evaluates release notes generation"
+        description="Evaluates release notes generation",
+        sop_file="task-release-notes.sop.md",
     ),
     "reviewer": EvalConfig(
         evaluators=[
@@ -52,14 +55,16 @@ EVAL_CONFIGS: dict[str, EvalConfig] = {
             ConciseResponseEvaluator,
             TurnEfficiencyEvaluator,
         ],
-        description="Evaluates code review agents"
+        description="Evaluates code review agents",
+        sop_file="task-reviewer.sop.md",
     ),
     "implementer": EvalConfig(
         evaluators=[
             ToolSelectionAccuracyEvaluator,
             TurnEfficiencyEvaluator,
         ],
-        description="Evaluates implementation agents"
+        description="Evaluates implementation agents",
+        sop_file="task-implementer.sop.md",
     ),
 }
 

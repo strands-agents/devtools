@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useCallback, useEffect } from "rea
 import type { ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import type { SelectProps } from "@cloudscape-design/components/select";
-import type { EvaluationReport, Session } from "../types/evaluation";
+import type { EvaluationReport, InsightsData, Session } from "../types/evaluation";
 
 export interface EvaluatorData {
   name: string;
@@ -121,6 +121,7 @@ export function getStatusType(score: number): "success" | "warning" | "error" {
 interface EvaluationContextType {
   evaluators: EvaluatorData[];
   manifest: Manifest | null;
+  insights: InsightsData | null;
   loading: boolean;
   error: string | null;
   setError: (error: string | null) => void;
@@ -151,6 +152,7 @@ export function EvaluationProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedCase, setSelectedCase] = useState<number>(0);
+  const [insights, setInsights] = useState<InsightsData | null>(null);
   const [runsIndex, setRunsIndex] = useState<RunsIndex | null>(null);
   const [selectedRun, setSelectedRun] = useState<SelectProps.Option | null>(null);
 
@@ -192,6 +194,18 @@ export function EvaluationProvider({ children }: { children: ReactNode }) {
       }
       setEvaluators(evaluatorData);
       setSelectedCase(0);
+
+      // Load insights if available
+      try {
+        const insightsRes = await fetch(`/runs/${runId}/insights.json`);
+        if (insightsRes.ok) {
+          setInsights(await insightsRes.json());
+        } else {
+          setInsights(null);
+        }
+      } catch {
+        setInsights(null);
+      }
     } catch (err) {
       setError(`Failed to load run: ${err}`);
     }
@@ -307,6 +321,7 @@ export function EvaluationProvider({ children }: { children: ReactNode }) {
   const value: EvaluationContextType = {
     evaluators,
     manifest,
+    insights,
     loading,
     error,
     setError,

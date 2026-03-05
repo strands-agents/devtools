@@ -41,8 +41,9 @@ setup_environment()
 from strands_evals import Case, Experiment
 from strands_evals.providers import LangfuseProvider
 
-from s3_export import export_reports_to_s3
+from s3_export import export_reports_to_s3, export_insights_to_s3
 from eval_configs import get_eval_config
+from insights_generator import generate_insights
 
 
 def run_session_evaluation(session_id: str, eval_type: str):
@@ -83,13 +84,21 @@ def run_session_evaluation(session_id: str, eval_type: str):
     reports = experiment.run_evaluations(task)
 
     # Export to S3
-    export_reports_to_s3(
-        reports, 
-        experiment, 
+    run_id = export_reports_to_s3(
+        reports,
+        experiment,
         run_id_prefix=eval_type,
         source="lambda_sqs_trigger",
         agent_type=eval_type,
     )
+
+    # Generate and export insights (non-fatal — failure doesn't affect eval results)
+    try:
+        insights = generate_insights(reports, eval_data, eval_type)
+        export_insights_to_s3(insights, run_id)
+        logger.info(f"Insights generated and exported for run {run_id}")
+    except Exception as e:
+        logger.warning(f"Insights generation failed (non-fatal): {e}", exc_info=True)
 
     return {
         "session_id": session_id,

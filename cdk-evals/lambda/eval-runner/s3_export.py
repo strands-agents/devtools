@@ -101,6 +101,44 @@ def export_reports_to_s3(
     return run_id
 
 
+def export_insights_to_s3(insights: dict, run_id: str) -> None:
+    """Export insights JSON to S3 alongside eval results.
+
+    Args:
+        insights: Insights dict from generate_insights()
+        run_id: The run ID to export insights for
+    """
+    s3 = boto3.client("s3", region_name=REGION)
+
+    insights["run_id"] = run_id
+
+    # Write insights.json
+    insights_key = f"runs/{run_id}/insights.json"
+    logger.info(f"  Uploading insights.json for run {run_id}")
+    s3.put_object(
+        Bucket=BUCKET_NAME,
+        Key=insights_key,
+        Body=json.dumps(insights, indent=2),
+        ContentType="application/json",
+    )
+
+    # Update manifest with has_insights flag
+    manifest_key = f"runs/{run_id}/manifest.json"
+    try:
+        response = s3.get_object(Bucket=BUCKET_NAME, Key=manifest_key)
+        manifest = json.loads(response["Body"].read().decode("utf-8"))
+        manifest["has_insights"] = True
+        s3.put_object(
+            Bucket=BUCKET_NAME,
+            Key=manifest_key,
+            Body=json.dumps(manifest, indent=2),
+            ContentType="application/json",
+        )
+        logger.info("  Updated manifest.json with has_insights=true")
+    except ClientError as e:
+        logger.warning(f"Failed to update manifest with insights flag: {e}")
+
+
 def _update_runs_index(
     s3,
     run_id: str,

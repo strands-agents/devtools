@@ -8,6 +8,7 @@ import TestCasesPage from "./pages/TestCasesPage";
 import ScoreTrendsPage from "./pages/ScoreTrendsPage";
 import AgentProgressPage from "./pages/AgentProgressPage";
 import SettingsPage from "./pages/SettingsPage";
+import InsightsPage from "./pages/InsightsPage";
 
 function App() {
   return (
@@ -20,6 +21,7 @@ function App() {
           <Route path="/cases" element={<TestCasesPage />} />
           <Route path="/trends" element={<ScoreTrendsPage />} />
           <Route path="/agent-progress" element={<AgentProgressPage />} />
+          <Route path="/insights" element={<InsightsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Routes>
       </EvaluationProvider>

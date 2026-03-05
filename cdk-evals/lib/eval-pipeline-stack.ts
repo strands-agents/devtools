@@ -67,6 +67,8 @@ export class EvalPipelineStack extends cdk.Stack {
     });
 
     // Lambda Function for running evaluations
+    const agentSopsDir = path.join(__dirname, "../../strands-command/agent-sops");
+
     this.evalFunction = new PythonFunction(this, "EvalRunnerFunction", {
       functionName: "strands-evals-runner",
       entry: path.join(__dirname, "../lambda/eval-runner"),
@@ -82,6 +84,23 @@ export class EvalPipelineStack extends cdk.Stack {
       },
       bundling: {
         assetExcludes: ['.venv'],
+        volumes: [
+          {
+            hostPath: agentSopsDir,
+            containerPath: "/tmp/agent-sops",
+          },
+        ],
+        commandHooks: {
+          beforeBundling(_inputDir: string, outputDir: string): string[] {
+            return [
+              `mkdir -p ${outputDir}/sops`,
+              `cp /tmp/agent-sops/*.sop.md ${outputDir}/sops/ 2>/dev/null || true`,
+            ];
+          },
+          afterBundling(_inputDir: string, _outputDir: string): string[] {
+            return [];
+          },
+        },
       },
     });
 
