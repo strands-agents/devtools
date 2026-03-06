@@ -3,6 +3,8 @@
 # Dependencies
 node_modules/
 
+__pycache__
+
 # CDK output
 cdk.out/
 
