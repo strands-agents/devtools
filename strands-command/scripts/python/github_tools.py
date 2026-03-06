@@ -512,6 +512,42 @@ def add_pr_comment(pr_number: int, body: str, path: str | None = None, line: int
 
 @tool
 @log_inputs
+@check_should_call_write_api_or_record
+def submit_pr_review(pr_number: int, event: str, body: str = "", repo: str | None = None) -> str:
+    """Submits a pull request review with a verdict and summary.
+
+    Args:
+        pr_number: The pull request number
+        event: The review action - "APPROVE", "REQUEST_CHANGES", or "COMMENT"
+        body: The review summary text (optional)
+        repo: GitHub repository in the format "owner/repo" (optional; falls back to env var)
+
+    Returns:
+        Result of the operation
+    """
+    event = event.upper()
+    valid_events = ("APPROVE", "REQUEST_CHANGES", "COMMENT")
+    if event not in valid_events:
+        error_msg = f"Error: event must be one of {valid_events}, got '{event}'"
+        console.print(Panel(escape(error_msg), title="[bold red]Error", border_style="red"))
+        return error_msg
+
+    data: dict[str, Any] = {"event": event}
+    if body:
+        data["body"] = body
+
+    result = _github_request("POST", f"pulls/{pr_number}/reviews", repo, data)
+    if isinstance(result, str):
+        console.print(Panel(escape(result), title="[bold red]Error", border_style="red"))
+        return result
+
+    message = f"Review submitted ({event}): {result['html_url']}"
+    console.print(Panel(escape(message), title="[bold green]✅ Review Submitted", border_style="green"))
+    return message
+
+
+@tool
+@log_inputs
 def get_pr_files(pr_number: int, repo: str | None = None) -> str:
     """Gets the list of files changed in a pull request with their diffs.
 

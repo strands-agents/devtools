@@ -155,7 +155,7 @@ Format review comments to be clear and actionable.
 
 ### 5. Post Review Comments
 
-Add the review comments to the pull request.
+Add inline review comments to the pull request.
 
 **Constraints:**
 - You MUST use the `add_pr_comment` tool for inline comments on specific lines
@@ -169,20 +169,21 @@ Add the review comments to the pull request.
 - You MUST focus on improvements and suggestions only
 - You MUST NOT add inline comments praising good coding practices
 
-### 6. Summary Review Comment
+### 6. Submit Review
 
-Provide a concise overall summary of the review.
+Submit the formal pull request review with a verdict and summary using the `submit_pr_review` tool.
 
 **Constraints:**
-- You MUST create a pull request review using GitHub's review feature
-- You MUST provide an overall assessment (Approve, Request Changes, Comment)
+- You MUST use the `submit_pr_review` tool to submit the review
+- You MUST set the `event` parameter to `APPROVE`, `REQUEST_CHANGES`, or `COMMENT`
+- You MUST provide a review summary in the `body` parameter
 - You MUST NOT approve the PR if the Documentation PR Check (step 3.5) has failed
 - You MUST keep the summary concise, informative, and easy to read
 - You MUST NOT repeat information already covered in inline comments
 - You MUST focus on high-level themes and patterns, not individual issues
 - You MUST use collapsible `<details>` sections if the summary contains multiple categories or is longer than 5 lines
 - You MAY include a brief positive note at the end (1 sentence maximum)
-- You SHOULD use this format:
+- You SHOULD use this format for the `body` parameter:
   ```
   **Assessment**: [Approve/Request Changes/Comment]
   
