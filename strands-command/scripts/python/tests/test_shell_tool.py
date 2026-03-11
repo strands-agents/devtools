@@ -5,114 +5,83 @@ from strands.types.tools import ToolContext
 from ..shell_tool import ShellSession, shell_tool
 
 
+@pytest.fixture
+def session():
+    """Create a ShellSession and stop it after the test."""
+    s = ShellSession()
+    yield s
+    if s._alive:
+        s.stop()
+
+
 """Tests for ShellSession class."""
 
-def test_basic_command():
+def test_basic_command(session):
     """Test basic command execution."""
-    session = ShellSession()
-    try:
-        output = session.run("echo hello")
-        assert "hello" in output
-    finally:
-        session.stop()
+    output = session.run("echo hello")
+    assert "hello" in output
 
-def test_exit_code_success():
+def test_exit_code_success(session):
     """Test successful command exit code."""
-    session = ShellSession()
-    try:
-        output = session.run("true")
-        # Exit code 0 should not be appended
-        assert "Exit code:" not in output
-    finally:
-        session.stop()
+    output = session.run("true")
+    # Exit code 0 should not be appended
+    assert "Exit code:" not in output
 
-def test_exit_code_failure():
+def test_exit_code_failure(session):
     """Test failed command exit code."""
-    session = ShellSession()
-    try:
-        output = session.run("false")
-        assert "Exit code: 1" in output
-    finally:
-        session.stop()
+    output = session.run("false")
+    assert "Exit code: 1" in output
 
-def test_multiline_output():
+def test_multiline_output(session):
     """Test command with multiple output lines."""
-    session = ShellSession()
-    try:
-        output = session.run("echo line1; echo line2; echo line3")
-        assert "line1" in output
-        assert "line2" in output
-        assert "line3" in output
-    finally:
-        session.stop()
+    output = session.run("echo line1; echo line2; echo line3")
+    assert "line1" in output
+    assert "line2" in output
+    assert "line3" in output
 
-def test_cd_persistence():
+def test_cd_persistence(session):
     """Test that cd command persists across commands."""
-    session = ShellSession()
-    try:
-        # Create a temp directory
-        session.run("mkdir -p /tmp/shell_test_$$")
-        session.run("cd /tmp/shell_test_$$")
+    # Create a temp directory
+    session.run("mkdir -p /tmp/shell_test_$$")
+    session.run("cd /tmp/shell_test_$$")
 
-        # Check we're in the right directory
-        output = session.run("pwd")
-        assert "shell_test" in output
+    # Check we're in the right directory
+    output = session.run("pwd")
+    assert "shell_test" in output
 
-        # Verify persistence
-        output2 = session.run("pwd")
-        assert output.strip() == output2.strip()
-    finally:
-        session.stop()
+    # Verify persistence
+    output2 = session.run("pwd")
+    assert output.strip() == output2.strip()
 
-def test_env_var_persistence():
+def test_env_var_persistence(session):
     """Test that exported environment variables persist."""
-    session = ShellSession()
-    try:
-        session.run("export TEST_VAR=hello123")
-        output = session.run("echo $TEST_VAR")
-        assert "hello123" in output
-    finally:
-        session.stop()
+    session.run("export TEST_VAR=hello123")
+    output = session.run("echo $TEST_VAR")
+    assert "hello123" in output
 
-def test_shell_variable_persistence():
+def test_shell_variable_persistence(session):
     """Test that shell variables persist."""
-    session = ShellSession()
-    try:
-        session.run("MY_VAR=testing456")
-        output = session.run("echo $MY_VAR")
-        assert "testing456" in output
-    finally:
-        session.stop()
+    session.run("MY_VAR=testing456")
+    output = session.run("echo $MY_VAR")
+    assert "testing456" in output
 
-def test_stderr_merged_into_stdout():
+def test_stderr_merged_into_stdout(session):
     """Test that stderr is merged into output."""
-    session = ShellSession()
-    try:
-        # Command that writes to stderr
-        output = session.run("echo error message >&2")
-        assert "error message" in output
-    finally:
-        session.stop()
+    # Command that writes to stderr
+    output = session.run("echo error message >&2")
+    assert "error message" in output
 
-def test_no_newline_output():
+def test_no_newline_output(session):
     """Test command that produces output without trailing newline."""
-    session = ShellSession()
-    try:
-        output = session.run("printf 'no newline'")
-        assert "no newline" in output
-    finally:
-        session.stop()
+    output = session.run("printf 'no newline'")
+    assert "no newline" in output
 
-def test_large_output():
+def test_large_output(session):
     """Test command with large output."""
-    session = ShellSession()
-    try:
-        # Generate ~10KB of output
-        output = session.run("for i in {1..200}; do echo 'Line number '$i; done")
-        assert "Line number 1" in output
-        assert "Line number 200" in output
-    finally:
-        session.stop()
+    # Generate ~10KB of output
+    output = session.run("for i in {1..200}; do echo 'Line number '$i; done")
+    assert "Line number 1" in output
+    assert "Line number 200" in output
 
 def test_timeout():
     """Test command timeout handling."""
@@ -128,66 +97,42 @@ def test_timeout():
         if session._alive:
             session.stop()
 
-def test_sequential_commands():
+def test_sequential_commands(session):
     """Test multiple sequential commands."""
-    session = ShellSession()
-    try:
-        session.run("echo first")
-        session.run("echo second")
-        output = session.run("echo third")
-        assert "third" in output
-    finally:
-        session.stop()
+    session.run("echo first")
+    session.run("echo second")
+    output = session.run("echo third")
+    assert "third" in output
 
-def test_pipe_commands():
+def test_pipe_commands(session):
     """Test commands with pipes."""
-    session = ShellSession()
-    try:
-        output = session.run("echo 'hello world' | grep hello")
-        assert "hello world" in output
-    finally:
-        session.stop()
+    output = session.run("echo 'hello world' | grep hello")
+    assert "hello world" in output
 
-def test_command_substitution():
+def test_command_substitution(session):
     """Test command substitution."""
-    session = ShellSession()
-    try:
-        output = session.run("echo $(echo nested)")
-        assert "nested" in output
-    finally:
-        session.stop()
+    output = session.run("echo $(echo nested)")
+    assert "nested" in output
 
-def test_exit_code_propagation():
+def test_exit_code_propagation(session):
     """Test that non-zero exit codes are properly captured."""
-    session = ShellSession()
-    try:
-        output = session.run("ls /nonexistent 2>&1")
-        assert "Exit code:" in output
-        # ls should fail with non-zero exit code
-        assert "Exit code: 0" not in output
-    finally:
-        session.stop()
+    output = session.run("ls /nonexistent 2>&1")
+    assert "Exit code:" in output
+    # ls should fail with non-zero exit code
+    assert "Exit code: 0" not in output
 
-def test_restart():
+def test_restart(session):
     """Test session restart."""
-    session = ShellSession()
-    try:
-        session.run("export TEST_VAR=before")
-        session.restart()
-        # Variable should be gone after restart
-        output = session.run("echo ${TEST_VAR:-empty}")
-        assert "empty" in output
-    finally:
-        session.stop()
+    session.run("export TEST_VAR=before")
+    session.restart()
+    # Variable should be gone after restart
+    output = session.run("echo ${TEST_VAR:-empty}")
+    assert "empty" in output
 
-def test_special_characters_in_output():
+def test_special_characters_in_output(session):
     """Test handling of special characters."""
-    session = ShellSession()
-    try:
-        output = session.run("echo '$HOME' '\\n' '\\t' '|' '&'")
-        assert "$HOME" in output
-    finally:
-        session.stop()
+    output = session.run("echo '$HOME' '\\n' '\\t' '|' '&'")
+    assert "$HOME" in output
 
 
 """Tests for shell_tool function."""
@@ -289,66 +234,46 @@ def test_tool_session_cleanup_on_error():
 
 """Tests to verify architectural properties."""
 
-def test_no_readline_dependency():
+def test_no_readline_dependency(session):
     """Verify that output without newlines works correctly."""
-    session = ShellSession()
-    try:
-        # This would fail if using readline()
-        output = session.run("printf 'line1'; printf 'line2'")
-        assert "line1" in output and "line2" in output
-    finally:
-        session.stop()
+    # This would fail if using readline()
+    output = session.run("printf 'line1'; printf 'line2'")
+    assert "line1" in output and "line2" in output
 
-def test_sentinel_uniqueness():
+def test_sentinel_uniqueness(session):
     """Test that concurrent commands would use unique sentinels."""
-    session = ShellSession()
-    try:
-        # Run multiple commands - each should have unique sentinel
-        outputs = []
-        for i in range(5):
-            output = session.run(f"echo test{i}")
-            outputs.append(output)
-            assert f"test{i}" in output
+    # Run multiple commands - each should have unique sentinel
+    outputs = []
+    for i in range(5):
+        output = session.run(f"echo test{i}")
+        outputs.append(output)
+        assert f"test{i}" in output
 
-        # All outputs should be distinct
-        assert len(set(outputs)) == len(outputs)
-    finally:
-        session.stop()
+    # All outputs should be distinct
+    assert len(set(outputs)) == len(outputs)
 
-def test_binary_mode_handling():
+def test_binary_mode_handling(session):
     """Test that binary mode handles various encodings."""
-    session = ShellSession()
-    try:
-        # Test with UTF-8 characters
-        output = session.run("echo 'Hello 世界'")
-        # Should decode with replacement, not crash
-        assert isinstance(output, str)
-    finally:
-        session.stop()
+    # Test with UTF-8 characters
+    output = session.run("echo 'Hello 世界'")
+    # Should decode with replacement, not crash
+    assert isinstance(output, str)
 
-def test_buffer_offset_isolation():
+def test_buffer_offset_isolation(session):
     """Test that commands don't see each other's output."""
-    session = ShellSession()
-    try:
-        output1 = session.run("echo first")
-        output2 = session.run("echo second")
+    output1 = session.run("echo first")
+    output2 = session.run("echo second")
 
-        # Second command should not include first command's output
-        assert "first" not in output2
-        assert "second" in output2
-    finally:
-        session.stop()
+    # Second command should not include first command's output
+    assert "first" not in output2
+    assert "second" in output2
 
-def test_merged_stderr_stdout():
+def test_merged_stderr_stdout(session):
     """Test that stderr and stdout are properly merged."""
-    session = ShellSession()
-    try:
-        # Command with interleaved stdout and stderr
-        output = session.run("echo out1; echo err1 >&2; echo out2; echo err2 >&2")
-        # All output should be present
-        assert "out1" in output
-        assert "err1" in output
-        assert "out2" in output
-        assert "err2" in output
-    finally:
-        session.stop()
+    # Command with interleaved stdout and stderr
+    output = session.run("echo out1; echo err1 >&2; echo out2; echo err2 >&2")
+    # All output should be present
+    assert "out1" in output
+    assert "err1" in output
+    assert "out2" in output
+    assert "err2" in output
