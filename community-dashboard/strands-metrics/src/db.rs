@@ -1,9 +1,15 @@
 use anyhow::Result;
 use rusqlite::Connection;
 use std::path::Path;
+use std::time::Duration;
 
 pub fn init_db<P: AsRef<Path>>(path: P) -> Result<Connection> {
     let conn = Connection::open(path)?;
+
+    // WAL mode allows concurrent reads while writing
+    conn.pragma_update(None, "journal_mode", "WAL")?;
+    // Wait up to 30s for locks instead of failing immediately
+    conn.busy_timeout(Duration::from_secs(30))?;
 
     conn.execute(
         "CREATE TABLE IF NOT EXISTS app_state (

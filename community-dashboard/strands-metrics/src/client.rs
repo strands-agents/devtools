@@ -9,6 +9,8 @@ use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::thread;
+use std::time::Duration;
 
 #[derive(Deserialize, Debug)]
 struct SimpleUser {
@@ -36,6 +38,27 @@ impl<'a> GitHubClient<'a> {
     fn log_progress(&self, msg: &str) {
         self.pb.set_message(msg.to_string());
         tracing::info!("{}", msg);
+    }
+
+    /// Execute a DB write with retries on SQLITE_BUSY. Returns the rusqlite Result directly.
+    /// Retries up to 3 times with exponential backoff (1s, 2s, 4s) on top of the busy_timeout.
+    fn db_execute_with_retry<F>(&self, description: &str, mut f: F) -> rusqlite::Result<usize>
+    where
+        F: FnMut(&Connection) -> rusqlite::Result<usize>,
+    {
+        let max_retries = 3;
+        for attempt in 0..max_retries {
+            match f(&self.db) {
+                Ok(n) => return Ok(n),
+                Err(ref e) if attempt < max_retries - 1 && is_busy_error(e) => {
+                    let wait = Duration::from_secs(1 << attempt);
+                    tracing::warn!("DB busy on {} (attempt {}/{}), retrying in {:?}...", description, attempt + 1, max_retries, wait);
+                    thread::sleep(wait);
+                }
+                Err(e) => return Err(e),
+            }
+        }
+        unreachable!()
     }
 
     pub async fn check_limits(&self) -> Result<()> {
@@ -114,24 +137,28 @@ impl<'a> GitHubClient<'a> {
     pub async fn sync_org(&mut self, org: &str) -> Result<()> {
         self.check_limits().await?;
         let repos = self.fetch_repos(org).await?;
-        let mut failures: Vec<String> = Vec::new();
+        let mut failures: Vec<(String, String)> = Vec::new();
         for repo in repos {
             self.log_progress(&format!("Syncing {}", repo.name));
             if let Err(e) = self.sync_repo(org, &repo).await {
-                tracing::error!("Failed to sync {}: {}", repo.name, e);
+                tracing::error!("DATA_LOSS: Failed to sync repo '{}': {}. PRs/issues/commits from this sync window may be missing.", repo.name, e);
                 self.log_progress(&format!("WARN: {} sync failed, continuing...", repo.name));
-                failures.push(repo.name.clone());
+                failures.push((repo.name.clone(), format!("{}", e)));
             }
         }
 
         // Sync GitHub Project V2 items (project #4 = Strands Agents board)
         if let Err(e) = self.sync_project_items(org, 4).await {
-            tracing::error!("Failed to sync project items: {}", e);
-            failures.push("project_items".to_string());
+            tracing::error!("DATA_LOSS: Failed to sync project items: {}", e);
+            failures.push(("project_items".to_string(), format!("{}", e)));
         }
 
         if !failures.is_empty() {
-            tracing::warn!("Sync completed with failures: {:?}", failures);
+            tracing::error!(
+                "DATA_LOSS_SUMMARY: Sync completed with {} failures: {:?}",
+                failures.len(),
+                failures
+            );
         }
 
         Ok(())
@@ -350,11 +377,17 @@ impl<'a> GitHubClient<'a> {
                         .and_then(|m| m.as_str())
                         .unwrap_or("");
 
-                    self.db.execute(
-                        "INSERT OR REPLACE INTO commits (sha, repo, author, date, additions, deletions, message) 
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                        params![sha, repo, author, date_str, adds, dels, msg]
-                    )?;
+                    if let Err(e) = self.db_execute_with_retry(
+                        &format!("commit {}/{}", repo, sha),
+                        |db| db.execute(
+                            "INSERT OR REPLACE INTO commits (sha, repo, author, date, additions, deletions, message) 
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                            params![&sha, repo, author, date_str, adds, dels, msg],
+                        ),
+                    ) {
+                        tracing::error!("DATA_LOSS: Failed to write commit {}/{}: {}", repo, sha, e);
+                        continue;
+                    }
                 }
             }
 
@@ -410,11 +443,17 @@ impl<'a> GitHubClient<'a> {
                     0
                 };
 
-                self.db.execute(
-                    "INSERT OR REPLACE INTO workflow_runs (id, repo, name, head_branch, conclusion, created_at, updated_at, duration_ms)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
-                    params![id, repo, name, head, conclusion, created_at, updated_at, duration]
-                )?;
+                if let Err(e) = self.db_execute_with_retry(
+                    &format!("workflow run {}/run-{}", repo, id),
+                    |db| db.execute(
+                        "INSERT OR REPLACE INTO workflow_runs (id, repo, name, head_branch, conclusion, created_at, updated_at, duration_ms)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                        params![id, repo, name, head, conclusion, created_at, updated_at, duration],
+                    ),
+                ) {
+                    tracing::error!("DATA_LOSS: Failed to write workflow run {}/run-{}: {}", repo, id, e);
+                    continue;
+                }
             }
 
             if let Some(next) = next_page {
@@ -447,10 +486,19 @@ impl<'a> GitHubClient<'a> {
             for entry in page.items {
                 if let (Some(starred_at), Some(user)) = (entry.starred_at, entry.user) {
                     remote_users.insert(user.login.clone());
-                    self.db.execute(
-                        "INSERT OR REPLACE INTO stargazers (repo, user, starred_at) VALUES (?1, ?2, ?3)",
-                        params![repo.name, user.login, starred_at.to_rfc3339()],
-                    )?;
+                    let starred_str = starred_at.to_rfc3339();
+                    let login = user.login.clone();
+                    let repo_name = repo.name.clone();
+                    if let Err(e) = self.db_execute_with_retry(
+                        &format!("star {}/{}", repo.name, user.login),
+                        |db| db.execute(
+                            "INSERT OR REPLACE INTO stargazers (repo, user, starred_at) VALUES (?1, ?2, ?3)",
+                            params![&repo_name, &login, &starred_str],
+                        ),
+                    ) {
+                        tracing::error!("DATA_LOSS: Failed to write star {}/{}: {}", repo.name, login, e);
+                        continue;
+                    }
                 }
             }
             if let Some(next) = next_page {
@@ -517,21 +565,25 @@ impl<'a> GitHubClient<'a> {
                     _ => "unknown",
                 };
 
-                self.db.execute(
-                    "INSERT OR REPLACE INTO pull_requests 
-                    (id, repo, number, state, author, title, created_at, updated_at, merged_at, closed_at, data) 
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
-                    params![
-                        pr_id, repo, pr_number, state_str,
-                        pr.user.as_ref().map(|u| u.login.clone()).unwrap_or_default(),
-                        pr.title.unwrap_or_default(),
-                        pr.created_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
-                        pr.updated_at.map(|d| d.to_rfc3339()).unwrap_or_default(),
-                        pr.merged_at.map(|t| t.to_rfc3339()),
-                        pr.closed_at.map(|t| t.to_rfc3339()),
-                        json
-                    ],
-                )?;
+                let author = pr.user.as_ref().map(|u| u.login.clone()).unwrap_or_default();
+                let title = pr.title.unwrap_or_default();
+                let created = pr.created_at.map(|d| d.to_rfc3339()).unwrap_or_default();
+                let updated = pr.updated_at.map(|d| d.to_rfc3339()).unwrap_or_default();
+                let merged = pr.merged_at.map(|t| t.to_rfc3339());
+                let closed = pr.closed_at.map(|t| t.to_rfc3339());
+
+                if let Err(e) = self.db_execute_with_retry(
+                    &format!("PR {}/#{}", repo, pr_number),
+                    |db| db.execute(
+                        "INSERT OR REPLACE INTO pull_requests 
+                        (id, repo, number, state, author, title, created_at, updated_at, merged_at, closed_at, data) 
+                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+                        params![pr_id, repo, pr_number, state_str, &author, &title, &created, &updated, &merged, &closed, &json],
+                    ),
+                ) {
+                    tracing::error!("DATA_LOSS: Failed to write PR {}/#{}: {}", repo, pr_number, e);
+                    continue;
+                }
 
                 if pr.updated_at.map(|t| t >= since).unwrap_or(false) {
                     self.sync_reviews(org, repo, pr.number).await?;
@@ -570,16 +622,20 @@ impl<'a> GitHubClient<'a> {
                     .map(|s| format!("{:?}", s).to_uppercase())
                     .unwrap_or_else(|| "UNKNOWN".to_string());
 
-                self.db.execute(
-                    "INSERT OR REPLACE INTO pr_reviews (id, repo, pr_number, state, author, submitted_at, data)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                    params![
-                        review_id, repo, pr_num, state_str,
-                        review.user.as_ref().map(|u| u.login.clone()).unwrap_or_default(),
-                        review.submitted_at.map(|t| t.to_rfc3339()).unwrap_or_default(),
-                        json
-                    ],
-                )?;
+                let author = review.user.as_ref().map(|u| u.login.clone()).unwrap_or_default();
+                let submitted = review.submitted_at.map(|t| t.to_rfc3339()).unwrap_or_default();
+
+                if let Err(e) = self.db_execute_with_retry(
+                    &format!("review {}/PR#{}/review-{}", repo, pr_num, review_id),
+                    |db| db.execute(
+                        "INSERT OR REPLACE INTO pr_reviews (id, repo, pr_number, state, author, submitted_at, data)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                        params![review_id, repo, pr_num, &state_str, &author, &submitted, &json],
+                    ),
+                ) {
+                    tracing::error!("DATA_LOSS: Failed to write review {}/PR#{}/review-{}: {}", repo, pr_num, review_id, e);
+                    continue;
+                }
             }
             if let Some(next) = next_page {
                 self.check_limits().await?;
@@ -649,12 +705,18 @@ impl<'a> GitHubClient<'a> {
                     .unwrap_or("");
                 let closed = issue.get("closed_at").and_then(|v| v.as_str());
 
-                self.db.execute(
-                    "INSERT OR REPLACE INTO issues 
-                    (id, repo, number, state, author, title, created_at, updated_at, closed_at, data) 
-                    VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
-                    params![id, repo, number, state, author, title, created, updated_at_str, closed, json],
-                )?;
+                if let Err(e) = self.db_execute_with_retry(
+                    &format!("issue {}/#{}", repo, number),
+                    |db| db.execute(
+                        "INSERT OR REPLACE INTO issues 
+                        (id, repo, number, state, author, title, created_at, updated_at, closed_at, data) 
+                        VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                        params![id, repo, number, state, author, title, created, updated_at_str, closed, &json],
+                    ),
+                ) {
+                    tracing::error!("DATA_LOSS: Failed to write issue {}/#{}: {}", repo, number, e);
+                    continue;
+                }
             }
             if !keep_fetching {
                 break;
@@ -714,11 +776,17 @@ impl<'a> GitHubClient<'a> {
                     .unwrap_or("");
                 let json = serde_json::to_string(&comment)?;
 
-                self.db.execute(
-                    "INSERT OR REPLACE INTO issue_comments (id, repo, issue_number, author, created_at, updated_at, data)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                    params![id, repo, issue_number, author, created, updated_at_str, json],
-                )?;
+                if let Err(e) = self.db_execute_with_retry(
+                    &format!("issue comment {}/comment-{}", repo, id),
+                    |db| db.execute(
+                        "INSERT OR REPLACE INTO issue_comments (id, repo, issue_number, author, created_at, updated_at, data)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                        params![id, repo, issue_number, author, created, updated_at_str, &json],
+                    ),
+                ) {
+                    tracing::error!("DATA_LOSS: Failed to write issue comment {}/comment-{}: {}", repo, id, e);
+                    continue;
+                }
             }
             if !keep_fetching {
                 break;
@@ -778,11 +846,17 @@ impl<'a> GitHubClient<'a> {
                     .unwrap_or("");
                 let json = serde_json::to_string(&comment)?;
 
-                self.db.execute(
-                    "INSERT OR REPLACE INTO pr_review_comments (id, repo, pr_number, author, created_at, updated_at, data)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-                    params![id, repo, pr_number, author, created, updated_at_str, json],
-                )?;
+                self.db_execute_with_retry(
+                    &format!("PR review comment {}/comment-{}", repo, id),
+                    |db| db.execute(
+                        "INSERT OR REPLACE INTO pr_review_comments (id, repo, pr_number, author, created_at, updated_at, data)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                        params![id, repo, pr_number, author, created, updated_at_str, &json],
+                    ),
+                ).map_err(|e| {
+                    tracing::error!("DATA_LOSS: Failed to write PR review comment {}/comment-{}: {}", repo, id, e);
+                    e
+                }).ok();
             }
             if !keep_fetching {
                 break;
@@ -922,7 +996,7 @@ impl<'a> GitHubClient<'a> {
                         "Cannot access project #{} — ensure GITHUB_TOKEN has project read scope. Error: {}",
                         project_number, err_msg
                     );
-                    return Ok(());
+                    return Ok(0);
                 }
                 tracing::warn!("GraphQL errors syncing project items: {}", err_msg);
             }
@@ -935,7 +1009,7 @@ impl<'a> GitHubClient<'a> {
                         project_number,
                         serde_json::to_string_pretty(&response).unwrap_or_default()
                     );
-                    return Ok(());
+                    return Ok(0);
                 }
             };
 
@@ -1179,4 +1253,17 @@ impl<'a> GitHubClient<'a> {
             _ => false,
         }
     }
+}
+
+fn is_busy_error(err: &rusqlite::Error) -> bool {
+    matches!(
+        err,
+        rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error { code: rusqlite::ffi::ErrorCode::DatabaseBusy, .. },
+            _
+        ) | rusqlite::Error::SqliteFailure(
+            rusqlite::ffi::Error { code: rusqlite::ffi::ErrorCode::DatabaseLocked, .. },
+            _
+        )
+    )
 }
