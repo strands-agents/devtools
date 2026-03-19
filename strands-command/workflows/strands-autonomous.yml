@@ -1,0 +1,263 @@
+# Strands Autonomous Agent Workflow Template
+#
+# This is a TEMPLATE workflow for repositories that want autonomous agent
+# capabilities. Copy this file to your repository's .github/workflows/
+# directory and configure the secrets and variables.
+#
+# Features:
+# - Scheduled autonomous runs (e.g., weekly release digests)
+# - Workflow dispatch for manual agent triggers
+# - Agent orchestration for sub-agent parallelization
+# - Security controls (authorization, rate limiting, timeouts)
+#
+# Required Secrets:
+#   AWS_ROLE_ARN: IAM role for AWS access
+#   AWS_SECRETS_MANAGER_SECRET_ID: Secret containing agent config
+#   PAT_TOKEN: Personal access token for workflow dispatch (sub-agents)
+#
+# Required Variables:
+#   AGENT_SCHEDULES: JSON schedule configuration (see control loop template)
+#
+# Optional Variables:
+#   ORCHESTRATOR_MAX_CONCURRENT: Max concurrent sub-agents (default: 3)
+#   ORCHESTRATOR_AGENT_TIMEOUT_MINUTES: Per-agent timeout (default: 30)
+#   ORCHESTRATOR_MAX_TOTAL_AGENTS: Max total sub-agents per run (default: 5)
+
+name: Strands Autonomous Agent
+
+on:
+  # Weekly release digest: Wednesdays at 10am UTC
+  schedule:
+    - cron: '0 10 * * 3'
+  
+  # Manual trigger with configurable inputs
+  workflow_dispatch:
+    inputs:
+      issue_id:
+        description: 'Issue ID to process'
+        required: false
+        type: string
+      command:
+        description: 'Agent command (e.g., "release-digest", "adversarial-test")'
+        required: false
+        type: string
+        default: 'release-digest'
+      session_id:
+        description: 'Session ID for resuming'
+        required: false
+        type: string
+        default: ''
+
+permissions: write-all
+
+jobs:
+  # ─────────────────────────────────────────────────────────
+  # Authorization Gate
+  # ─────────────────────────────────────────────────────────
+  authorization-check:
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    name: Check access
+    permissions: read-all
+    runs-on: ubuntu-latest
+    outputs:
+      approval-env: ${{ steps.auth.outputs.approval-env }}
+    steps:
+      - name: Check Authorization
+        id: auth
+        shell: bash
+        run: |
+          # Scheduled runs and workflow_dispatch are always authorized
+          if [ "${{ github.event_name }}" = "schedule" ]; then
+            echo "✅ Scheduled run - authorized"
+            echo "approval-env=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "✅ Workflow dispatch - authorized"
+            echo "approval-env=" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          echo "❌ Unknown trigger"
+          exit 1
+
+  # ─────────────────────────────────────────────────────────
+  # Determine Agent Type from Schedule/Command
+  # ─────────────────────────────────────────────────────────
+  setup:
+    needs: [authorization-check]
+    runs-on: ubuntu-latest
+    outputs:
+      agent_type: ${{ steps.determine.outputs.agent_type }}
+      system_prompt: ${{ steps.determine.outputs.system_prompt }}
+      task_prompt: ${{ steps.determine.outputs.task_prompt }}
+      session_id: ${{ steps.determine.outputs.session_id }}
+    steps:
+      - name: Determine agent type
+        id: determine
+        shell: bash
+        run: |
+          COMMAND="${{ github.event.inputs.command || 'release-digest' }}"
+          SESSION_ID="${{ github.event.inputs.session_id }}"
+          ISSUE_ID="${{ github.event.inputs.issue_id }}"
+          
+          # Generate session ID if not provided
+          if [ -z "$SESSION_ID" ]; then
+            SESSION_ID="${COMMAND}-$(date +%s)"
+          fi
+          echo "session_id=$SESSION_ID" >> $GITHUB_OUTPUT
+          
+          case "$COMMAND" in
+            release-digest|digest)
+              echo "agent_type=release-digest" >> $GITHUB_OUTPUT
+              echo "system_prompt<<PROMPT_EOF" >> $GITHUB_OUTPUT
+              cat << 'SOP_EOF' >> $GITHUB_OUTPUT
+          You are a Release Digest Orchestrator following the task-release-digest SOP.
+          Your goal is to produce a comprehensive weekly release digest by coordinating
+          multiple parallel analysis tasks. You find all changes since the last release,
+          dispatch sub-agents for adversarial testing and release notes generation,
+          collect their results, and compile everything into a single consolidated digest issue.
+          SOP_EOF
+              echo "PROMPT_EOF" >> $GITHUB_OUTPUT
+              
+              echo "task_prompt<<TASK_EOF" >> $GITHUB_OUTPUT
+              echo "Run the weekly release digest. Find all changes since the last release tag, analyze merged PRs, dispatch adversarial testing and release notes sub-agents, and compile a comprehensive digest issue with findings, draft release notes, and action items." >> $GITHUB_OUTPUT
+              echo "TASK_EOF" >> $GITHUB_OUTPUT
+              ;;
+              
+            adversarial-test|adversarial)
+              echo "agent_type=adversarial-test" >> $GITHUB_OUTPUT
+              echo "system_prompt<<PROMPT_EOF" >> $GITHUB_OUTPUT
+              cat << 'SOP_EOF' >> $GITHUB_OUTPUT
+          You are an Adversarial Tester following the task-adversarial-tester SOP.
+          Your goal is to break code changes by actively finding bugs, edge cases,
+          security holes, and failure modes. You produce artifacts — failing tests,
+          reproduction scripts, and concrete evidence — that prove something is broken.
+          SOP_EOF
+              echo "PROMPT_EOF" >> $GITHUB_OUTPUT
+              
+              TASK="Run adversarial testing on recent changes."
+              if [ -n "$ISSUE_ID" ]; then
+                TASK="Run adversarial testing for issue #${ISSUE_ID}. Check the referenced PR for code changes to test."
+              fi
+              echo "task_prompt=$TASK" >> $GITHUB_OUTPUT
+              ;;
+              
+            release-notes)
+              echo "agent_type=release-notes" >> $GITHUB_OUTPUT
+              echo "system_prompt<<PROMPT_EOF" >> $GITHUB_OUTPUT
+              cat << 'SOP_EOF' >> $GITHUB_OUTPUT
+          You are a Release Notes Generator following the task-release-notes SOP.
+          Your goal is to create high-quality release notes highlighting Major Features
+          and Major Bug Fixes. Analyze merged PRs, extract code examples, validate them,
+          and format into well-structured markdown.
+          SOP_EOF
+              echo "PROMPT_EOF" >> $GITHUB_OUTPUT
+              
+              echo "task_prompt=Generate release notes for the latest unreleased changes. Find the most recent release tag and analyze all merged PRs since then." >> $GITHUB_OUTPUT
+              ;;
+              
+            *)
+              echo "agent_type=custom" >> $GITHUB_OUTPUT
+              echo "system_prompt=You are an autonomous GitHub agent." >> $GITHUB_OUTPUT
+              echo "task_prompt=$COMMAND" >> $GITHUB_OUTPUT
+              ;;
+          esac
+          
+          echo "📋 Agent type: $(cat $GITHUB_OUTPUT | grep agent_type | cut -d= -f2)"
+
+  # ─────────────────────────────────────────────────────────
+  # Execute Agent
+  # ─────────────────────────────────────────────────────────
+  execute-agent:
+    needs: [setup]
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+      id-token: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      # Orchestrator security limits
+      ORCHESTRATOR_MAX_CONCURRENT: ${{ vars.ORCHESTRATOR_MAX_CONCURRENT || '3' }}
+      ORCHESTRATOR_AGENT_TIMEOUT_MINUTES: ${{ vars.ORCHESTRATOR_AGENT_TIMEOUT_MINUTES || '30' }}
+      ORCHESTRATOR_MAX_TOTAL_AGENTS: ${{ vars.ORCHESTRATOR_MAX_TOTAL_AGENTS || '5' }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Checkout devtools for scripts and SOPs
+      - name: Checkout devtools
+        uses: actions/checkout@v5
+        with:
+          repository: strands-agents/devtools
+          ref: main
+          sparse-checkout: |
+            strands-command/scripts
+            strands-command/agent-sops
+          path: devtools
+
+      - name: Copy devtools to safe directory
+        shell: bash
+        run: |
+          mkdir -p ${{ runner.temp }}/strands-agent-runner
+          cp -r devtools/strands-command ${{ runner.temp }}/strands-agent-runner/
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          uv pip install --system -r ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/requirements.txt --quiet
+
+      - name: Configure Git
+        shell: bash
+        run: |
+          git config --global user.name "Strands Agent"
+          git config --global user.email "217235299+strands-agent@users.noreply.github.com"
+          git config --global core.pager cat
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: GitHubActions-StrandsAutonomous-${{ github.run_id }}
+          aws-region: us-west-2
+          mask-aws-account-id: true
+
+      - name: Retrieve secrets
+        id: secrets
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.AWS_SECRETS_MANAGER_SECRET_ID }}" ]; then
+            SECRET_JSON=$(aws secretsmanager get-secret-value --secret-id "${{ secrets.AWS_SECRETS_MANAGER_SECRET_ID }}" --query SecretString --output text --region us-east-1)
+            SESSIONS_BUCKET=$(echo $SECRET_JSON | jq -r '.AGENT_SESSIONS_BUCKET // empty')
+            [ -n "$SESSIONS_BUCKET" ] && echo "::add-mask::$SESSIONS_BUCKET"
+            echo "sessions_bucket=$SESSIONS_BUCKET" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Execute autonomous agent
+        shell: bash
+        env:
+          GITHUB_WRITE: 'true'
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
+          S3_SESSION_BUCKET: ${{ steps.secrets.outputs.sessions_bucket }}
+          SESSION_ID: ${{ needs.setup.outputs.session_id }}
+          INPUT_SYSTEM_PROMPT: ${{ needs.setup.outputs.system_prompt }}
+          INPUT_TASK: ${{ needs.setup.outputs.task_prompt }}
+          STRANDS_TOOL_CONSOLE_MODE: 'enabled'
+          BYPASS_TOOL_CONSENT: 'true'
+        run: |
+          echo "🤖 Running autonomous agent: ${{ needs.setup.outputs.agent_type }}"
+          uv run --no-project ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/agent_runner.py "$INPUT_TASK"

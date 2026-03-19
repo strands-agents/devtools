@@ -41,6 +41,14 @@ from github_tools import (
 
 # Import local tools we need
 from handoff_to_user import handoff_to_user
+
+# Import orchestrator tools for agent-to-agent coordination
+try:
+    from orchestrator import dispatch_agent, check_agents_status, wait_for_agents, get_orchestrator_config
+    _ORCHESTRATOR_AVAILABLE = True
+except ImportError:
+    _ORCHESTRATOR_AVAILABLE = False
+    print("ℹ️ Orchestrator tools not available (orchestrator.py not found)")
 from notebook import notebook
 from str_replace_based_edit_tool import str_replace_based_edit_tool
 
@@ -179,6 +187,10 @@ def _get_all_tools() -> list[Any]:
         notebook,
         handoff_to_user,
     ]
+    
+    # Add orchestrator tools if available
+    if _ORCHESTRATOR_AVAILABLE:
+        tools.extend([dispatch_agent, check_agents_status, wait_for_agents, get_orchestrator_config])
 
 
 def run_agent(query: str):

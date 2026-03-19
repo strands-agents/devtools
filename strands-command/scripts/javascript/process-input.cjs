@@ -85,16 +85,27 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs)
     'implementer': 'devtools/strands-command/agent-sops/task-implementer.sop.md',
     'refiner': 'devtools/strands-command/agent-sops/task-refiner.sop.md',
     'release-notes': 'devtools/strands-command/agent-sops/task-release-notes.sop.md',
-    'reviewer': 'devtools/strands-command/agent-sops/task-reviewer.sop.md'
+    'reviewer': 'devtools/strands-command/agent-sops/task-reviewer.sop.md',
+    'adversarial-test': 'devtools/strands-command/agent-sops/task-adversarial-tester.sop.md',
+    'release-digest': 'devtools/strands-command/agent-sops/task-release-digest.sop.md'
   };
   
   const scriptFile = scriptFiles[mode] || scriptFiles['refiner'];
   const systemPrompt = fs.readFileSync(scriptFile, 'utf8');
   
-  let prompt = (isPullRequest) 
-    ? 'The pull request id is:'
-    : 'The issue id is:';
-  prompt += `${issueId}\n${command}\nreview and continue`;
+  let prompt;
+  if (mode === 'release-digest') {
+    prompt = `Run the weekly release digest for this repository.\n${command}\nreview and continue`;
+  } else if (mode === 'adversarial-test') {
+    prompt = (isPullRequest) 
+      ? `Run adversarial testing on pull request #${issueId}.\n${command}\nreview and continue`
+      : `Run adversarial testing for the changes referenced in issue #${issueId}.\n${command}\nreview and continue`;
+  } else {
+    prompt = (isPullRequest) 
+      ? 'The pull request id is:'
+      : 'The issue id is:';
+    prompt += `${issueId}\n${command}\nreview and continue`;
+  }
 
   return { sessionId, systemPrompt, prompt };
 }
@@ -107,7 +118,11 @@ module.exports = async (context, github, core, inputs) => {
     
     // Determine mode based on explicit command first, then context
     let mode;
-    if (command.startsWith('release-notes') || command.startsWith('release notes')) {
+    if (command.startsWith('release-digest') || command.startsWith('digest')) {
+      mode = 'release-digest';
+    } else if (command.startsWith('adversarial-test') || command.startsWith('adversarial')) {
+      mode = 'adversarial-test';
+    } else if (command.startsWith('release-notes') || command.startsWith('release notes')) {
       mode = 'release-notes';
     } else if (command.startsWith('implement')) {
       mode = 'implementer';
