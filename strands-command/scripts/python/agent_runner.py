@@ -52,10 +52,10 @@ except ImportError:
 from notebook import notebook
 from str_replace_based_edit_tool import str_replace_based_edit_tool
 
-# Strands configuration constants
-STRANDS_MODEL_ID = "global.anthropic.claude-opus-4-5-20251101-v1:0"
-STRANDS_MAX_TOKENS = 64000
-STRANDS_BUDGET_TOKENS = 8000
+# Strands configuration constants — matches strands-coder settings
+# Opus 4.6 with adaptive thinking and 1M context window
+STRANDS_MODEL_ID = "global.anthropic.claude-opus-4-6-v1"
+STRANDS_MAX_TOKENS = 128000
 STRANDS_REGION = "us-west-2"
 
 # Default values for environment variables used only in this file
@@ -157,7 +157,7 @@ def _get_trace_attributes() -> dict:
     }
 
 def _get_all_tools() -> list[Any]:
-    return [
+    tools = [
         # File editing
         str_replace_based_edit_tool,
         
@@ -191,6 +191,8 @@ def _get_all_tools() -> list[Any]:
     # Add orchestrator tools if available
     if _ORCHESTRATOR_AVAILABLE:
         tools.extend([dispatch_agent, check_agents_status, wait_for_agents, get_orchestrator_config])
+    
+    return tools
 
 
 def run_agent(query: str):
@@ -203,13 +205,10 @@ def run_agent(query: str):
         # Get tools and create model
         tools = _get_all_tools()
         
-        # Create Bedrock model with inlined configuration
+        # Create Bedrock model — Opus 4.6 with adaptive thinking and 1M context
         additional_request_fields = {}
-        additional_request_fields["anthropic_beta"] = ["interleaved-thinking-2025-05-14"]
-        
         additional_request_fields["thinking"] = {
-            "type": "enabled",
-            "budget_tokens": STRANDS_BUDGET_TOKENS
+            "type": "adaptive",
         }
         
         model = BedrockModel(

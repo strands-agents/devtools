@@ -544,11 +544,10 @@ The orchestrator module (`orchestrator.py`) enables agents to dispatch and coord
 
 ```mermaid
 graph TD
-    A[Control Loop] -->|hourly check| B[Schedule Check]
-    B -->|Wednesday 10am| C[Release Digest Agent]
-    C -->|dispatch| D[Adversarial Tester]
-    C -->|dispatch| E[Release Notes Generator]
-    C -->|dispatch| F[Docs Gap Analyzer]
+    A[strands-autonomous.yml] -->|"Wed 10am cron"| C[Release Digest Orchestrator]
+    C -->|dispatch| D[strands-adversarial-test.yml]
+    C -->|dispatch| E[strands-release-notes-agent.yml]
+    C -->|dispatch| F[strands-docs-gap.yml]
     D -->|results| C
     E -->|results| C
     F -->|results| C
@@ -556,7 +555,12 @@ graph TD
     
     style C fill:#f9f,stroke:#333,stroke-width:2px
     style G fill:#9f9,stroke:#333,stroke-width:2px
+    style D fill:#fcc,stroke:#333
+    style E fill:#ccf,stroke:#333
+    style F fill:#cfc,stroke:#333
 ```
+
+Each sub-agent workflow can also be triggered independently via `workflow_dispatch` for isolated testing.
 
 #### Self-Trigger Prevention
 
@@ -575,26 +579,12 @@ Copy the template workflows to your repository:
 ```bash
 # From the devtools/strands-command/workflows/ directory
 cp strands-autonomous.yml your-repo/.github/workflows/
-cp strands-control.yml your-repo/.github/workflows/
+cp strands-adversarial-test.yml your-repo/.github/workflows/
+cp strands-release-notes-agent.yml your-repo/.github/workflows/
+cp strands-docs-gap.yml your-repo/.github/workflows/
 ```
 
-#### 2. Configure Repository Variables
-
-Set the `AGENT_SCHEDULES` repository variable:
-
-```json
-{
-  "jobs": {
-    "weekly_release_digest": {
-      "enabled": true,
-      "cron": "0 10 * * 3",
-      "command": "release-digest",
-      "workflow": "strands-autonomous.yml",
-      "last_triggered": 0
-    }
-  }
-}
-```
+The Wednesday 10am schedule is configured directly in `strands-autonomous.yml` via cron — no additional schedule variables needed.
 
 #### 3. Configure Secrets
 
@@ -649,3 +639,57 @@ When running as an orchestrator agent, these tools are available:
 | `check_agents_status` | Check status of all dispatched sub-agents |
 | `wait_for_agents` | Wait for all sub-agents to complete (with timeout) |
 | `get_orchestrator_config` | View current orchestrator security configuration |
+
+
+### Autonomous Agent Capabilities
+
+The Strands command system supports autonomous agent execution for:
+
+- **Adversarial Testing**: Automated testing that actively tries to break code changes
+- **Release Digest**: Weekly orchestrated analysis combining adversarial testing, release notes, and documentation gap analysis
+
+#### Workflow Architecture
+
+Each agent type has its own dedicated workflow for **isolated testing and execution**:
+
+| Workflow | Purpose | Trigger |
+|----------|---------|---------|
+| `strands-autonomous.yml` | Release digest orchestrator | Wednesday 10am UTC cron + manual |
+| `strands-adversarial-test.yml` | Adversarial testing agent | Dispatched by orchestrator + manual |
+| `strands-release-notes-agent.yml` | Release notes generation | Dispatched by orchestrator + manual |
+| `strands-docs-gap.yml` | Documentation gap analysis | Dispatched by orchestrator + manual |
+
+#### Agent Orchestration
+
+The orchestrator module (`orchestrator.py`) enables agents to dispatch and coordinate sub-agents via dedicated workflows:
+
+```
+strands-autonomous.yml (Release Digest Orchestrator — Wed 10am)
+  ├── strands-adversarial-test.yml      (isolated workflow)
+  ├── strands-release-notes-agent.yml   (isolated workflow)
+  └── strands-docs-gap.yml             (isolated workflow)
+```
+
+Each sub-agent runs in its own workflow, so you can:
+- **Test in isolation**: Trigger any sub-agent independently via `workflow_dispatch`
+- **Debug independently**: Check workflow run logs per agent type
+- **Customize timeouts**: Each workflow has its own `timeout-minutes`
+
+Security limits:
+- Max concurrent sub-agents: 3 (configurable)
+- Per-agent timeout: 30 minutes
+- Max total sub-agents per run: 5
+- Rate limiting and cooldown between dispatches
+
+#### Model Configuration
+
+All agents use **Opus 4.6** with adaptive thinking and 1M context window:
+- Model: `global.anthropic.claude-opus-4-6-v1`
+- Max tokens: 128,000
+- Thinking: adaptive
+
+#### Setup
+
+1. Copy the workflow files to `.github/workflows/` in your repository
+2. Configure `PAT_TOKEN` secret with `workflow_dispatch` permission
+3. Configure orchestrator limits via repository variables (optional)

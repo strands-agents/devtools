@@ -64,7 +64,7 @@ class AgentTask:
     completion_time: datetime | None = None
     result: str | None = None
     error: str | None = None
-    workflow: str = "strands-command.yml"
+    workflow: str = ""
 
 
 @dataclass
@@ -170,7 +170,7 @@ class AgentOrchestrator:
         agent_type: str,
         prompt: str,
         system_prompt: str = "",
-        workflow: str = "strands-command.yml",
+        workflow: str = "",
         extra_inputs: dict[str, str] | None = None,
     ) -> AgentTask:
         """Dispatch a sub-agent via workflow_dispatch.
@@ -179,7 +179,10 @@ class AgentOrchestrator:
             agent_type: Type of agent (e.g., "adversarial-test", "release-notes")
             prompt: Task prompt for the sub-agent
             system_prompt: System prompt override for the sub-agent
-            workflow: Target workflow file (default: strands-command.yml)
+            workflow: Target workflow file. Each sub-agent has a dedicated workflow:
+                  - strands-adversarial-test.yml
+                  - strands-release-notes-agent.yml
+                  - strands-docs-gap.yml
             extra_inputs: Additional workflow inputs
 
         Returns:
@@ -468,7 +471,7 @@ def dispatch_agent(
     agent_type: str,
     prompt: str,
     system_prompt: str = "",
-    workflow: str = "strands-command.yml",
+    workflow: str = "",
 ) -> str:
     """Dispatch a sub-agent via GitHub Actions workflow_dispatch.
 
@@ -482,7 +485,10 @@ def dispatch_agent(
         agent_type: Type of agent (e.g., "adversarial-test", "release-notes", "docs-gap")
         prompt: Task prompt for the sub-agent
         system_prompt: System prompt override (optional)
-        workflow: Target workflow file (default: strands-command.yml).
+        workflow: Target workflow file. Each sub-agent has a dedicated workflow:
+                  - strands-adversarial-test.yml
+                  - strands-release-notes-agent.yml
+                  - strands-docs-gap.yml.
                   Use "owner/repo/workflow.yml" for cross-repo dispatch.
 
     Returns:

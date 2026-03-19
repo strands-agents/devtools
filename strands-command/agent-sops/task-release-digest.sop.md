@@ -64,11 +64,11 @@ Determine which sub-agents to dispatch based on the changes found.
 **Constraints:**
 - You MUST plan the following sub-agent tasks:
 
-  | Task | Agent Type | Input | Output |
-  |------|-----------|-------|--------|
-  | Adversarial Testing | `adversarial-test` | List of PRs with significant code changes | Findings report per PR |
-  | Release Notes | `release-notes` | Base and head git references | Formatted release notes |
-  | Documentation Gaps | `docs-gap` | List of PRs with new/changed APIs | Missing docs report |
+  | Task | Agent Type | Workflow | Input | Output |
+  |------|-----------|----------|-------|--------|
+  | Adversarial Testing | `adversarial-test` | `strands-adversarial-test.yml` | List of PRs with significant code changes | Findings report per PR |
+  | Release Notes | `release-notes` | `strands-release-notes-agent.yml` | Base and head git references | Formatted release notes |
+  | Documentation Gaps | `docs-gap` | `strands-docs-gap.yml` | List of PRs with new/changed APIs | Missing docs report |
 
 - You MUST skip adversarial testing if there are no code-changing PRs (only docs/CI/test changes)
 - You MUST skip documentation gap analysis if there are no API-changing PRs
@@ -80,10 +80,14 @@ Determine which sub-agents to dispatch based on the changes found.
 Dispatch sub-agents for parallel execution.
 
 **Constraints:**
-- You MUST use the orchestrator module (`orchestrator.py`) to dispatch sub-agents
+- You MUST use the orchestrator module (`orchestrator.py`) to dispatch sub-agents to their **dedicated workflows** (each runs in isolation)
 - You MUST call the `dispatch_agent` function for each planned task
 - You MUST respect the concurrent agent limit — wait for slots before dispatching
 - You MUST wait the minimum cooldown between dispatches
+- You MUST dispatch each sub-agent to its dedicated workflow:
+  - **Adversarial tester** → `strands-adversarial-test.yml`
+  - **Release notes** → `strands-release-notes-agent.yml`
+  - **Docs gap** → `strands-docs-gap.yml`
 - You MUST pass appropriate inputs to each sub-agent:
   - **Adversarial tester**: PR numbers, branch references
   - **Release notes**: Base tag, head reference, repository
@@ -228,7 +232,7 @@ The orchestrator reads scheduling configuration from the `AGENT_SCHEDULES` repos
       "cron": "0 10 * * 3",
       "prompt": "Run the weekly release digest. Find all changes since the last release, dispatch adversarial testing and release notes sub-agents, and compile a comprehensive digest issue.",
       "system_prompt": "You are a Release Digest Orchestrator following the task-release-digest SOP.",
-      "workflow": "strands-command.yml",
+      "workflow": "strands-autonomous.yml"  // orchestrator only,
       "tools": ""
     }
   }
