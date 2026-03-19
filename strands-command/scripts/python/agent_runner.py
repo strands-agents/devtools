@@ -19,7 +19,7 @@ from strands.session import S3SessionManager
 from strands.models.bedrock import BedrockModel
 from botocore.config import Config
 
-from strands_tools import http_request, shell
+from strands_tools import http_request, shell, use_agent
 
 # Import local GitHub tools we need
 from github_tools import (
@@ -41,14 +41,6 @@ from github_tools import (
 
 # Import local tools we need
 from handoff_to_user import handoff_to_user
-
-# Import orchestrator tools for agent-to-agent coordination
-try:
-    from orchestrator import dispatch_agent, check_agents_status, wait_for_agents, get_orchestrator_config
-    _ORCHESTRATOR_AVAILABLE = True
-except ImportError:
-    _ORCHESTRATOR_AVAILABLE = False
-    print("ℹ️ Orchestrator tools not available (orchestrator.py not found)")
 from notebook import notebook
 from str_replace_based_edit_tool import str_replace_based_edit_tool
 
@@ -186,11 +178,12 @@ def _get_all_tools() -> list[Any]:
         # Agent tools
         notebook,
         handoff_to_user,
+        
+        # Sub-agent creation — enables orchestrator pattern
+        # The parent agent can spawn specialized sub-agents for parallel tasks
+        # Each sub-agent runs in-process with its own system prompt and tools
+        use_agent,
     ]
-    
-    # Add orchestrator tools if available
-    if _ORCHESTRATOR_AVAILABLE:
-        tools.extend([dispatch_agent, check_agents_status, wait_for_agents, get_orchestrator_config])
     
     return tools
 

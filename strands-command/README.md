@@ -478,218 +478,49 @@ Use workflow dispatch with:
 
 **Note**: This system is designed for trusted environments. Always review security implications before deployment and implement appropriate guardrails for your use case.
 
-## Autonomous Agent Capabilities
+---
 
-### Overview
+## 🤖 Autonomous Agents: Release Digest
 
-In addition to the `/strands` command interface, strands-command supports autonomous agent execution via scheduled workflows. This enables:
+The strands-command system includes autonomous agent capabilities for automated release analysis.
 
-- **Weekly release digests** with adversarial testing, release notes, and docs gap analysis
-- **Agent orchestration** — agents dispatching sub-agents for parallel work
-- **Scheduled automation** via a control loop pattern
+### Architecture
 
-### New Agent Types
-
-#### Adversarial Tester (`task-adversarial-tester.sop.md`)
-
-Breaks code changes by finding bugs, edge cases, security holes, and failure modes with concrete evidence.
-
-**Workflow**: Setup → Attack Surface Analysis → Test Generation → Execute → Report
-
-**Capabilities:**
-- Edge case and boundary testing
-- Failure mode and error handling testing
-- Contract verification against PR claims
-- Security probing (injection, path traversal, credential leaks)
-- Concurrency and race condition testing
-- Produces runnable failing test artifacts as evidence
-
-**Trigger**:
-- `/strands adversarial-test` on a PR
-- Automated dispatch from release digest orchestrator
-
-#### Release Digest Orchestrator (`task-release-digest.sop.md`)
-
-Produces comprehensive weekly release digests by coordinating multiple parallel analysis agents.
-
-**Workflow**: Discover Changes → Plan Tasks → Dispatch Sub-Agents → Collect Results → Synthesize → Publish
-
-**Capabilities:**
-- Finds all changes since last release tag
-- Dispatches adversarial testing, release notes, and docs gap sub-agents in parallel
-- Collects and synthesizes results from all sub-agents
-- Creates consolidated digest issue with findings, draft notes, and action items
-- Graceful degradation when sub-agents fail
-
-**Trigger**:
-- Scheduled weekly (Wednesday 10am UTC default)
-- `/strands release-digest` on an Issue
-- `workflow_dispatch` with `release-digest` command
-
-### Agent Orchestration
-
-The orchestrator module (`orchestrator.py`) enables agents to dispatch and coordinate sub-agents with built-in security limits.
-
-#### Security Controls
-
-| Control | Default | Environment Variable |
-|---------|---------|---------------------|
-| Max concurrent agents | 3 | `ORCHESTRATOR_MAX_CONCURRENT` |
-| Max total agents per run | 5 | `ORCHESTRATOR_MAX_TOTAL_AGENTS` |
-| Per-agent timeout | 30 min | `ORCHESTRATOR_AGENT_TIMEOUT_MINUTES` |
-| Token budget per agent | 32000 | `ORCHESTRATOR_AGENT_MAX_TOKENS` |
-| Cooldown between dispatches | 10s | `ORCHESTRATOR_COOLDOWN_SECONDS` |
-
-#### Architecture
-
-```mermaid
-graph TD
-    A[strands-autonomous.yml] -->|"Wed 10am cron"| C[Release Digest Orchestrator]
-    C -->|dispatch| D[strands-adversarial-test.yml]
-    C -->|dispatch| E[strands-release-notes-agent.yml]
-    C -->|dispatch| F[strands-docs-gap.yml]
-    D -->|results| C
-    E -->|results| C
-    F -->|results| C
-    C -->|create| G[Digest Issue]
-    
-    style C fill:#f9f,stroke:#333,stroke-width:2px
-    style G fill:#9f9,stroke:#333,stroke-width:2px
-    style D fill:#fcc,stroke:#333
-    style E fill:#ccf,stroke:#333
-    style F fill:#cfc,stroke:#333
-```
-
-Each sub-agent workflow can also be triggered independently via `workflow_dispatch` for isolated testing.
-
-#### Self-Trigger Prevention
-
-The orchestrator uses the same pattern as strands-coder to prevent infinite loops:
-- Agent accounts can only trigger workflows via explicit `workflow_dispatch`
-- Comments and other events from agent accounts are ignored
-- Each dispatch requires PAT_TOKEN authentication
-- Rate limiting prevents runaway dispatches
-
-### Setting Up Autonomous Agents
-
-#### 1. Copy Workflow Templates
-
-Copy the template workflows to your repository:
-
-```bash
-# From the devtools/strands-command/workflows/ directory
-cp strands-autonomous.yml your-repo/.github/workflows/
-cp strands-adversarial-test.yml your-repo/.github/workflows/
-cp strands-release-notes-agent.yml your-repo/.github/workflows/
-cp strands-docs-gap.yml your-repo/.github/workflows/
-```
-
-The Wednesday 10am schedule is configured directly in `strands-autonomous.yml` via cron — no additional schedule variables needed.
-
-#### 3. Configure Secrets
-
-In addition to the standard secrets (`AWS_ROLE_ARN`, `AWS_SECRETS_MANAGER_SECRET_ID`), add:
-
-| Secret | Description |
-|--------|-------------|
-| `PAT_TOKEN` | Personal access token with `workflow_dispatch` permission (required for sub-agent dispatch) |
-
-#### 4. Optional: Configure Security Limits
-
-Set repository variables to adjust orchestrator limits:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ORCHESTRATOR_MAX_CONCURRENT` | `3` | Max sub-agents running simultaneously |
-| `ORCHESTRATOR_AGENT_TIMEOUT_MINUTES` | `30` | Per-agent timeout |
-| `ORCHESTRATOR_MAX_TOTAL_AGENTS` | `5` | Max total sub-agents per orchestration run |
-
-### Usage Examples
-
-#### Manual Adversarial Testing
-
-Comment on a PR:
-```
-/strands adversarial-test Focus on the new authentication flow edge cases
-```
-
-#### Manual Release Digest
-
-Comment on an issue:
-```
-/strands release-digest Generate digest for changes since v1.5.0
-```
-
-#### Workflow Dispatch
-
-Trigger the autonomous workflow manually:
-```bash
-gh workflow run strands-autonomous.yml \
-  -f command="adversarial-test" \
-  -f issue_id="123"
-```
-
-### Orchestrator Tools (for Agent Use)
-
-When running as an orchestrator agent, these tools are available:
-
-| Tool | Description |
-|------|------------|
-| `dispatch_agent` | Dispatch a sub-agent via workflow_dispatch (with security limits) |
-| `check_agents_status` | Check status of all dispatched sub-agents |
-| `wait_for_agents` | Wait for all sub-agents to complete (with timeout) |
-| `get_orchestrator_config` | View current orchestrator security configuration |
-
-
-### Autonomous Agent Capabilities
-
-The Strands command system supports autonomous agent execution for:
-
-- **Adversarial Testing**: Automated testing that actively tries to break code changes
-- **Release Digest**: Weekly orchestrated analysis combining adversarial testing, release notes, and documentation gap analysis
-
-#### Workflow Architecture
-
-Each agent type has its own dedicated workflow for **isolated testing and execution**:
-
-| Workflow | Purpose | Trigger |
-|----------|---------|---------|
-| `strands-autonomous.yml` | Release digest orchestrator | Wednesday 10am UTC cron + manual |
-| `strands-adversarial-test.yml` | Adversarial testing agent | Dispatched by orchestrator + manual |
-| `strands-release-notes-agent.yml` | Release notes generation | Dispatched by orchestrator + manual |
-| `strands-docs-gap.yml` | Documentation gap analysis | Dispatched by orchestrator + manual |
-
-#### Agent Orchestration
-
-The orchestrator module (`orchestrator.py`) enables agents to dispatch and coordinate sub-agents via dedicated workflows:
+A single orchestrator agent runs weekly (Wednesday 10am UTC) and uses `use_agent` from `strands_tools` to spawn per-package sub-agents **in-process**. No workflow dispatch, no PAT tokens, no self-trigger prevention needed.
 
 ```
-strands-autonomous.yml (Release Digest Orchestrator — Wed 10am)
-  ├── strands-adversarial-test.yml      (isolated workflow)
-  ├── strands-release-notes-agent.yml   (isolated workflow)
-  └── strands-docs-gap.yml             (isolated workflow)
+strands-autonomous.yml (Wed 10am cron / manual dispatch)
+└── Release Digest Orchestrator Agent
+    ├── use_agent → SDK Python Analyzer
+    ├── use_agent → SDK TypeScript Analyzer
+    ├── use_agent → Tools Analyzer
+    ├── use_agent → Evals Analyzer
+    └── Compiles results → Creates digest issue
 ```
 
-Each sub-agent runs in its own workflow, so you can:
-- **Test in isolation**: Trigger any sub-agent independently via `workflow_dispatch`
-- **Debug independently**: Check workflow run logs per agent type
-- **Customize timeouts**: Each workflow has its own `timeout-minutes`
+### How It Works
 
-Security limits:
-- Max concurrent sub-agents: 3 (configurable)
-- Per-agent timeout: 30 minutes
-- Max total sub-agents per run: 5
-- Rate limiting and cooldown between dispatches
+1. **Orchestrator** discovers changes across all packages since their last release tag
+2. **Per-package sub-agents** are spawned via `use_agent` with read-only tools (`shell`, `http_request`)
+3. Each sub-agent analyzes PRs, runs adversarial testing, generates draft release notes, and finds docs gaps
+4. **Orchestrator** collects all results and creates a single consolidated digest issue
 
-#### Model Configuration
+### Files
 
-All agents use **Opus 4.6** with adaptive thinking and 1M context window:
-- Model: `global.anthropic.claude-opus-4-6-v1`
-- Max tokens: 128,000
-- Thinking: adaptive
+| File | Purpose |
+|------|---------|
+| `workflows/strands-autonomous.yml` | Template workflow — cron + manual dispatch |
+| `agent-sops/task-release-digest.sop.md` | Orchestrator SOP (uses `use_agent`) |
+| `agent-sops/task-adversarial-tester.sop.md` | Adversarial testing SOP (used as sub-agent system prompt) |
+| `scripts/python/agent_runner.py` | Agent runner with `use_agent` tool |
 
-#### Setup
+### Setup
 
-1. Copy the workflow files to `.github/workflows/` in your repository
-2. Configure `PAT_TOKEN` secret with `workflow_dispatch` permission
-3. Configure orchestrator limits via repository variables (optional)
+1. Copy `workflows/strands-autonomous.yml` to your repo's `.github/workflows/`
+2. Configure secrets: `AWS_ROLE_ARN`, `AWS_SECRETS_MANAGER_SECRET_ID`
+3. The workflow runs automatically every Wednesday at 10am UTC, or trigger manually via `workflow_dispatch`
+
+### Commands
+
+- `/strands adversarial-test` — Run adversarial testing on a PR
+- `/strands release-digest` — Trigger a release digest manually
