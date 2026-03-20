@@ -19,7 +19,7 @@ from strands.session import S3SessionManager
 from strands.models.bedrock import BedrockModel
 from botocore.config import Config
 
-from strands_tools import http_request, shell, use_agent
+from strands_tools import http_request, shell
 
 # Import local GitHub tools we need
 from github_tools import (
@@ -149,7 +149,7 @@ def _get_trace_attributes() -> dict:
     }
 
 def _get_all_tools() -> list[Any]:
-    tools = [
+    return [
         # File editing
         str_replace_based_edit_tool,
         
@@ -178,14 +178,7 @@ def _get_all_tools() -> list[Any]:
         # Agent tools
         notebook,
         handoff_to_user,
-        
-        # Sub-agent creation — enables orchestrator pattern
-        # The parent agent can spawn specialized sub-agents for parallel tasks
-        # Each sub-agent runs in-process with its own system prompt and tools
-        use_agent,
     ]
-    
-    return tools
 
 
 def run_agent(query: str):
