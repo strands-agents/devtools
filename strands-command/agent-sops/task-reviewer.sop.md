@@ -143,15 +143,6 @@ Use judgment to answer: *"Does a user need to know about this change to use the 
 - If a documentation PR is only suggested, you SHOULD mention it as a non-blocking recommendation in your review
 - If the changes fall into the "not needed" category, do NOT request or suggest a documentation PR
 
-#### 3.6 Dependency Review
-
-Check that dependency changes use safe version bounds.
-
-**Constraints:**
-- You MUST check any new or modified dependencies for a supported upper bound (e.g., `>=1.2,<2` rather than `>=1.2` with no cap)
-- You MUST flag unbounded dependencies as **Critical** since a new major version release can break existing integrations
-- You MUST verify upper bounds align with the currently supported major version of the dependency
-
 ### 4. Generate Review Comments
 
 Create specific, actionable review comments for identified issues.
