@@ -44,7 +44,7 @@ from handoff_to_user import handoff_to_user
 from notebook import notebook
 from str_replace_based_edit_tool import str_replace_based_edit_tool
 
-# Strands configuration constants — matches strands-coder settings
+# Strands configuration constants
 # Opus 4.6 with adaptive thinking and 1M context window
 STRANDS_MODEL_ID = "global.anthropic.claude-opus-4-6-v1"
 STRANDS_MAX_TOKENS = 128000
