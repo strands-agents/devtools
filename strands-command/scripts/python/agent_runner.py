@@ -209,6 +209,7 @@ def run_agent(query: str):
                 connect_timeout=900,
                 retries={"max_attempts": 3, "mode": "adaptive"},
             ),
+            cache_config=CacheConfig(strategy="auto"),
             additional_request_fields=additional_request_fields,
             cache_prompt="default",
             cache_tools="default",
