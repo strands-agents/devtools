@@ -16,7 +16,7 @@ from strands import Agent
 from strands.telemetry import StrandsTelemetry
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands.session import S3SessionManager
-from strands.models.bedrock import BedrockModel
+from strands.models import BedrockModel, CacheConfig
 from botocore.config import Config
 
 from strands_tools import http_request, shell
@@ -209,6 +209,7 @@ def run_agent(query: str):
                 connect_timeout=900,
                 retries={"max_attempts": 3, "mode": "adaptive"},
             ),
+            cache_config=CacheConfig(strategy="auto"),
             additional_request_fields=additional_request_fields,
             cache_prompt="default",
             cache_tools="default",
