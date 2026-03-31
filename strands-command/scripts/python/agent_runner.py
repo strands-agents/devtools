@@ -16,7 +16,7 @@ from strands import Agent
 from strands.telemetry import StrandsTelemetry
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands.session import S3SessionManager
-from strands.models.bedrock import BedrockModel
+from strands.models import BedrockModel, CacheConfig
 from botocore.config import Config
 
 from strands_tools import http_request, shell
