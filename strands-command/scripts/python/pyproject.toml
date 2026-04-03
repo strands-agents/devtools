@@ -1,0 +1,17 @@
+[project]
+name = "strands-devtools"
+version = "0.1.0"
+description = "Strands Agents devtools - GitHub Actions agent runner and tools"
+requires-python = ">=3.13"
+dependencies = [
+    "strands-agents",
+    "strands-agents-tools",
+    "colorama",
+    "rich",
+    "requests>=2.28.0",
+    "opentelemetry-exporter-otlp",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.backends"

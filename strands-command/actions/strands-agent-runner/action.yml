@@ -88,13 +88,13 @@ runs:
       uses: astral-sh/setup-uv@v3
       with:
         enable-cache: true
-        cache-dependency-glob: '${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/requirements.txt'
+        cache-dependency-glob: '${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/pyproject.toml'
 
     - name: Install Strands Agents
       shell: bash
       run: |
-        echo "📦 Installing from requirements.txt"
-        uv pip install --system -r ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/requirements.txt --quiet
+        echo "📦 Installing from pyproject.toml"
+        uv pip install --system ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python --quiet
 
     - name: Configure Git
       shell: bash
