@@ -12,6 +12,9 @@ dependencies = [
     "opentelemetry-exporter-otlp",
 ]
 
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+
 [build-system]
 requires = ["hatchling"]
-build-backend = "hatchling.backends"
+build-backend = "hatchling.build"
