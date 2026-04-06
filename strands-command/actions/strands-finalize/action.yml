@@ -129,14 +129,14 @@ runs:
       uses: astral-sh/setup-uv@v3
       with:
         enable-cache: true
-        cache-dependency-glob: devtools/strands-command/scripts/python/requirements.txt
+        cache-dependency-glob: devtools/strands-command/scripts/python/pyproject.toml
 
     - name: Install dependencies
       if: steps.check-write-ops.outputs.exists == 'true'
       shell: bash
       run: |
-        echo "📦 Installing from requirements.txt"
-        uv pip install --system -r devtools/strands-command/scripts/python/requirements.txt --quiet
+        echo "📦 Installing from pyproject.toml"
+        uv pip install --system devtools/strands-command/scripts/python --quiet
 
     - name: Execute write operations
       if: steps.check-write-ops.outputs.exists == 'true'

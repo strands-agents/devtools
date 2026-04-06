@@ -237,6 +237,7 @@ Focus on substantive issues that impact code quality, not stylistic preferences:
 6. **Testing**: Is there comprehensive test coverage including edge cases?
 7. **Language Best Practices**: Does it follow language-specific best practices as defined in repository guidelines?
 8. **Design Documentation**: Are design decisions, alternatives, and tradeoffs documented?
+9. **Dependency Bounds**: Do new or changed dependencies have a supported upper bound to prevent breakage from major version releases?
 
 ## Best Practices
 

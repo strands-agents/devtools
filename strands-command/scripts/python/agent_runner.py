@@ -16,7 +16,7 @@ from strands import Agent
 from strands.telemetry import StrandsTelemetry
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands.session import S3SessionManager
-from strands.models.bedrock import BedrockModel
+from strands.models import BedrockModel, CacheConfig
 from botocore.config import Config
 
 from strands_tools import http_request, shell, use_agent
@@ -48,6 +48,7 @@ from str_replace_based_edit_tool import str_replace_based_edit_tool
 # Opus 4.6 with adaptive thinking and 1M context window
 STRANDS_MODEL_ID = "global.anthropic.claude-opus-4-6-v1"
 STRANDS_MAX_TOKENS = 128000
+STRANDS_BUDGET_TOKENS = 8000
 STRANDS_REGION = "us-west-2"
 
 # Default values for environment variables used only in this file
@@ -214,6 +215,7 @@ def run_agent(query: str):
                 connect_timeout=900,
                 retries={"max_attempts": 3, "mode": "adaptive"},
             ),
+            cache_config=CacheConfig(strategy="auto"),
             additional_request_fields=additional_request_fields,
             cache_prompt="default",
             cache_tools="default",
