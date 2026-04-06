@@ -19,7 +19,7 @@ from strands.session import S3SessionManager
 from strands.models.bedrock import BedrockModel
 from botocore.config import Config
 
-from strands_tools import http_request, shell
+from strands_tools import http_request, shell, use_agent
 
 # Import local GitHub tools we need
 from github_tools import (
@@ -178,6 +178,11 @@ def _get_all_tools() -> list[Any]:
         # Agent tools
         notebook,
         handoff_to_user,
+
+        # Sub-agent creation — enables orchestrator pattern
+        # The parent agent can spawn specialized sub-agents for parallel tasks
+        # Each sub-agent runs in-process with its own system prompt and tools
+        use_agent,
     ]
 
 
@@ -196,6 +201,9 @@ def run_agent(query: str):
         additional_request_fields["thinking"] = {
             "type": "adaptive",
         }
+        additional_request_fields["anthropic_beta"] = [
+            "context-1m-2025-08-07",
+        ]
         
         model = BedrockModel(
             model_id=STRANDS_MODEL_ID,
