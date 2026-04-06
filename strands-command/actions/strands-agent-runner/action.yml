@@ -54,7 +54,7 @@ runs:
         jq -r .prompt strands-parsed-input.json >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
-    # Checkout devtools repo for scripts
+    # Checkout devtools repo for scripts, SOPs, and agent skills
     - name: Checkout devtools
       uses: actions/checkout@v5
       with:
@@ -63,6 +63,7 @@ runs:
         sparse-checkout: |
           strands-command/scripts
           strands-command/agent-sops
+          strands-command/agent-skills
         path: devtools
 
     # Copy the devtools directory to the runner temp directory so the branch content cant overwrite the scripts executed here
@@ -78,6 +79,18 @@ runs:
       with:
         ref: ${{ steps.read-input.outputs.ref }}
         repository: ${{ steps.read-input.outputs.head_repo || github.repository }}
+
+    # Copy agent-skills to working directory so the skills plugin can find them
+    - name: Copy agent-skills to working directory
+      shell: bash
+      run: |
+        if [ -d "${{ runner.temp }}/strands-agent-runner/strands-command/agent-skills" ]; then
+          cp -r ${{ runner.temp }}/strands-agent-runner/strands-command/agent-skills ./agent-skills
+          echo "✅ Copied agent-skills to working directory"
+          ls -la ./agent-skills/
+        else
+          echo "ℹ️ No agent-skills directory found (skills not available)"
+        fi
 
     - name: Set up Python
       uses: actions/setup-python@v4

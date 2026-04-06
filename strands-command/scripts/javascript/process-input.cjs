@@ -81,15 +81,35 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs)
     ? `${mode}-${branchName}`.replace(/[\/\\]/g, '-')
     : `${mode}-${issueId}`);
 
-  const scriptFiles = {
+  // Skill-based modes use the AgentSkills plugin at runtime — no SOP file needed.
+  // The system prompt just sets the context; the agent activates the skill itself.
+  const skillModes = ['adversarial-test', 'release-digest'];
+
+  const sopFiles = {
     'implementer': 'devtools/strands-command/agent-sops/task-implementer.sop.md',
     'refiner': 'devtools/strands-command/agent-sops/task-refiner.sop.md',
     'release-notes': 'devtools/strands-command/agent-sops/task-release-notes.sop.md',
     'reviewer': 'devtools/strands-command/agent-sops/task-reviewer.sop.md'
   };
-  
-  const scriptFile = scriptFiles[mode] || scriptFiles['refiner'];
-  const systemPrompt = fs.readFileSync(scriptFile, 'utf8');
+
+  let systemPrompt;
+
+  if (skillModes.includes(mode)) {
+    // Skill-based modes — the AgentSkills plugin provides the full instructions via SKILL.md.
+    // Map command names to skill names for activation.
+    const skillNameMap = {
+      'adversarial-test': 'task-adversarial-tester',
+      'release-digest': 'task-release-digest',
+    };
+    const skillName = skillNameMap[mode] || mode;
+
+    systemPrompt = `You are an autonomous GitHub agent powered by Strands Agents SDK.
+You have access to agent skills. Use the 'skills' tool to activate the '${skillName}' skill, then follow its instructions.`;
+  } else {
+    // SOP-based modes
+    const scriptFile = sopFiles[mode] || sopFiles['refiner'];
+    systemPrompt = fs.readFileSync(scriptFile, 'utf8');
+  }
   
   let prompt = (isPullRequest) 
     ? 'The pull request id is:'
@@ -107,7 +127,11 @@ module.exports = async (context, github, core, inputs) => {
     
     // Determine mode based on explicit command first, then context
     let mode;
-    if (command.startsWith('release-notes') || command.startsWith('release notes')) {
+    if (command.startsWith('adversarial-test') || command.startsWith('adversarial test')) {
+      mode = 'adversarial-test';
+    } else if (command.startsWith('release-digest') || command.startsWith('release digest')) {
+      mode = 'release-digest';
+    } else if (command.startsWith('release-notes') || command.startsWith('release notes')) {
       mode = 'release-notes';
     } else if (command.startsWith('implement')) {
       mode = 'implementer';
