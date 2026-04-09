@@ -47,6 +47,7 @@ runs:
         echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "session_id=$(jq -r .session_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "head_repo=$(jq -r '.head_repo // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "agent_type=$(jq -r '.agent_type // "standard"' strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "system_prompt<<EOF" >> $GITHUB_OUTPUT
         jq -r .system_prompt strands-parsed-input.json >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
@@ -80,8 +81,10 @@ runs:
         ref: ${{ steps.read-input.outputs.ref }}
         repository: ${{ steps.read-input.outputs.head_repo || github.repository }}
 
-    # Copy agent-skills to working directory so the skills plugin can find them
+    # Copy agent-skills to working directory (beta agent only)
+    # The AgentSkills plugin looks for skills in the working directory
     - name: Copy agent-skills to working directory
+      if: steps.read-input.outputs.agent_type == 'beta'
       shell: bash
       run: |
         if [ -d "${{ runner.temp }}/strands-agent-runner/strands-command/agent-skills" ]; then
@@ -248,8 +251,18 @@ runs:
 
         # Evals Configuration (input overrides Secrets Manager)
         EVALS_SQS_QUEUE_ARN: ${{ inputs.evals_sqs_queue_arn || steps.secrets.outputs.evals_sqs_queue_arn }}
+
+        # Agent type (standard or beta)
+        AGENT_TYPE: ${{ steps.read-input.outputs.agent_type }}
       run: |
-        uv run --no-project ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/agent_runner.py "$INPUT_TASK"
+        SCRIPTS_DIR="${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python"
+        if [ "$AGENT_TYPE" = "beta" ]; then
+          echo "🧪 Running beta agent"
+          uv run --no-project "$SCRIPTS_DIR/beta_agent_runner.py" "$INPUT_TASK"
+        else
+          echo "🤖 Running standard agent"
+          uv run --no-project "$SCRIPTS_DIR/agent_runner.py" "$INPUT_TASK"
+        fi
 
     - name: Capture repository state
       shell: bash

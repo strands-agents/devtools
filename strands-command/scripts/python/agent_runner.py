@@ -9,7 +9,6 @@ import json
 import os
 import sys
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 import boto3
@@ -20,7 +19,7 @@ from strands.session import S3SessionManager
 from strands.models import BedrockModel, CacheConfig
 from botocore.config import Config
 
-from strands_tools import http_request, shell, use_agent
+from strands_tools import http_request, shell
 
 # Import local GitHub tools we need
 from github_tools import (
@@ -158,10 +157,6 @@ def _get_all_tools() -> list[Any]:
         shell,
         http_request,
         
-        # Sub-agent creation — enables orchestrator pattern
-        # The parent agent can spawn specialized sub-agents for parallel tasks
-        use_agent,
-
         # GitHub issue tools
         create_issue,
         get_issue,
@@ -184,53 +179,6 @@ def _get_all_tools() -> list[Any]:
         notebook,
         handoff_to_user,
     ]
-
-
-def _load_skills_plugin():
-    """Load agent skills from the agent-skills directory if available.
-    
-    Returns AgentSkills plugin instance or None if skills aren't available.
-    Skills are loaded from agent-skills/ which is copied to the working directory
-    by the GitHub Action.
-    """
-    try:
-        from strands.vended_plugins.skills import AgentSkills
-    except ImportError:
-        print("ℹ️ AgentSkills plugin not available (strands.vended_plugins.skills not found)")
-        return None
-
-    # Look for skills directory in the working directory
-    # The action.yml copies agent-skills/ to the working directory
-    possible_paths = [
-        Path("agent-skills"),  # Working directory (copied by action.yml)
-        Path("devtools/strands-command/agent-skills"),  # Before copy step
-    ]
-
-    skills_dir = None
-    for path in possible_paths:
-        if path.exists() and path.is_dir():
-            skills_dir = path
-            break
-
-    if skills_dir is None:
-        print("ℹ️ No agent-skills directory found (skills not available)")
-        return None
-
-    try:
-        plugin = AgentSkills(skills=str(skills_dir))
-        skills = plugin.get_available_skills()
-
-        if skills:
-            print(f"✅ AgentSkills plugin: {len(skills)} skills loaded")
-            for skill in skills:
-                print(f"  - {skill.name}: {skill.description[:60]}...")
-            return plugin
-        else:
-            print("⚠️ AgentSkills plugin: no skills found in directory")
-            return None
-    except Exception as e:
-        print(f"⚠️ Failed to load skills: {e}")
-        return None
 
 
 def run_agent(query: str):
@@ -281,12 +229,6 @@ def run_agent(query: str):
         else:
             raise ValueError("Both SESSION_ID and S3_SESSION_BUCKET must be set")
 
-        # Load agent skills plugin (gracefully degrades if not available)
-        plugins = []
-        skills_plugin = _load_skills_plugin()
-        if skills_plugin:
-            plugins.append(skills_plugin)
-
         # Create agent with optional trace attributes for Langfuse
         agent_kwargs = {
             "model": model,
@@ -294,16 +236,12 @@ def run_agent(query: str):
             "tools": tools,
             "session_manager": session_manager,
         }
-
-        if plugins:
-            agent_kwargs["plugins"] = plugins
         
         if trace_attributes:
             agent_kwargs["trace_attributes"] = trace_attributes
         
         agent = Agent(**agent_kwargs)
 
-        print(f"🤖 Agent created with {len(tools)} tools and {len(plugins)} plugins")
         print("Processing user query...")
         result = agent(query)
 

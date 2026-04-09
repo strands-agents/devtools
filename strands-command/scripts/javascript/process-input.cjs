@@ -76,40 +76,48 @@ async function determineBranch(github, context, issueId, mode, isPullRequest) {
   return { branchName, headRepo };
 }
 
-function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs) {
+function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, agentType) {
   const sessionId = inputs.session_id || (mode === 'implementer' 
     ? `${mode}-${branchName}`.replace(/[\/\\]/g, '-')
     : `${mode}-${issueId}`);
 
-  // Skill-based modes use the AgentSkills plugin at runtime — no SOP file needed.
-  // The system prompt just sets the context; the agent activates the skill itself.
-  const skillModes = ['adversarial-test', 'release-digest'];
+  // Beta agent uses skill-based system prompts — the AgentSkills plugin provides
+  // the full instructions via SKILL.md files. The system prompt just sets context
+  // and tells the agent which skill to activate.
+  if (agentType === 'beta') {
+    const skillNameMap = {
+      'adversarial-test': 'task-adversarial-tester',
+      'release-digest': 'task-release-digest',
+    };
+    const skillName = skillNameMap[mode];
 
-  const sopFiles = {
+    let systemPrompt;
+    if (skillName) {
+      systemPrompt = `You are an autonomous GitHub agent powered by Strands Agents SDK.
+You have access to agent skills. Use the 'skills' tool to activate the '${skillName}' skill, then follow its instructions.`;
+    } else {
+      // Generic beta prompt for commands without a specific skill mapping
+      systemPrompt = `You are an autonomous GitHub agent powered by Strands Agents SDK with extended capabilities including agent skills and sub-agent orchestration.`;
+    }
+
+    let prompt = (isPullRequest)
+      ? 'The pull request id is:'
+      : 'The issue id is:';
+    prompt += `${issueId}\n${command}\nreview and continue`;
+
+    return { sessionId, systemPrompt, prompt };
+  }
+
+  // Standard agent uses SOP-based system prompts
+  const scriptFiles = {
     'implementer': 'devtools/strands-command/agent-sops/task-implementer.sop.md',
     'refiner': 'devtools/strands-command/agent-sops/task-refiner.sop.md',
     'release-notes': 'devtools/strands-command/agent-sops/task-release-notes.sop.md',
     'reviewer': 'devtools/strands-command/agent-sops/task-reviewer.sop.md'
   };
-
-  let systemPrompt;
-
-  if (skillModes.includes(mode)) {
-    // Skill-based modes — the AgentSkills plugin provides the full instructions via SKILL.md.
-    // Map command names to skill names for activation.
-    const skillNameMap = {
-      'adversarial-test': 'task-adversarial-tester',
-      'release-digest': 'task-release-digest',
-    };
-    const skillName = skillNameMap[mode] || mode;
-
-    systemPrompt = `You are an autonomous GitHub agent powered by Strands Agents SDK.
-You have access to agent skills. Use the 'skills' tool to activate the '${skillName}' skill, then follow its instructions.`;
-  } else {
-    // SOP-based modes
-    const scriptFile = sopFiles[mode] || sopFiles['refiner'];
-    systemPrompt = fs.readFileSync(scriptFile, 'utf8');
-  }
+  
+  const scriptFile = scriptFiles[mode] || scriptFiles['refiner'];
+  const systemPrompt = fs.readFileSync(scriptFile, 'utf8');
   
   let prompt = (isPullRequest) 
     ? 'The pull request id is:'
@@ -124,31 +132,49 @@ module.exports = async (context, github, core, inputs) => {
     const { issueId, command, issue } = await getIssueInfo(github, context, inputs);
     
     const isPullRequest = !!issue.data.pull_request;
+
+    // Check if this is a beta command: /strands beta <subcommand>
+    let agentType = 'standard';
+    let effectiveCommand = command;
+
+    if (command.startsWith('beta ') || command === 'beta') {
+      agentType = 'beta';
+      effectiveCommand = command.replace(/^beta\s*/, '').trim();
+      console.log(`Beta agent requested. Effective command: "${effectiveCommand}"`);
+    }
     
     // Determine mode based on explicit command first, then context
     let mode;
-    if (command.startsWith('adversarial-test') || command.startsWith('adversarial test')) {
+    if (effectiveCommand.startsWith('adversarial-test') || effectiveCommand.startsWith('adversarial test')) {
       mode = 'adversarial-test';
-    } else if (command.startsWith('release-digest') || command.startsWith('release digest')) {
+    } else if (effectiveCommand.startsWith('release-digest') || effectiveCommand.startsWith('release digest')) {
       mode = 'release-digest';
-    } else if (command.startsWith('release-notes') || command.startsWith('release notes')) {
+    } else if (effectiveCommand.startsWith('release-notes') || effectiveCommand.startsWith('release notes')) {
       mode = 'release-notes';
-    } else if (command.startsWith('implement')) {
+    } else if (effectiveCommand.startsWith('implement')) {
       mode = 'implementer';
-    } else if (command.startsWith('review')) {
+    } else if (effectiveCommand.startsWith('review')) {
       mode = 'reviewer';
-    } else if (command.startsWith('refine')) {
+    } else if (effectiveCommand.startsWith('refine')) {
       mode = 'refiner';
     } else {
       // Default behavior when no explicit command: PR -> implementer, Issue -> refiner
       mode = isPullRequest ? 'implementer' : 'refiner';
     }
-    console.log(`Is PR: ${isPullRequest}, Command: "${command}", Mode: ${mode}`);
+
+    // Beta-only modes: adversarial-test and release-digest require the beta agent
+    const betaOnlyModes = ['adversarial-test', 'release-digest'];
+    if (betaOnlyModes.includes(mode) && agentType !== 'beta') {
+      agentType = 'beta';
+      console.log(`Mode '${mode}' requires beta agent — auto-promoting to beta`);
+    }
+
+    console.log(`Is PR: ${isPullRequest}, Command: "${command}", Mode: ${mode}, Agent: ${agentType}`);
 
     const { branchName, headRepo } = await determineBranch(github, context, issueId, mode, isPullRequest);
     console.log(`Building prompts - mode: ${mode}, issue: ${issueId}, is PR: ${isPullRequest}`);
 
-    const { sessionId, systemPrompt, prompt } = buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs);
+    const { sessionId, systemPrompt, prompt } = buildPrompts(mode, issueId, isPullRequest, effectiveCommand, branchName, inputs, agentType);
     
     console.log(`Session ID: ${sessionId}`);
     console.log(`Task prompt: "${prompt}"`);
@@ -159,7 +185,8 @@ module.exports = async (context, github, core, inputs) => {
       system_prompt: systemPrompt,
       prompt: prompt,
       issue_id: issueId,
-      head_repo: headRepo
+      head_repo: headRepo,
+      agent_type: agentType,
     };
     
     fs.writeFileSync('strands-parsed-input.json', JSON.stringify(outputs, null, 2));
