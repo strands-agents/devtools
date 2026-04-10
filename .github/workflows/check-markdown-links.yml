@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       config-file:
-        description: 'Path to markdown-link-check config file. If not found, falls back to default config from devtools.'
+        description: 'Path to markdown-link-check config file. If not found, falls back to inline default config.'
         required: false
         type: string
         default: '.markdown-link-check.json'
@@ -24,12 +24,11 @@ jobs:
             echo "config-path=$CONFIG_FILE" >> "$GITHUB_OUTPUT"
             echo "Using repo config: $CONFIG_FILE"
           else
-            echo "Repo config not found, downloading default from devtools..."
-            curl -sSfL \
-              "https://raw.githubusercontent.com/strands-agents/devtools/main/markdown-link-check/default-config.json" \
-              -o ".markdown-link-check-default.json"
+            echo "Repo config not found, using inline default config..."
+            echo '{"retryOn429":true,"retryCount":3,"fallbackRetryDelay":"30s","aliveStatusCodes":[200,206]}' \
+              > ".markdown-link-check-default.json"
             echo "config-path=.markdown-link-check-default.json" >> "$GITHUB_OUTPUT"
-            echo "Using default devtools config"
+            echo "Using default config (inline)"
           fi
 
       - uses: gaurav-nelson/github-action-markdown-link-check@3c3b66f1f7d0900e37b71eca45b63ea9eedfce31 # v1.0.17
