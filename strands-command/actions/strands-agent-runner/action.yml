@@ -47,6 +47,7 @@ runs:
         echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "session_id=$(jq -r .session_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "head_repo=$(jq -r '.head_repo // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "agent_mode=$(jq -r '.agent_mode // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "agent_type=$(jq -r '.agent_type // "standard"' strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "system_prompt<<EOF" >> $GITHUB_OUTPUT
         jq -r .system_prompt strands-parsed-input.json >> $GITHUB_OUTPUT
@@ -90,6 +91,10 @@ runs:
         if [ -d "${{ runner.temp }}/strands-agent-runner/strands-command/agent-skills" ]; then
           cp -r ${{ runner.temp }}/strands-agent-runner/strands-command/agent-skills ./agent-skills
           echo "✅ Copied agent-skills to working directory"
+        if [ -d "${{ runner.temp }}/strands-agent-runner/strands-command/agent-sops" ]; then
+          cp -r ${{ runner.temp }}/strands-agent-runner/strands-command/agent-sops ./agent-sops
+          echo "✅ Copied agent-sops to working directory (for runtime skill conversion)"
+        fi
           ls -la ./agent-skills/
         else
           echo "ℹ️ No agent-skills directory found (skills not available)"
@@ -254,6 +259,7 @@ runs:
 
         # Agent type (standard or beta)
         AGENT_TYPE: ${{ steps.read-input.outputs.agent_type }}
+        AGENT_MODE: ${{ steps.read-input.outputs.agent_mode }}
       run: |
         SCRIPTS_DIR="${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python"
         if [ "$AGENT_TYPE" = "beta" ]; then

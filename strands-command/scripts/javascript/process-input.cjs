@@ -81,23 +81,32 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs,
     ? `${mode}-${branchName}`.replace(/[\/\\]/g, '-')
     : `${mode}-${issueId}`);
 
-  // Beta agent uses skill-based system prompts — the AgentSkills plugin provides
-  // the full instructions via SKILL.md files. The system prompt just sets context
-  // and tells the agent which skill to activate.
+  // Beta agent uses BETA_SYSTEM_PROMPT.md (loaded by the runner) + skill activation.
+  // The system prompt here is just a thin context layer — the real instructions come
+  // from the BETA_SYSTEM_PROMPT.md file and the activated skill.
   if (agentType === 'beta') {
-    const skillNameMap = {
-      'adversarial-test': 'task-adversarial-tester',
-      'release-digest': 'task-release-digest',
-    };
-    const skillName = skillNameMap[mode];
+    // Read BETA_SYSTEM_PROMPT.md if available — provides the base system prompt
+    let systemPrompt = '';
+    const promptPaths = [
+      'devtools/strands-command/agent-skills/BETA_SYSTEM_PROMPT.md',
+      'agent-skills/BETA_SYSTEM_PROMPT.md',
+    ];
 
-    let systemPrompt;
-    if (skillName) {
-      systemPrompt = `You are an autonomous GitHub agent powered by Strands Agents SDK.
-You have access to agent skills. Use the 'skills' tool to activate the '${skillName}' skill, then follow its instructions.`;
-    } else {
-      // Generic beta prompt for commands without a specific skill mapping
-      systemPrompt = `You are an autonomous GitHub agent powered by Strands Agents SDK with extended capabilities including agent skills and sub-agent orchestration.`;
+    for (const promptPath of promptPaths) {
+      try {
+        if (fs.existsSync(promptPath)) {
+          systemPrompt = fs.readFileSync(promptPath, 'utf8');
+          console.log(`Loaded beta system prompt from ${promptPath}`);
+          break;
+        }
+      } catch (e) {
+        console.log(`Could not read ${promptPath}: ${e.message}`);
+      }
+    }
+
+    // Fallback if file not found
+    if (!systemPrompt) {
+      systemPrompt = `You are an autonomous GitHub agent powered by Strands Agents SDK with extended capabilities including agent skills, sub-agent orchestration, and programmatic tool calling.`;
     }
 
     let prompt = (isPullRequest)
@@ -105,7 +114,7 @@ You have access to agent skills. Use the 'skills' tool to activate the '${skillN
       : 'The issue id is:';
     prompt += `${issueId}\n${command}\nreview and continue`;
 
-    return { sessionId, systemPrompt, prompt };
+    return { sessionId, systemPrompt, prompt, mode };
   }
 
   // Standard agent uses SOP-based system prompts
@@ -124,7 +133,7 @@ You have access to agent skills. Use the 'skills' tool to activate the '${skillN
     : 'The issue id is:';
   prompt += `${issueId}\n${command}\nreview and continue`;
 
-  return { sessionId, systemPrompt, prompt };
+  return { sessionId, systemPrompt, prompt, mode };
 }
 
 module.exports = async (context, github, core, inputs) => {
@@ -149,6 +158,8 @@ module.exports = async (context, github, core, inputs) => {
       mode = 'adversarial-test';
     } else if (effectiveCommand.startsWith('release-digest') || effectiveCommand.startsWith('release digest')) {
       mode = 'release-digest';
+    } else if (effectiveCommand.startsWith('meta-reason') || effectiveCommand.startsWith('meta reason')) {
+      mode = 'meta-reason';
     } else if (effectiveCommand.startsWith('release-notes') || effectiveCommand.startsWith('release notes')) {
       mode = 'release-notes';
     } else if (effectiveCommand.startsWith('implement')) {
@@ -158,12 +169,12 @@ module.exports = async (context, github, core, inputs) => {
     } else if (effectiveCommand.startsWith('refine')) {
       mode = 'refiner';
     } else {
-      // Default behavior when no explicit command: PR -> implementer, Issue -> refiner
-      mode = isPullRequest ? 'implementer' : 'refiner';
+      // Default behavior when no explicit command: PR -> reviewer, Issue -> refiner
+      mode = isPullRequest ? 'reviewer' : 'refiner';
     }
 
-    // Beta-only modes: adversarial-test and release-digest require the beta agent
-    const betaOnlyModes = ['adversarial-test', 'release-digest'];
+    // Beta-only modes require the beta agent
+    const betaOnlyModes = ['adversarial-test', 'release-digest', 'meta-reason'];
     if (betaOnlyModes.includes(mode) && agentType !== 'beta') {
       agentType = 'beta';
       console.log(`Mode '${mode}' requires beta agent — auto-promoting to beta`);
@@ -187,6 +198,7 @@ module.exports = async (context, github, core, inputs) => {
       issue_id: issueId,
       head_repo: headRepo,
       agent_type: agentType,
+      agent_mode: mode,
     };
     
     fs.writeFileSync('strands-parsed-input.json', JSON.stringify(outputs, null, 2));
