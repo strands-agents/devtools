@@ -102,47 +102,6 @@ Analyze the test coverage and quality of tests.
 - You MUST identify missing edge cases or error scenarios
 - You MUST verify integration tests are included when appropriate
 
-#### 3.5 Documentation Review
-
-Check documentation completeness and quality. Determine whether a corresponding documentation PR is needed based on the nature of the changes — not every PR requires one.
-
-**Constraints:**
-- You MUST verify documentation exists for all public APIs as required by repository guidelines
-- You MUST check that documentation is clear, helpful, and concise
-- You MAY suggest examples for complex APIs
-- You MUST verify that README.md updates are included if needed
-- You MUST check that development documentation is updated if patterns changed
-- You MUST check the PR description for a "Documentation PR" section
-- You MUST verify any linked documentation PR points to `https://github.com/strands-agents/docs/pull/...`
-
-**Determining whether a documentation PR is needed:**
-
-Use judgment to answer: *"Does a user need to know about this change to use the SDK correctly?"* Apply the following criteria:
-
-- **Documentation PR REQUIRED (blocking — Request Changes if missing):**
-  - New features that add public API surface (new classes, methods, modules, or CLI commands)
-  - Breaking changes to existing public APIs (changed signatures, removed functionality, behavioral changes that break existing code)
-  - New concepts or patterns that users need to learn to use the SDK effectively
-
-- **Documentation PR SUGGESTED (non-blocking — mention in review as a suggestion):**
-  - Enhancements to existing features that change user-visible behavior
-  - New configuration options or environment variables
-  - Changes that affect documented examples or tutorials
-
-- **Documentation PR NOT NEEDED (do not request one):**
-  - Bug fixes (unless the bug revealed a gap in existing documentation)
-  - Internal refactors with no user-facing changes
-  - Test-only changes
-  - CI/config changes
-  - Performance improvements with no API changes
-  - Timeout, retry, or resilience fixes
-  - Dependency updates
-  - Code style or linting changes
-
-- If a documentation PR is required per the criteria above and neither a valid link nor a justification is present, you MUST treat this as a blocking issue (Request Changes) and post a review comment requesting the author add a "Documentation PR" section
-- If a documentation PR is only suggested, you SHOULD mention it as a non-blocking recommendation in your review
-- If the changes fall into the "not needed" category, do NOT request or suggest a documentation PR
-
 ### 4. Generate Review Comments
 
 Create specific, actionable review comments for identified issues.
@@ -200,7 +159,6 @@ Provide a concise overall summary of the review.
 **Constraints:**
 - You MUST create a pull request review using GitHub's review feature
 - You MUST provide an overall assessment (Approve, Request Changes, Comment)
-- You MUST NOT approve the PR if a documentation PR is required per the criteria in step 3.5 and is missing
 - You MUST keep the summary concise, informative, and easy to read
 - You MUST NOT repeat information already covered in inline comments
 - You MUST focus on high-level themes and patterns, not individual issues
