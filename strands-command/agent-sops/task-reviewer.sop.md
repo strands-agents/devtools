@@ -101,6 +101,8 @@ Analyze the test coverage and quality of tests.
 - You MUST check for proper test organization and naming
 - You MUST identify missing edge cases or error scenarios
 - You MUST verify integration tests are included when appropriate
+- You MUST flag tests that assert on individual fields when the full object or shape can be asserted in a single equality check, since per-field assertions silently miss unexpected or regressed fields
+- You MAY accept per-field assertions only when a field is non-deterministic or irrelevant to the behavior under test, and the test isolates that field rather than splitting the whole assertion
 
 ### 4. Generate Review Comments
 
