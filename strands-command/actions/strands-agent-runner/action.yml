@@ -47,6 +47,8 @@ runs:
         echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "session_id=$(jq -r .session_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "head_repo=$(jq -r '.head_repo // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "agent_mode=$(jq -r '.agent_mode // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "agent_type=$(jq -r '.agent_type // "standard"' strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "system_prompt<<EOF" >> $GITHUB_OUTPUT
         jq -r .system_prompt strands-parsed-input.json >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
@@ -54,7 +56,7 @@ runs:
         jq -r .prompt strands-parsed-input.json >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
-    # Checkout devtools repo for scripts
+    # Checkout devtools repo for scripts, SOPs, and agent skills
     - name: Checkout devtools
       uses: actions/checkout@v5
       with:
@@ -63,6 +65,7 @@ runs:
         sparse-checkout: |
           strands-command/scripts
           strands-command/agent-sops
+          strands-command/agent-skills
         path: devtools
 
     # Copy the devtools directory to the runner temp directory so the branch content cant overwrite the scripts executed here
@@ -78,6 +81,24 @@ runs:
       with:
         ref: ${{ steps.read-input.outputs.ref }}
         repository: ${{ steps.read-input.outputs.head_repo || github.repository }}
+
+    # Copy agent-skills to working directory (beta agent only)
+    # The AgentSkills plugin looks for skills in the working directory
+    - name: Copy agent-skills to working directory
+      if: steps.read-input.outputs.agent_type == 'beta'
+      shell: bash
+      run: |
+        if [ -d "${{ runner.temp }}/strands-agent-runner/strands-command/agent-skills" ]; then
+          cp -r ${{ runner.temp }}/strands-agent-runner/strands-command/agent-skills ./agent-skills
+          echo "✅ Copied agent-skills to working directory"
+        if [ -d "${{ runner.temp }}/strands-agent-runner/strands-command/agent-sops" ]; then
+          cp -r ${{ runner.temp }}/strands-agent-runner/strands-command/agent-sops ./agent-sops
+          echo "✅ Copied agent-sops to working directory (for runtime skill conversion)"
+        fi
+          ls -la ./agent-skills/
+        else
+          echo "ℹ️ No agent-skills directory found (skills not available)"
+        fi
 
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -235,8 +256,19 @@ runs:
 
         # Evals Configuration (input overrides Secrets Manager)
         EVALS_SQS_QUEUE_ARN: ${{ inputs.evals_sqs_queue_arn || steps.secrets.outputs.evals_sqs_queue_arn }}
+
+        # Agent type (standard or beta)
+        AGENT_TYPE: ${{ steps.read-input.outputs.agent_type }}
+        AGENT_MODE: ${{ steps.read-input.outputs.agent_mode }}
       run: |
-        uv run --no-project ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/agent_runner.py "$INPUT_TASK"
+        SCRIPTS_DIR="${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python"
+        if [ "$AGENT_TYPE" = "beta" ]; then
+          echo "🧪 Running beta agent"
+          uv run --no-project "$SCRIPTS_DIR/beta_agent_runner.py" "$INPUT_TASK"
+        else
+          echo "🤖 Running standard agent"
+          uv run --no-project "$SCRIPTS_DIR/agent_runner.py" "$INPUT_TASK"
+        fi
 
     - name: Capture repository state
       shell: bash
