@@ -151,7 +151,10 @@ runs:
       run: |
         echo "🚀 Strands Write Executor - Processing write operations"
         if [ -n "${{ steps.read-input.outputs.issue_id }}" ]; then
-          python devtools/strands-command/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl" --issue-id "${{ steps.read-input.outputs.issue_id }}"
+          python devtools/strands-command/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl" \
+            --issue-id "${{ steps.read-input.outputs.issue_id }}" \
+            --run-id "${{ github.run_id }}" \
+            --repository "${{ github.repository }}"
         else
           python devtools/strands-command/scripts/python/write_executor.py "${{ runner.temp }}/write_operations.jsonl"
         fi

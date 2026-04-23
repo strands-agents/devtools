@@ -35,6 +35,66 @@ logging.basicConfig(
 logger = logging.getLogger("write_executor")
 
 
+def read_parsed_input() -> Dict[str, Any] | None:
+    """Read parsed input artifact if it exists.
+    
+    Returns:
+        Dictionary with parsed input data or None if not found
+    """
+    artifact_path = Path("strands-parsed-input.json")
+    if not artifact_path.exists():
+        logger.debug("Parsed input artifact not found")
+        return None
+    
+    try:
+        with open(artifact_path, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        logger.error(f"Failed to read parsed input: {e}")
+        return None
+
+
+def post_fork_commit_comment(issue_id: int, branch_name: str, head_repo: str, base_repo: str, run_id: str):
+    """Post a comment with fork commit instructions.
+
+    Args:
+        issue_id: Issue number to comment on
+        branch_name: Branch name created by agent
+        head_repo: Fork repository name (user/repo)
+        base_repo: Base repository name (owner/repo)
+        run_id: GitHub Actions workflow run ID
+    """
+    comment = f"""## 🔀 Fork Changes Ready
+
+The agent has completed its work on your fork. To apply these changes:
+
+```bash
+# Create a unique temporary directory and download the artifact
+TEMP_DIR=$(mktemp -d)
+cd "$TEMP_DIR"
+
+# Download and extract the repository state
+gh run download {run_id} -n repository-state -R {base_repo}
+tar -xzf repository_state.tar.gz
+
+# Push the changes to your fork
+git push origin {branch_name}
+
+# Clean up
+cd ~
+rm -rf "$TEMP_DIR"
+```
+
+**Note:** You'll need the [GitHub CLI (`gh`)](https://cli.github.com/) installed and authenticated to download the artifact.
+
+Alternatively, you can manually download the `repository-state` artifact from the [workflow run](https://github.com/{base_repo}/actions/runs/{run_id}).
+
+This will push the changes to your fork at `{head_repo}`."""
+
+    logger.info(f"Posting fork commit instructions to issue #{issue_id}")
+    add_issue_comment(issue_id, comment)
+
+
 def get_function_mapping() -> Dict[str, Any]:
     """Get mapping of function names to actual functions."""
     return {
@@ -121,7 +181,17 @@ def main():
         type=int,
         help="Default issue ID to use for fallback operations"
     )
-    
+    parser.add_argument(
+        "--run-id",
+        type=str,
+        help="GitHub Actions workflow run ID"
+    )
+    parser.add_argument(
+        "--repository",
+        type=str,
+        help="Repository name in format owner/repo"
+    )
+
     args = parser.parse_args()
     artifact_path = Path(args.artifact_file)
     
@@ -149,6 +219,20 @@ def main():
     
     # Process the JSONL file
     process_jsonl_file(artifact_path, args.issue_id)
+    
+    # Check if this is a fork PR and post commit instructions
+    parsed_input = read_parsed_input()
+    if parsed_input and args.issue_id and args.run_id and args.repository:
+        head_repo = parsed_input.get("head_repo")
+        branch_name = parsed_input.get("branch_name")
+
+        if head_repo and branch_name:
+            logger.info("Fork PR detected - posting commit instructions")
+            post_fork_commit_comment(args.issue_id, branch_name, head_repo, args.repository, args.run_id)
+        else:
+            logger.debug("Not a fork PR or missing required fields")
+    elif parsed_input and args.issue_id and parsed_input.get("head_repo"):
+        logger.warning("Fork PR detected but missing run_id or repository - cannot post commit instructions")
 
 if __name__ == "__main__":
     main()
