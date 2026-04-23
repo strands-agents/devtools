@@ -1,0 +1,1398 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "panels": [],
+      "title": "Key Performance Indicators",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Pull requests merged in the last 7 days compared to the previous 7 days.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": true,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  CAST(strftime('%s', date('now', '-14 days')) as INTEGER) as time,\n  (SELECT COUNT(*) FROM pull_requests WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-14 days') AND date(merged_at) < date('now', '-7 days')) as \"PRs Merged\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT COUNT(*) FROM pull_requests WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-7 days')) as \"PRs Merged\"",
+          "queryType": "time series",
+          "rawQueryText": "SELECT \n  CAST(strftime('%s', date('now', '-14 days')) as INTEGER) as time,\n  (SELECT COUNT(*) FROM pull_requests WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-14 days') AND date(merged_at) < date('now', '-7 days')) as \"PRs Merged\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT COUNT(*) FROM pull_requests WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-7 days')) as \"PRs Merged\"",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "PRs Merged (7d)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Average hours until first response on issues/PRs.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 18.0
+              },
+              {
+                "color": "red",
+                "value": 24.0
+              }
+            ]
+          },
+          "unit": "h"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 1
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "inverted",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": true,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  CAST(strftime('%s', date('now', '-14 days')) as INTEGER) as time,\n  (SELECT ROUND(AVG(time_to_first_response), 1) FROM daily_metrics WHERE date >= date('now', '-14 days') AND date < date('now', '-7 days') AND time_to_first_response > 0) as \"Response Time\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT ROUND(AVG(time_to_first_response), 1) FROM daily_metrics WHERE date >= date('now', '-7 days') AND time_to_first_response > 0) as \"Response Time\"",
+          "queryType": "time series",
+          "rawQueryText": "SELECT \n  CAST(strftime('%s', date('now', '-14 days')) as INTEGER) as time,\n  (SELECT ROUND(AVG(time_to_first_response), 1) FROM daily_metrics WHERE date >= date('now', '-14 days') AND date < date('now', '-7 days') AND time_to_first_response > 0) as \"Response Time\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT ROUND(AVG(time_to_first_response), 1) FROM daily_metrics WHERE date >= date('now', '-7 days') AND time_to_first_response > 0) as \"Response Time\"",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        },
+        {
+          "hide": true,
+          "queryText": "SELECT warning_value as \"Warning\", goal_value as \"Critical\" FROM goal_thresholds WHERE metric = 'time_to_first_response_hours'",
+          "queryType": "table",
+          "rawQueryText": "SELECT warning_value as \"Warning\", goal_value as \"Critical\" FROM goal_thresholds WHERE metric = 'time_to_first_response_hours'",
+          "refId": "Thresholds",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Time to First Response (7d)",
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "configRefId": "Thresholds",
+            "mappings": [
+              {
+                "fieldName": "Warning",
+                "handlerKey": "threshold1",
+                "reducerId": "lastNotNull"
+              },
+              {
+                "fieldName": "Critical",
+                "handlerKey": "threshold2",
+                "reducerId": "lastNotNull"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Percentage of merged PRs from community (non-org) contributors.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 14.0
+              },
+              {
+                "color": "green",
+                "value": 20.0
+              }
+            ]
+          },
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 1
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": true,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  CAST(strftime('%s', date('now', '-60 days')) as INTEGER) as time,\n  (SELECT ROUND(100.0 * SUM(CASE WHEN json_extract(data, '$.author_association') NOT IN ('OWNER', 'MEMBER', 'COLLABORATOR') THEN 1 ELSE 0 END) / COUNT(*), 1)\n   FROM pull_requests\n   WHERE merged_at IS NOT NULL \n     AND date(merged_at) >= date('now', '-60 days')\n     AND date(merged_at) < date('now', '-30 days')) as \"Community %\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT ROUND(100.0 * SUM(CASE WHEN json_extract(data, '$.author_association') NOT IN ('OWNER', 'MEMBER', 'COLLABORATOR') THEN 1 ELSE 0 END) / COUNT(*), 1)\n   FROM pull_requests\n   WHERE merged_at IS NOT NULL \n     AND date(merged_at) >= date('now', '-30 days')) as \"Community %\"",
+          "queryType": "time series",
+          "rawQueryText": "SELECT \n  CAST(strftime('%s', date('now', '-60 days')) as INTEGER) as time,\n  (SELECT ROUND(100.0 * SUM(CASE WHEN json_extract(data, '$.author_association') NOT IN ('OWNER', 'MEMBER', 'COLLABORATOR') THEN 1 ELSE 0 END) / COUNT(*), 1)\n   FROM pull_requests\n   WHERE merged_at IS NOT NULL \n     AND date(merged_at) >= date('now', '-60 days')\n     AND date(merged_at) < date('now', '-30 days')) as \"Community %\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT ROUND(100.0 * SUM(CASE WHEN json_extract(data, '$.author_association') NOT IN ('OWNER', 'MEMBER', 'COLLABORATOR') THEN 1 ELSE 0 END) / COUNT(*), 1)\n   FROM pull_requests\n   WHERE merged_at IS NOT NULL \n     AND date(merged_at) >= date('now', '-30 days')) as \"Community %\"",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        },
+        {
+          "hide": true,
+          "queryText": "SELECT warning_value as \"Warning\", goal_value as \"Critical\" FROM goal_thresholds WHERE metric = 'community_pr_percent_min'",
+          "queryType": "table",
+          "rawQueryText": "SELECT warning_value as \"Warning\", goal_value as \"Critical\" FROM goal_thresholds WHERE metric = 'community_pr_percent_min'",
+          "refId": "Thresholds",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Community PR % (30d)",
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "configRefId": "Thresholds",
+            "mappings": [
+              {
+                "fieldName": "Warning",
+                "handlerKey": "threshold1",
+                "reducerId": "lastNotNull"
+              },
+              {
+                "fieldName": "Critical",
+                "handlerKey": "threshold2",
+                "reducerId": "lastNotNull"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Total package downloads in the last 7 days across PyPI and npm.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 1
+      },
+      "id": 5,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": true,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  CAST(strftime('%s', date('now', '-14 days')) as INTEGER) as time,\n  (SELECT SUM(downloads) FROM package_downloads WHERE date >= date('now', '-14 days') AND date < date('now', '-7 days')) as \"Downloads\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT SUM(downloads) FROM package_downloads WHERE date >= date('now', '-7 days')) as \"Downloads\"",
+          "queryType": "time series",
+          "rawQueryText": "SELECT \n  CAST(strftime('%s', date('now', '-14 days')) as INTEGER) as time,\n  (SELECT SUM(downloads) FROM package_downloads WHERE date >= date('now', '-14 days') AND date < date('now', '-7 days')) as \"Downloads\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT SUM(downloads) FROM package_downloads WHERE date >= date('now', '-7 days')) as \"Downloads\"",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Downloads (7d)",
+      "type": "stat"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 6
+      },
+      "id": 10,
+      "panels": [],
+      "title": "Adoption",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Cumulative downloads across all packages and registries.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "purple",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 0,
+        "y": 7
+      },
+      "id": 11,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT SUM(downloads) as value FROM package_downloads",
+          "queryType": "table",
+          "rawQueryText": "SELECT SUM(downloads) as value FROM package_downloads",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Total Downloads",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Weekly download trends across all packages.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 13,
+        "x": 5,
+        "y": 7
+      },
+      "id": 12,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  CAST(strftime('%s', date(date, 'weekday 0', '-6 days')) as INTEGER) as time,\n  SUM(downloads) as \"Weekly Downloads\"\nFROM package_downloads\nWHERE date >= date('now', '-90 days')\nGROUP BY date(date, 'weekday 0', '-6 days')\nORDER BY time",
+          "queryType": "time series",
+          "rawQueryText": "SELECT \n  CAST(strftime('%s', date(date, 'weekday 0', '-6 days')) as INTEGER) as time,\n  SUM(downloads) as \"Weekly Downloads\"\nFROM package_downloads\nWHERE date >= date('now', '-90 days')\nGROUP BY date(date, 'weekday 0', '-6 days')\nORDER BY time",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Weekly Downloads",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Download distribution between PyPI and npm.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          },
+          "mappings": []
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pypi"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#3572A5",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "npm"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "#f7df1e",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 6,
+        "x": 18,
+        "y": 7
+      },
+      "id": 13,
+      "options": {
+        "displayLabels": [
+          "percent"
+        ],
+        "legend": {
+          "displayMode": "list",
+          "placement": "right",
+          "showLegend": true,
+          "values": []
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "queryText": "SELECT registry, SUM(downloads) as downloads\nFROM package_downloads\nGROUP BY registry",
+          "queryType": "table",
+          "rawQueryText": "SELECT registry, SUM(downloads) as downloads\nFROM package_downloads\nGROUP BY registry",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Platform Split",
+      "transformations": [
+        {
+          "id": "rowsToFields",
+          "options": {
+            "mappings": [
+              {
+                "fieldName": "registry",
+                "handlerKey": "field.name"
+              },
+              {
+                "fieldName": "downloads",
+                "handlerKey": "field.value"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "piechart"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 13
+      },
+      "id": 20,
+      "panels": [],
+      "title": "Trends",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Average hours from PR open to merge (14-day rolling average).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 252.0
+              },
+              {
+                "color": "red",
+                "value": 336.0
+              }
+            ]
+          },
+          "unit": "h"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Goal (14d)"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              },
+              {
+                "id": "custom.lineStyle",
+                "value": {
+                  "dash": [
+                    10,
+                    10
+                  ],
+                  "fill": "dash"
+                }
+              },
+              {
+                "id": "custom.lineWidth",
+                "value": 1
+              },
+              {
+                "id": "custom.fillOpacity",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "id": 21,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "queryText": "WITH daily_avg AS (\n  SELECT \n    date(merged_at) as merge_date,\n    AVG((julianday(merged_at) - julianday(created_at)) * 24) as avg_hours\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL\n    AND date(merged_at) >= date('now', '-104 days')\n  GROUP BY date(merged_at)\n)\nSELECT \n  CAST(strftime('%s', merge_date) as INTEGER) as time,\n  AVG(avg_hours) OVER (ORDER BY merge_date ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) as \"Cycle Time\"\nFROM daily_avg\nWHERE merge_date >= date('now', '-90 days')\nORDER BY merge_date",
+          "queryType": "time series",
+          "rawQueryText": "WITH daily_avg AS (\n  SELECT \n    date(merged_at) as merge_date,\n    AVG((julianday(merged_at) - julianday(created_at)) * 24) as avg_hours\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL\n    AND date(merged_at) >= date('now', '-104 days')\n  GROUP BY date(merged_at)\n)\nSELECT \n  CAST(strftime('%s', merge_date) as INTEGER) as time,\n  AVG(avg_hours) OVER (ORDER BY merge_date ROWS BETWEEN 13 PRECEDING AND CURRENT ROW) as \"Cycle Time\"\nFROM daily_avg\nWHERE merge_date >= date('now', '-90 days')\nORDER BY merge_date",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        },
+        {
+          "queryText": "SELECT \n  CAST(strftime('%s', date) as INTEGER) as time,\n  (SELECT label FROM goals WHERE metric = 'cycle_time_hours') as metric,\n  (SELECT value FROM goals WHERE metric = 'cycle_time_hours') as value\nFROM (\n  SELECT DISTINCT date(merged_at) as date\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-90 days')\n)\nORDER BY date",
+          "queryType": "time series",
+          "rawQueryText": "SELECT \n  CAST(strftime('%s', date) as INTEGER) as time,\n  (SELECT label FROM goals WHERE metric = 'cycle_time_hours') as metric,\n  (SELECT value FROM goals WHERE metric = 'cycle_time_hours') as value\nFROM (\n  SELECT DISTINCT date(merged_at) as date\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-90 days')\n)\nORDER BY date",
+          "refId": "Goal",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Cycle Time (14-Day Rolling)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Cumulative unique contributors over time.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "never",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Community"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Total"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "id": 22,
+      "options": {
+        "legend": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "hideZeros": false,
+          "mode": "multi",
+          "sort": "none"
+        }
+      },
+      "targets": [
+        {
+          "queryText": "WITH first_contributions AS (\n  SELECT \n    author,\n    MIN(date(created_at)) as first_pr_date,\n    MAX(CASE WHEN json_extract(data, '$.author_association') IN ('OWNER', 'MEMBER', 'COLLABORATOR') THEN 1 ELSE 0 END) as is_org_member\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL\n  GROUP BY author\n),\ndates AS (\n  SELECT DISTINCT date(merged_at) as date\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-90 days')\n)\nSELECT \n  CAST(strftime('%s', d.date) as INTEGER) as time,\n  (SELECT COUNT(*) FROM first_contributions WHERE first_pr_date <= d.date) as \"Total\",\n  (SELECT COUNT(*) FROM first_contributions WHERE first_pr_date <= d.date AND is_org_member = 0) as \"Community\"\nFROM dates d\nORDER BY d.date",
+          "queryType": "time series",
+          "rawQueryText": "WITH first_contributions AS (\n  SELECT \n    author,\n    MIN(date(created_at)) as first_pr_date,\n    MAX(CASE WHEN json_extract(data, '$.author_association') IN ('OWNER', 'MEMBER', 'COLLABORATOR') THEN 1 ELSE 0 END) as is_org_member\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL\n  GROUP BY author\n),\ndates AS (\n  SELECT DISTINCT date(merged_at) as date\n  FROM pull_requests\n  WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-90 days')\n)\nSELECT \n  CAST(strftime('%s', d.date) as INTEGER) as time,\n  (SELECT COUNT(*) FROM first_contributions WHERE first_pr_date <= d.date) as \"Total\",\n  (SELECT COUNT(*) FROM first_contributions WHERE first_pr_date <= d.date AND is_org_member = 0) as \"Community\"\nFROM dates d\nORDER BY d.date",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Cumulative Contributors",
+      "type": "timeseries"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "id": 30,
+      "panels": [],
+      "title": "Current State",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Current count of open pull requests vs 7 days ago.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 0,
+        "y": 23
+      },
+      "id": 31,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "inverted",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": true,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  CAST(strftime('%s', date('now', '-7 days')) as INTEGER) as time,\n  (SELECT SUM(open_prs_count) FROM daily_metrics WHERE date = date('now', '-7 days')) as \"Open PRs\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT COUNT(*) FROM pull_requests WHERE state = 'open') as \"Open PRs\"",
+          "queryType": "time series",
+          "rawQueryText": "SELECT \n  CAST(strftime('%s', date('now', '-7 days')) as INTEGER) as time,\n  (SELECT SUM(open_prs_count) FROM daily_metrics WHERE date = date('now', '-7 days')) as \"Open PRs\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT COUNT(*) FROM pull_requests WHERE state = 'open') as \"Open PRs\"",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Open PRs",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "PRs open for more than 7 days without merge.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 4.95
+              },
+              {
+                "color": "red",
+                "value": 15.0
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 23
+      },
+      "id": 32,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "inverted",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT COUNT(*) as value\nFROM pull_requests \nWHERE state = 'open' \n  AND date(created_at) < date('now', '-7 days')",
+          "queryType": "table",
+          "rawQueryText": "SELECT COUNT(*) as value\nFROM pull_requests \nWHERE state = 'open' \n  AND date(created_at) < date('now', '-7 days')",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Stale PRs (7d+)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Average hours from PR open to merge (14-day window).",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 18.0
+              },
+              {
+                "color": "red",
+                "value": 24.0
+              }
+            ]
+          },
+          "unit": "h"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 23
+      },
+      "id": 33,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "inverted",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": true,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  CAST(strftime('%s', date('now', '-28 days')) as INTEGER) as time,\n  (SELECT ROUND(AVG((julianday(merged_at) - julianday(created_at)) * 24), 1)\n   FROM pull_requests \n   WHERE merged_at IS NOT NULL \n     AND date(merged_at) >= date('now', '-28 days') \n     AND date(merged_at) < date('now', '-14 days')) as \"Merge Time\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT ROUND(AVG((julianday(merged_at) - julianday(created_at)) * 24), 1)\n   FROM pull_requests \n   WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-14 days')) as \"Merge Time\"",
+          "queryType": "time series",
+          "rawQueryText": "SELECT \n  CAST(strftime('%s', date('now', '-28 days')) as INTEGER) as time,\n  (SELECT ROUND(AVG((julianday(merged_at) - julianday(created_at)) * 24), 1)\n   FROM pull_requests \n   WHERE merged_at IS NOT NULL \n     AND date(merged_at) >= date('now', '-28 days') \n     AND date(merged_at) < date('now', '-14 days')) as \"Merge Time\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT ROUND(AVG((julianday(merged_at) - julianday(created_at)) * 24), 1)\n   FROM pull_requests \n   WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-14 days')) as \"Merge Time\"",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        },
+        {
+          "hide": true,
+          "queryText": "SELECT warning_value as \"Warning\", goal_value as \"Critical\" FROM goal_thresholds WHERE metric = 'avg_merge_time_hours'",
+          "queryType": "table",
+          "rawQueryText": "SELECT warning_value as \"Warning\", goal_value as \"Critical\" FROM goal_thresholds WHERE metric = 'avg_merge_time_hours'",
+          "refId": "Thresholds",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Avg Merge Time",
+      "transformations": [
+        {
+          "id": "configFromData",
+          "options": {
+            "configRefId": "Thresholds",
+            "mappings": [
+              {
+                "fieldName": "Warning",
+                "handlerKey": "threshold1",
+                "reducerId": "lastNotNull"
+              },
+              {
+                "fieldName": "Critical",
+                "handlerKey": "threshold2",
+                "reducerId": "lastNotNull"
+              }
+            ]
+          }
+        }
+      ],
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Total GitHub stars across all repositories.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "yellow",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 23
+      },
+      "id": 34,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": true,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  CAST(strftime('%s', date('now', '-7 days')) as INTEGER) as time,\n  (SELECT SUM(stars) FROM daily_metrics WHERE date = date('now', '-7 days')) as \"Stars\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT SUM(stars) FROM daily_metrics WHERE date = (SELECT MAX(date) FROM daily_metrics)) as \"Stars\"",
+          "queryType": "time series",
+          "rawQueryText": "SELECT \n  CAST(strftime('%s', date('now', '-7 days')) as INTEGER) as time,\n  (SELECT SUM(stars) FROM daily_metrics WHERE date = date('now', '-7 days')) as \"Stars\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT SUM(stars) FROM daily_metrics WHERE date = (SELECT MAX(date) FROM daily_metrics)) as \"Stars\"",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Stars",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Unique contributors with merged PRs in the last 7 days.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 23
+      },
+      "id": 35,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": true,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT \n  CAST(strftime('%s', date('now', '-14 days')) as INTEGER) as time,\n  (SELECT COUNT(DISTINCT author) FROM pull_requests WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-14 days') AND date(merged_at) < date('now', '-7 days')) as \"Contributors\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT COUNT(DISTINCT author) FROM pull_requests WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-7 days')) as \"Contributors\"",
+          "queryType": "time series",
+          "rawQueryText": "SELECT \n  CAST(strftime('%s', date('now', '-14 days')) as INTEGER) as time,\n  (SELECT COUNT(DISTINCT author) FROM pull_requests WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-14 days') AND date(merged_at) < date('now', '-7 days')) as \"Contributors\"\nUNION ALL\nSELECT \n  CAST(strftime('%s', date('now')) as INTEGER) as time,\n  (SELECT COUNT(DISTINCT author) FROM pull_requests WHERE merged_at IS NOT NULL AND date(merged_at) >= date('now', '-7 days')) as \"Contributors\"",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Active Contributors (7d)",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "frser-sqlite-datasource",
+        "uid": "P2289B60D79A89B0C"
+      },
+      "description": "Number of repositories being tracked.",
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 23
+      },
+      "id": 36,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "percentChangeColorMode": "standard",
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showPercentChange": false,
+        "textMode": "auto",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "queryText": "SELECT COUNT(DISTINCT repo) as value FROM pull_requests",
+          "queryType": "table",
+          "rawQueryText": "SELECT COUNT(DISTINCT repo) as value FROM pull_requests",
+          "refId": "A",
+          "timeColumns": [
+            "time",
+            "ts"
+          ]
+        }
+      ],
+      "title": "Repos",
+      "type": "stat"
+    }
+  ],
+  "preload": false,
+  "schemaVersion": 40,
+  "tags": [
+    "executive",
+    "summary"
+  ],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-90d",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Executive Summary",
+  "uid": "executive-summary",
+  "version": 1
+}
