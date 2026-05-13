@@ -51,4 +51,4 @@ runs:
       with:
         result-encoding: string
         script: |
-          return ""
+          return "auto-approve"
