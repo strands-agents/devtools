@@ -5,10 +5,15 @@
  * @param {object} options - Configuration options
  * @param {string} options.username - Username to check (required)
  * @param {string} options.allowedRoles - Comma-separated list of allowed roles (required)
- * @returns {Promise<string>} 'auto-approve' or 'manual-approval'
+ * @returns {Promise<string>} '' or 'manual-approval'
  */
 
 async function checkAuthorization(context, github, options) {
+  if (context.payload.pull_request?.draft) {
+    console.log(`PR is a draft. Requiring manual approval.`);
+    return "manual-approval";
+  }
+
   if (!options.username) {
     throw new Error('Username is required but was not provided');
   }
@@ -32,7 +37,7 @@ async function checkAuthorization(context, github, options) {
     return "manual-approval";
   } else {
     console.log(`Verified ${options.username} has write access (role: ${role_name}). Auto Approving.`);
-    return "auto-approve";
+    return "";
   }
 
 }
