@@ -9,6 +9,11 @@
  */
 
 async function checkAuthorization(context, github, options) {
+  if (context.payload.pull_request?.draft) {
+    console.log(`PR is a draft. Requiring manual approval.`);
+    return "manual-approval";
+  }
+
   if (!options.username) {
     throw new Error('Username is required but was not provided');
   }
