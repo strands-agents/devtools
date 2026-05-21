@@ -16,6 +16,7 @@ runs:
         echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "issue_id=$(jq -r .issue_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "head_repo=$(jq -r '.head_repo // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "mode=$(jq -r '.mode // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
 
     # Push code changes before running write commands in case we need to create a pull request
     # Pull requests cannot be created if a branch has no diff with main, so push changes first, then create pr
@@ -26,12 +27,14 @@ runs:
           echo "🚫 Ref is default - skipping push operations to prevent direct commits to default branch"
         elif [ -n "${{ steps.read-input.outputs.head_repo }}" ]; then
           echo "🚫 Fork PR detected - skipping push operations (no write access to fork)"
+        elif [ "${{ steps.read-input.outputs.mode }}" = "reviewer" ]; then
+          echo "🚫 Reviewer mode - skipping push operations (review agent is read-only)"
         else
           echo "✅ Ref is '${{ steps.read-input.outputs.ref }}' - push operations will proceed"
         fi
     
     - name: Download repository state artifact
-      if: steps.read-input.outputs.ref != github.event.repository.default_branch && steps.read-input.outputs.head_repo == ''
+      if: steps.read-input.outputs.ref != github.event.repository.default_branch && steps.read-input.outputs.head_repo == '' && steps.read-input.outputs.mode != 'reviewer'
       uses: actions/download-artifact@v4
       with:
         name: repository-state
@@ -39,7 +42,7 @@ runs:
       continue-on-error: true
 
     - name: Apply Artifact and Push changes
-      if: steps.read-input.outputs.ref != github.event.repository.default_branch && steps.read-input.outputs.head_repo == ''
+      if: steps.read-input.outputs.ref != github.event.repository.default_branch && steps.read-input.outputs.head_repo == '' && steps.read-input.outputs.mode != 'reviewer'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}

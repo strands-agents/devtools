@@ -135,7 +135,8 @@ module.exports = async (context, github, core, inputs) => {
       system_prompt: systemPrompt,
       prompt: prompt,
       issue_id: issueId,
-      head_repo: headRepo
+      head_repo: headRepo,
+      mode: mode
     };
     
     fs.writeFileSync('strands-parsed-input.json', JSON.stringify(outputs, null, 2));
