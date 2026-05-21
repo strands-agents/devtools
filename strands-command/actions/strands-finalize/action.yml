@@ -27,14 +27,14 @@ runs:
           echo "🚫 Ref is default - skipping push operations to prevent direct commits to default branch"
         elif [ -n "${{ steps.read-input.outputs.head_repo }}" ]; then
           echo "🚫 Fork PR detected - skipping push operations (no write access to fork)"
-        elif [ "${{ steps.read-input.outputs.mode }}" = "reviewer" ]; then
-          echo "🚫 Reviewer mode - skipping push operations (review agent is read-only)"
+        elif [ "${{ steps.read-input.outputs.mode }}" != "implementer" ]; then
+          echo "🚫 Mode '${{ steps.read-input.outputs.mode }}' is not implementer - skipping push operations"
         else
           echo "✅ Ref is '${{ steps.read-input.outputs.ref }}' - push operations will proceed"
         fi
     
     - name: Download repository state artifact
-      if: steps.read-input.outputs.ref != github.event.repository.default_branch && steps.read-input.outputs.head_repo == '' && steps.read-input.outputs.mode != 'reviewer'
+      if: steps.read-input.outputs.ref != github.event.repository.default_branch && steps.read-input.outputs.head_repo == '' && steps.read-input.outputs.mode == 'implementer'
       uses: actions/download-artifact@v4
       with:
         name: repository-state
@@ -42,7 +42,7 @@ runs:
       continue-on-error: true
 
     - name: Apply Artifact and Push changes
-      if: steps.read-input.outputs.ref != github.event.repository.default_branch && steps.read-input.outputs.head_repo == '' && steps.read-input.outputs.mode != 'reviewer'
+      if: steps.read-input.outputs.ref != github.event.repository.default_branch && steps.read-input.outputs.head_repo == '' && steps.read-input.outputs.mode == 'implementer'
       shell: bash
       env:
         GITHUB_TOKEN: ${{ github.token }}
