@@ -34,3 +34,4 @@ package-lock.json
 .env
 
 .claude/settings.json
+.claude/settings.local.json

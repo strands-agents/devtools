@@ -95,7 +95,7 @@ jobs:
         with:
           skip-check: ${{ github.event_name == 'workflow_dispatch' }}
           username: ${{ github.event.comment.user.login || 'invalid' }}
-          allowed-roles: 'triage,write,admin'
+          allowed-roles: 'maintain,triage,write,admin'
 
   setup-and-process:
     needs: [authorization-check]
@@ -403,7 +403,7 @@ Creates high-quality release notes highlighting major features and bug fixes.
 ### Security Features
 
 #### Authorization Controls
-- **Collaborator Verification**: Only users with write access get auto-approval
+- **Collaborator Verification**: Only users with approved roles get auto-approval (`maintain`, `triage`, `write`, `admin`)
 - **Manual Approval Gates**: Unknown users require manual approval via GitHub environments
 - **Permission Separation**: Read and write operations isolated in separate jobs
 
