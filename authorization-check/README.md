@@ -16,7 +16,8 @@ A reusable GitHub Action that validates user permissions and determines the appr
 ```yaml
 jobs:
   authorization-check:
-    permissions: read-all
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     outputs:
       approval-env: ${{ steps.auth.outputs.approval-env }}
