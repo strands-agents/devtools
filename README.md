@@ -11,6 +11,14 @@ This repo serves as a central location for:
 - **GitHub Actions & Workflows**: Reusable CI/CD workflows for building, testing, and releasing Strands Agents projects
 - **Shared Tooling**: Common scripts and utilities used across multiple repositories
 
+## Actions
+
+| Action | Description |
+|--------|-------------|
+| [`issue-labeler`](issue-labeler/) | Classify issues using an LLM and apply labels from a configurable allowlist |
+| [`authorization-check`](authorization-check/) | Check user authorization for workflow triggers |
+| [`strands-command`](strands-command/) | Run a Strands agent in GitHub Actions |
+
 ## Documentation
 
 For more information about Strands Agents, visit our [documentation](https://strandsagents.com/latest/documentation/docs/).

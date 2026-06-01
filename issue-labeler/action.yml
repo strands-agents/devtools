@@ -1,0 +1,99 @@
+name: 'Issue Labeler'
+description: 'Classify a GitHub issue using an LLM and apply labels from a hardcoded allowlist. Designed to be called multiple times with different configs for independent labeling concerns.'
+
+inputs:
+  aws_role_arn:
+    description: 'AWS IAM role ARN for Bedrock access'
+    required: true
+  config:
+    description: 'Inline YAML config defining labels and optional instructions. Use this OR config_path, not both.'
+    required: false
+    default: ''
+  config_path:
+    description: 'Path to a labeler config YAML file relative to repo root. Use this OR config, not both.'
+    required: false
+    default: ''
+  aws_region:
+    description: 'AWS region for Bedrock'
+    required: false
+    default: 'us-west-2'
+  model_id:
+    description: 'Bedrock model ID for classification'
+    required: false
+    default: 'anthropic.claude-haiku-4-5-20251001'
+  max_labels:
+    description: 'Maximum number of labels to apply per issue'
+    required: false
+    default: '3'
+  max_body_length:
+    description: 'Maximum characters of issue body to send to the LLM'
+    required: false
+    default: '1000'
+
+outputs:
+  labels:
+    description: 'Comma-separated list of labels that were applied (empty if none)'
+    value: ${{ steps.classify.outputs.labels }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_role_arn }}
+        role-session-name: IssueLabeler-${{ github.run_id }}-${{ github.run_attempt }}
+        aws-region: ${{ inputs.aws_region }}
+        mask-aws-account-id: true
+        inline-session-policy: >-
+          {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Action": ["bedrock:InvokeModel"],
+                "Resource": "*"
+              }
+            ]
+          }
+
+    - name: Install dependencies
+      shell: bash
+      run: pip install --quiet boto3 pyyaml
+
+    - name: Resolve config
+      id: config
+      shell: bash
+      env:
+        INLINE_CONFIG: ${{ inputs.config }}
+        CONFIG_PATH: ${{ inputs.config_path }}
+      run: |
+        if [ -n "$INLINE_CONFIG" ]; then
+          echo "$INLINE_CONFIG" > "${{ runner.temp }}/labeler-config.yml"
+        elif [ -n "$CONFIG_PATH" ]; then
+          if [ ! -f "$CONFIG_PATH" ]; then
+            echo "::error::Config file not found: $CONFIG_PATH"
+            exit 1
+          fi
+          cp "$CONFIG_PATH" "${{ runner.temp }}/labeler-config.yml"
+        else
+          echo "::error::Either 'config' or 'config_path' input is required."
+          exit 1
+        fi
+        echo "path=${{ runner.temp }}/labeler-config.yml" >> "$GITHUB_OUTPUT"
+
+    - name: Classify and apply labels
+      id: classify
+      shell: bash
+      env:
+        ISSUE_TITLE: ${{ github.event.issue.title }}
+        ISSUE_BODY: ${{ github.event.issue.body }}
+        ISSUE_NUMBER: ${{ github.event.issue.number }}
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}
+        CONFIG_PATH: ${{ steps.config.outputs.path }}
+        MODEL_ID: ${{ inputs.model_id }}
+        AWS_REGION: ${{ inputs.aws_region }}
+        MAX_LABELS: ${{ inputs.max_labels }}
+        MAX_BODY_LENGTH: ${{ inputs.max_body_length }}
+      run: python3 "${{ github.action_path }}/classify.py"
