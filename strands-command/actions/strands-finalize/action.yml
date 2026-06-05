@@ -87,7 +87,7 @@ runs:
           git config --local core.pager cat
           # We need to overwrite this since this is currently set by the previous readonly workflow artifact
           # Overwrite this value with the current token that allows us to push the commit
-          git config --local http."https://github.com/".extraheader "AUTHORIZATION: basic $(echo -n x-access-token:${GITHUB_TOKEN}| base64)"
+          git config --local http."https://github.com/".extraheader "AUTHORIZATION: basic $(echo -n "x-access-token:${GITHUB_TOKEN}" | base64 -w0)"
 
           # Fetch the remote repository
           git fetch origin "$REF"
