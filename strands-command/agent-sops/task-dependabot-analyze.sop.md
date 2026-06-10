@@ -52,13 +52,11 @@ You receive (via the task prompt and environment):
 **Constraints:**
 - You MUST post exactly one PR comment using `add_pr_comment`.
 - The comment MUST contain a human-readable analysis: package, version change, how the package is used in this repo, what changed upstream, and specific findings.
-- The comment MUST end with a machine-readable verdict block, exactly:
+- The comment MUST end with a machine-readable verdict line, on its own line, exactly:
 
-  ```json
-  {"verdict": "safe"}
-  ```
+  `DEPENDABOT_VERDICT: {"verdict": "safe"}`
 
-  where verdict is one of `safe`, `needs-review`, or `breaking`.
+  where verdict is one of `safe`, `needs-review`, or `breaking`. The `DEPENDABOT_VERDICT:` marker MUST appear exactly once and only on this final line.
 
 ### Verdict Criteria
 
