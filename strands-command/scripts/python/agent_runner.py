@@ -47,7 +47,6 @@ from str_replace_based_edit_tool import str_replace_based_edit_tool
 # Strands configuration constants
 STRANDS_MODEL_ID = "global.anthropic.claude-opus-4-8"
 STRANDS_MAX_TOKENS = 64000
-STRANDS_BUDGET_TOKENS = 8000
 STRANDS_REGION = "us-west-2"
 
 # Default values for environment variables used only in this file
@@ -193,12 +192,8 @@ def run_agent(query: str):
         
         # Create Bedrock model with inlined configuration
         additional_request_fields = {}
-        additional_request_fields["anthropic_beta"] = ["interleaved-thinking-2025-05-14"]
-        
-        additional_request_fields["thinking"] = {
-            "type": "enabled",
-            "budget_tokens": STRANDS_BUDGET_TOKENS
-        }
+        additional_request_fields["thinking"] = {"type": "adaptive"}
+        additional_request_fields["output_config"] = {"effort": "high"}
         
         model = BedrockModel(
             model_id=STRANDS_MODEL_ID,
