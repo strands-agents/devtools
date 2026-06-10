@@ -2,24 +2,28 @@
 """
 Issue classifier for the issue-labeler GitHub Action.
 
-Reads a config file defining valid labels, calls Bedrock for classification,
-validates the response against the allowlist, and applies labels via gh CLI.
+Reads a config file defining valid labels, calls Bedrock (via the Strands
+SDK) for structured classification, and applies labels via gh CLI.
 
 Security model:
-- LLM output is validated against a hardcoded allowlist from the config file.
+- The LLM returns a structured object whose label field is an enum built
+  from the config allowlist, so out-of-allowlist values are rejected by the
+  schema rather than by hand.
 - Issue content is sanitized and truncated before reaching the LLM.
 - The LLM has no tools, no shell access, no GitHub API access.
 - Worst case from prompt injection: mislabeling (not arbitrary actions).
 """
 
-import json
+import enum
 import os
 import re
 import subprocess
 import sys
 
-import boto3
 import yaml
+from pydantic import BaseModel, Field
+from strands import Agent
+from strands.models import BedrockModel
 
 
 def load_config(config_path: str) -> dict:
@@ -47,16 +51,16 @@ def build_system_prompt(config: dict, max_labels: int) -> str:
 
     labels_block = "\n".join(label_lines)
 
-    prompt = f"""You are a GitHub issue classifier. Respond with ONLY a JSON array of label strings. No other text, no explanation, no markdown fences.
+    prompt = f"""You are a GitHub issue classifier.
 
 Available labels:
 {labels_block}
 
 Rules:
-1. Assign 1-{max_labels} labels maximum.
+1. Assign at most {max_labels} labels.
 2. Only assign labels with clear evidence in the title or body.
 3. If unsure between multiple labels, prefer fewer labels over more.
-4. Respond with ONLY a JSON array. Example: ["label-one", "label-two"]"""
+4. If no label clearly applies, return an empty list."""
 
     custom_instructions = config.get("instructions", "")
     if custom_instructions:
@@ -73,53 +77,57 @@ def sanitize(text: str, max_len: int) -> str:
     return cleaned[:max_len]
 
 
+def build_classification_model(valid_labels: frozenset) -> type[BaseModel]:
+    """Build a Pydantic model whose label field is an enum of the allowlist.
+
+    SECURITY: the enum *is* the allowlist, so the structured-output schema
+    rejects any value the model invents that is not a configured label.
+    """
+    label_enum = enum.Enum("Label", {name: name for name in sorted(valid_labels)})
+
+    class Classification(BaseModel):
+        labels: list[label_enum] = Field(
+            default_factory=list,
+            description="Labels that apply to the issue, drawn only from the allowed set.",
+        )
+
+    return Classification
+
+
 def classify_issue(title: str, body: str, system_prompt: str, valid_labels: frozenset) -> list[str]:
-    """Call Bedrock to classify the issue, return validated labels."""
-    model_id = os.environ.get("MODEL_ID", "anthropic.claude-haiku-4-5-20251001")
+    """Call Bedrock via Strands to classify the issue, return validated labels."""
+    model_id = os.environ.get("MODEL_ID", "global.anthropic.claude-sonnet-4-6")
     region = os.environ.get("AWS_REGION", "us-west-2")
     max_labels = int(os.environ.get("MAX_LABELS", "3"))
 
-    client = boto3.client("bedrock-runtime", region_name=region)
+    model = BedrockModel(
+        model_id=model_id,
+        region_name=region,
+        temperature=0,
+        max_tokens=512,
+    )
+    agent = Agent(model=model, system_prompt=system_prompt)
 
+    classification_model = build_classification_model(valid_labels)
     user_msg = f"Classify this issue:\n\nTitle: {title}\n\nBody:\n{body}"
 
-    request_body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 150,
-        "temperature": 0,
-        "system": system_prompt,
-        "messages": [{"role": "user", "content": user_msg}],
-    })
-
-    response = client.invoke_model(
-        modelId=model_id,
-        contentType="application/json",
-        accept="application/json",
-        body=request_body,
-    )
-
-    response_body = json.loads(response["body"].read())
-    raw_text = response_body["content"][0]["text"].strip()
-    print(f"Raw LLM output: {raw_text}")
-
     try:
-        labels = json.loads(raw_text)
-    except json.JSONDecodeError:
-        match = re.search(r"\[.*?\]", raw_text, re.DOTALL)
-        if match:
-            try:
-                labels = json.loads(match.group())
-            except json.JSONDecodeError:
-                return []
-        else:
-            return []
-
-    if not isinstance(labels, list):
+        result = agent.structured_output(classification_model, user_msg)
+    except Exception as e:  # noqa: BLE001 - classification failure must not fail the workflow
+        print(f"::warning::Classification failed: {e}")
         return []
 
-    # SECURITY: Only accept labels from the hardcoded allowlist
-    validated = [l for l in labels if isinstance(l, str) and l in valid_labels]
-    return validated[:max_labels]
+    # Enum members carry the label name as their value; dedupe preserving order.
+    seen: set[str] = set()
+    labels: list[str] = []
+    for member in result.labels:
+        name = member.value
+        if name not in seen:
+            seen.add(name)
+            labels.append(name)
+
+    print(f"Classified labels: {labels}")
+    return labels[:max_labels]
 
 
 def apply_labels(issue_number: str, labels: list[str]) -> None:

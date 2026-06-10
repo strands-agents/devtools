@@ -18,9 +18,9 @@ inputs:
     required: false
     default: 'us-west-2'
   model_id:
-    description: 'Bedrock model ID for classification'
+    description: 'Bedrock model ID (inference profile) for classification'
     required: false
-    default: 'anthropic.claude-haiku-4-5-20251001'
+    default: 'global.anthropic.claude-sonnet-4-6'
   max_labels:
     description: 'Maximum number of labels to apply per issue'
     required: false
@@ -51,7 +51,10 @@ runs:
             "Statement": [
               {
                 "Effect": "Allow",
-                "Action": ["bedrock:InvokeModel"],
+                "Action": [
+                  "bedrock:InvokeModel",
+                  "bedrock:InvokeModelWithResponseStream"
+                ],
                 "Resource": "*"
               }
             ]
@@ -59,7 +62,7 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: pip install --quiet boto3 pyyaml
+      run: pip install --quiet strands-agents pyyaml
 
     - name: Resolve config
       id: config

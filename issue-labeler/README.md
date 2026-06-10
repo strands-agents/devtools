@@ -1,16 +1,16 @@
 # Issue Labeler
 
-A reusable GitHub Action that classifies issues using an LLM and applies labels from a hardcoded allowlist.
+A reusable GitHub Action that classifies issues using an LLM (via the [Strands Agents SDK](https://github.com/strands-agents/sdk-python)) and applies labels from a hardcoded allowlist.
 
 ## Security Model
 
-The LLM has no tools, no shell access, and no GitHub API access. Its output is parsed as JSON and validated against the label names defined in your config file. Invalid labels are silently dropped. The worst a prompt injection can achieve is mislabeling — never arbitrary label creation or other side effects.
+The LLM has no tools, no shell access, and no GitHub API access. It returns a structured object whose label field is an enum built from the label names in your config file, so out-of-allowlist values are rejected by the schema rather than filtered after the fact. The worst a prompt injection can achieve is mislabeling — never arbitrary label creation or other side effects.
 
 | Layer | Protection |
 |-------|-----------|
 | Input | Sanitized (control chars stripped) and truncated before reaching the LLM |
-| Output | Parsed as JSON, validated against frozen allowlist, capped at `max_labels` |
-| IAM | Scoped to `bedrock:InvokeModel` only |
+| Output | Structured output constrained to an allowlist enum, capped at `max_labels` |
+| IAM | Scoped to `bedrock:InvokeModel` / `bedrock:InvokeModelWithResponseStream` |
 | Permissions | Workflow only needs `issues: write` |
 
 ## Usage
@@ -112,7 +112,7 @@ labels:
 | `config` | No* | - | Inline YAML config |
 | `config_path` | No* | - | Path to config file |
 | `aws_region` | No | `us-west-2` | Bedrock region |
-| `model_id` | No | `anthropic.claude-haiku-4-5-20251001` | Model for classification |
+| `model_id` | No | `global.anthropic.claude-sonnet-4-6` | Bedrock inference profile for classification |
 | `max_labels` | No | `3` | Max labels per issue |
 | `max_body_length` | No | `1000` | Max chars of body sent to LLM |
 
@@ -127,5 +127,6 @@ labels:
 ## Prerequisites
 
 1. An AWS IAM role that the GitHub OIDC provider can assume
-2. The role needs `bedrock:InvokeModel` permission
-3. The labels referenced in your config must already exist on the repo
+2. The role needs `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` permissions
+3. Bedrock access enabled for the configured model in `aws_region`
+4. The labels referenced in your config must already exist on the repo
