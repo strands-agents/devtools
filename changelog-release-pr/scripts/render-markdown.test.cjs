@@ -61,6 +61,32 @@ test('null pr/commit/author render as null', () => {
   assert.match(md, /scope: null/)
 })
 
+test('quotes areas that contain YAML-significant chars', () => {
+  const md = renderMarkdown({
+    ...file,
+    entries: [{ ...file.entries[0], areas: ['model', 'a,b', 'weird]bracket', 'has space'] }],
+  })
+  // commas/brackets/spaces inside a label must be quoted so the flow seq stays valid
+  assert.match(md, /areas: \[model, "a,b", "weird\]bracket", "has space"\]/)
+})
+
+test('quotes YAML reserved bool/null words in scope and areas', () => {
+  const md = renderMarkdown({
+    ...file,
+    entries: [{ ...file.entries[0], scope: 'on', areas: ['yes', 'null', 'model'] }],
+  })
+  assert.match(md, /scope: "on"/)
+  assert.match(md, /areas: \["yes", "null", model\]/)
+})
+
+test('escapes quotes and newlines in titles', () => {
+  const md = renderMarkdown({
+    ...file,
+    entries: [{ ...file.entries[0], title: 'add "quoted" thing' }],
+  })
+  assert.match(md, /title: "add \\"quoted\\" thing"/)
+})
+
 test('mergePreserving keeps existing highlights + body, refreshes entries', () => {
   const existing = `---
 sdk: harness

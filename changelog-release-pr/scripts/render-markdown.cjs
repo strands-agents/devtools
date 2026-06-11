@@ -5,16 +5,26 @@
 // on re-sync while refreshing the parsed entries/urls.
 
 function q(s) {
-  return `"${String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`
+  return `"${String(s)
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\t/g, '\\t')
+    .replace(/\r/g, '\\r')
+    .replace(/\n/g, '\\n')}"`
 }
 
-// Bareword if safe for YAML, else quoted. Anything starting with a digit or
-// containing YAML-significant chars gets quoted.
+// YAML 1.1 words that, left bare, parse as booleans/null instead of strings.
+const YAML_RESERVED = new Set([
+  'true', 'false', 'yes', 'no', 'on', 'off', 'null', 'none', '~',
+])
+
+// Bareword if safe for YAML, else quoted. Quote anything that starts with a
+// digit, contains YAML-significant chars, or is a reserved bool/null word.
 function scalar(v) {
   if (v === null || v === undefined) return 'null'
   if (typeof v === 'number') return String(v)
   if (v === '') return '""'
-  if (/^[\w.@/-]+$/.test(v) && !/^\d/.test(v)) return v
+  if (/^[\w.@/-]+$/.test(v) && !/^\d/.test(v) && !YAML_RESERVED.has(v.toLowerCase())) return v
   return q(v)
 }
 
@@ -23,7 +33,7 @@ function flowEntry(e) {
     `type: ${e.type}`,
     `breaking: ${e.breaking === true}`,
     `scope: ${e.scope ? scalar(e.scope) : 'null'}`,
-    `areas: [${e.areas.join(', ')}]`,
+    `areas: [${e.areas.map(scalar).join(', ')}]`,
     `title: ${q(e.title)}`,
     `pr: ${e.pr == null ? 'null' : e.pr}`,
     `prUrl: ${e.prUrl ? q(e.prUrl) : 'null'}`,
@@ -43,7 +53,7 @@ function renderMarkdown(f, body = '') {
   lines.push(`sdk: ${f.sdk}`)
   if (f.language) lines.push(`language: ${f.language}`)
   lines.push(`version: ${q(f.version)}`)
-  lines.push(`tag: ${f.tag}`)
+  lines.push(`tag: ${scalar(f.tag)}`)
   lines.push(`date: ${f.date}`)
   lines.push(`releaseUrl: ${f.releaseUrl}`)
   lines.push(`packageUrl: ${f.packageUrl}`)
