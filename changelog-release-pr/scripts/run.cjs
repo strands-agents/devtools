@@ -26,6 +26,10 @@ async function run(opts) {
     releases = r ? [r] : []
   }
 
+  // listReleases includes drafts (no published_at) — skip them; a changelog
+  // only covers published releases.
+  releases = releases.filter((r) => r && r.published_at)
+
   const deps = {
     enrich: (prRepo, pr) => enrichFromPr(prRepo, pr, opts.client.getPr),
     readExisting: opts.readExisting,

@@ -48,6 +48,21 @@ test('single mode with unknown tag writes nothing', async () => {
   assert.deepEqual(res.written, [])
 })
 
+test('skips draft releases (null published_at) without crashing', async () => {
+  const withDraft = [
+    { tag_name: 'v1.0.0', published_at: null, html_url: 'h', body: '* feat: x by @a in https://github.com/o/r/pull/1\n' },
+    { tag_name: 'v0.9.0', published_at: '2026-01-01T00:00:00Z', html_url: 'h', body: '* fix: y by @b in https://github.com/o/r/pull/2\n' },
+  ]
+  const client = { listReleases: async () => withDraft, getRelease: async () => null, getPr: async () => null }
+  const written = {}
+  const res = await run({
+    repo: 'strands-agents/evals', mode: 'backfill', client,
+    readExisting: async () => null, writeFile: async (p, c) => { written[p] = c },
+  })
+  // only the published one is written
+  assert.deepEqual(res.written, ['site/src/content/changelog/evals/v0.9.0.md'])
+})
+
 test('collects drift warnings', async () => {
   const drifty = [{ tag_name: 'v1.0.0', published_at: '2026-01-01T00:00:00Z', html_url: 'h', body: '* a #1\n* b #2\n* c #3\n' }]
   const client = { listReleases: async () => drifty, getRelease: async () => null, getPr: async () => null }
