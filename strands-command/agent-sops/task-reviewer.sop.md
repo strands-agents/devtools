@@ -104,13 +104,13 @@ Analyze the test coverage and quality of tests.
 - You MUST flag tests that assert on individual fields when the full object or shape can be asserted in a single equality check, since per-field assertions silently miss unexpected or regressed fields
 - You MAY accept per-field assertions only when a field is non-deterministic or irrelevant to the behavior under test, and the test isolates that field rather than splitting the whole assertion
 
-### 4. Documentation Review (if applicable)
+### 4. Documentation Review
 
 If any changed files are under `site/src/content/docs/`, you MUST additionally review them against the documentation skills:
 
-- **Docs Audit**: Read and follow the procedure in https://github.com/strands-agents/harness-sdk/blob/main/.agents/skills/docs-audit/SKILL.md
-- **Docs Reviewer**: Read and follow the procedure in https://github.com/strands-agents/harness-sdk/blob/main/.agents/skills/docs-reviewer/SKILL.md
-- **MDX Authoring**: Read and follow the guidelines in https://github.com/strands-agents/harness-sdk/blob/main/.agents/references/mdx-authoring.md
+- **Docs Audit**: Read and follow the procedure in `.agents/skills/docs-audit/SKILL.md`
+- **Docs Reviewer**: Read and follow the procedure in `.agents/skills/docs-reviewer/SKILL.md`
+- **MDX Authoring**: Read and follow the guidelines in `.agents/references/mdx-authoring.md`
 
 Include findings from these checks in your review comments and summary.
 
