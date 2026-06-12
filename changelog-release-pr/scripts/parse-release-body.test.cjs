@@ -13,19 +13,15 @@ const body = `## What's Changed
 **Full Changelog**: https://github.com/strands-agents/sdk-python/compare/python/v1.41.0...python/v1.42.0`
 
 test('parses conventional-commit lines', () => {
-  const lines = parseReleaseBody(body)
-  assert.equal(lines.length, 5)
-  assert.deepEqual(lines[0], {
-    type: 'fix', scope: 'tests', breaking: false,
-    title: 'fix flaky tests', author: 'lizradway',
-    pr: 2319, prRepo: 'strands-agents/sdk-python',
-  })
-  assert.equal(lines[1].type, 'feat')
-  assert.equal(lines[1].scope, 'gemini')
-  assert.equal(lines[2].breaking, true) // '!' marker
-  assert.equal(lines[2].type, 'feat')
-  assert.equal(lines[4].author, null) // line without "by @author"
-  assert.equal(lines[4].pr, 2301)
+  // Whole-shape equality: the parser is deterministic, so assert everything.
+  const repo = 'strands-agents/sdk-python'
+  assert.deepEqual(parseReleaseBody(body), [
+    { type: 'fix', scope: 'tests', breaking: false, title: 'fix flaky tests', author: 'lizradway', pr: 2319, prRepo: repo },
+    { type: 'feat', scope: 'gemini', breaking: false, title: 'plumb through cache tokens', author: 'yatszhash', pr: 2287, prRepo: repo },
+    { type: 'feat', scope: null, breaking: true, title: 'drop legacy run()', author: 'pgrayy', pr: 2299, prRepo: repo },
+    { type: 'docs', scope: null, breaking: false, title: 'tidy readme', author: 'someone', pr: 2300, prRepo: repo },
+    { type: 'chore', scope: null, breaking: false, title: 'bump deps', author: null, pr: 2301, prRepo: repo },
+  ])
 })
 
 test('omitted-list body yields no entries', () => {
@@ -81,13 +77,19 @@ const nc = `## What's Changed
 
 **Full Changelog**: https://github.com/o/r/compare/a...b`
 
-test('parseNewContributors extracts structured logins + prs', () => {
+test('parseNewContributors extracts structured logins + prs + prRepo', () => {
   assert.deepEqual(parseNewContributors(nc), [
-    { login: 'senthilkumarmohan', pr: 2623 },
-    { login: 'ianholtz', pr: 2651 },
+    { login: 'senthilkumarmohan', pr: 2623, prRepo: 'strands-agents/harness-sdk' },
+    { login: 'ianholtz', pr: 2651, prRepo: 'strands-agents/harness-sdk' },
   ])
   assert.deepEqual(parseNewContributors(''), [])
   assert.deepEqual(parseNewContributors(null), [])
+})
+
+test('bracket-suffixed bot first-contribution lines are captured, not leaked into entries', () => {
+  const body = '* @dependabot[bot] made their first contribution in https://github.com/o/r/pull/625'
+  assert.deepEqual(parseNewContributors(body), [{ login: 'dependabot[bot]', pr: 625, prRepo: 'o/r' }])
+  assert.deepEqual(parseReleaseBody(body), []) // must NOT become an entry
 })
 
 test('first-contribution lines are excluded from entries', () => {

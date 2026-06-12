@@ -19,6 +19,11 @@ async function runAction(github, context, core) {
   const targetDir = process.env.TARGET_DIR
   const skipExisting = process.env.SKIP_EXISTING === 'true'
 
+  if (mode === 'single' && !tag) {
+    core.setFailed('changelog: single mode requires a tag (got none). Pass the release tag or use mode: backfill.')
+    return { written: [], warnings: [] }
+  }
+
   const client = {
     listReleases: async (repoFull) => {
       const { owner, repo } = splitRepo(repoFull)
@@ -90,11 +95,13 @@ async function runAction(github, context, core) {
   core.info(`changelog: wrote ${result.written.length} file(s)`)
   for (const w of result.warnings) core.warning(w)
   // Expose for the PR body + a git-safe branch name (tags contain '/' and '.').
-  const sdkSlug = sourceRepo.endsWith('/evals') ? 'evals' : 'harness'
+  // Slug from the repo NAME so different source repos (harness-sdk vs the
+  // archived sdk-typescript) can never collide on the same backfill branch.
+  const repoSlug = sourceRepo.split('/')[1] || sourceRepo
   const tagSlug = (tag || 'backfill').replace(/[^A-Za-z0-9._-]+/g, '-')
   core.setOutput('written_count', String(result.written.length))
   core.setOutput('warnings', result.warnings.join('\n'))
-  core.setOutput('branch', `changelog/sync-${sdkSlug}-${tagSlug}`)
+  core.setOutput('branch', `changelog/sync-${repoSlug}-${tagSlug}`)
   return result
 }
 

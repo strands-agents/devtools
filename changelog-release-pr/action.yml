@@ -38,7 +38,10 @@ runs:
       uses: actions/checkout@v6
       with:
         repository: strands-agents/devtools
-        ref: main
+        # Track the ref the CALLER pinned this action to, so pinning
+        # `uses: ...@<sha>` pins the scripts too (a hard-coded `main` here
+        # would let script behavior float regardless of the caller's pin).
+        ref: ${{ github.action_ref }}
         sparse-checkout: |
           changelog-release-pr/scripts
         path: devtools
@@ -60,7 +63,9 @@ runs:
           await runAction(github, context, core)
 
     - name: Open PR
-      uses: peter-evans/create-pull-request@v7
+      # Third-party action receiving a write-scoped token — pinned to a full
+      # commit SHA (v7.0.x) rather than a movable tag.
+      uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
       with:
         token: ${{ inputs.github-token }}
         path: target

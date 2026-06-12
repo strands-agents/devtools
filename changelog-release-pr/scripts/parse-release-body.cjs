@@ -12,7 +12,8 @@ const CONVENTIONAL = /^(feat|fix|docs|style|refactor|perf|test|chore|build|ci|re
 const KNOWN_TYPES = new Set(['feat', 'fix', 'docs', 'perf', 'refactor', 'test', 'chore'])
 // GitHub's "## New Contributors" lines: "@login made their first contribution in <pr-url>".
 // These are celebrated separately (parseNewContributors) and must NOT become entries.
-const FIRST_CONTRIBUTION = /^@([\w-]+) made their first contribution\s+in\s+https?:\/\/github\.com\/[^/]+\/[^/]+\/pull\/(\d+)\s*$/i
+// Login pattern must mirror TAIL's (incl. the bracket suffix for bots like dependabot[bot]).
+const FIRST_CONTRIBUTION = /^@([\w-]+(?:\[[\w-]+\])?) made their first contribution\s+in\s+https?:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)\s*$/i
 
 /**
  * @param {string|null|undefined} body
@@ -68,8 +69,10 @@ function countChangelogBullets(body) {
 
 /**
  * Extract GitHub's "## New Contributors" section into structured data.
+ * prRepo is the repo from the PR url (may differ from the release's repo for
+ * pre-monorepo releases) — gate/enrich against THAT repo, mirroring entries.
  * @param {string|null|undefined} body
- * @returns {Array<{login:string, pr:number}>}
+ * @returns {Array<{login:string, pr:number, prRepo:string}>}
  */
 function parseNewContributors(body) {
   if (!body) return []
@@ -78,7 +81,7 @@ function parseNewContributors(body) {
     const li = raw.match(LINE)
     if (!li) continue
     const m = li[1].trim().match(FIRST_CONTRIBUTION)
-    if (m) out.push({ login: m[1], pr: Number(m[2]) })
+    if (m) out.push({ login: m[1], pr: Number(m[3]), prRepo: m[2] })
   }
   return out
 }

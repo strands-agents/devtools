@@ -54,7 +54,7 @@ test('single mode writes only the given tag', async () => {
   assert.deepEqual(Object.keys(written), ['site/src/content/changelog/harness/python-v1.42.0.md'])
 })
 
-test('single mode with unknown tag writes nothing', async () => {
+test('single mode with unknown tag writes nothing and warns', async () => {
   const written = {}
   const res = await run({
     repo: 'strands-agents/harness-sdk', mode: 'single', tag: 'python/v9.9.9',
@@ -63,6 +63,36 @@ test('single mode with unknown tag writes nothing', async () => {
   })
   assert.deepEqual(Object.keys(written), [])
   assert.deepEqual(res.written, [])
+  assert.match(res.warnings[0], /no release found for tag "python\/v9\.9\.9"/)
+})
+
+test('prereleases are skipped', async () => {
+  const pre = [{ tag_name: 'v2.0.0', published_at: '2026-06-01T00:00:00Z', html_url: 'h', prerelease: true, body: '* feat: x by @a in https://github.com/o/r/pull/1\n' }]
+  const client = { listReleases: async () => pre, getRelease: async () => null, getPr: async () => null }
+  const res = await run({
+    repo: 'strands-agents/evals', mode: 'backfill', client,
+    readExisting: async () => null, writeFile: async () => { throw new Error('must not write') },
+  })
+  assert.deepEqual(res.written, [])
+})
+
+test('memoizes PR fetches across entries and newContributors', async () => {
+  let prCalls = 0
+  const rel = [{
+    tag_name: 'python/v9.0.0', published_at: '2026-06-01T00:00:00Z', html_url: 'h',
+    body: [
+      '* feat: thing by @newdev in https://github.com/strands-agents/harness-sdk/pull/7',
+      '',
+      '## New Contributors',
+      '* @newdev made their first contribution in https://github.com/strands-agents/harness-sdk/pull/7',
+    ].join('\n'),
+  }]
+  const client = {
+    listReleases: async () => rel, getRelease: async () => null,
+    getPr: async () => { prCalls++; return { labels: [], merge_commit_sha: 'abc1234', user: 'newdev', files: ['strands-py/x.py'] } },
+  }
+  await run({ repo: 'strands-agents/harness-sdk', mode: 'backfill', client, readExisting: async () => null, writeFile: async () => {} })
+  assert.equal(prCalls, 1) // entry + contributor gating share one fetch
 })
 
 test('skips draft releases (null published_at) without crashing', async () => {

@@ -83,7 +83,9 @@ async function buildReleaseFile(repo, release, deps) {
   if (isMonorepoStream) {
     const gated = []
     for (const c of newContributors) {
-      const enr = await deps.enrich(repo, c.pr)
+      // Use the PR's own repo (mirrors the entries path) — first-contribution
+      // links can point at the pre-monorepo repos.
+      const enr = await deps.enrich(c.prRepo || repo, c.pr)
       const langs = enr.languages
       if (!Array.isArray(langs) || langs.length === 0 || langs.includes(meta.language)) {
         gated.push(c)

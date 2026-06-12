@@ -19,26 +19,37 @@ const { enrichFromPr } = require('./enrich.cjs')
  * @returns {Promise<{written:string[], warnings:string[]}>}
  */
 async function run(opts) {
+  const warnings = []
   let releases
   if (opts.mode === 'backfill') {
     releases = await opts.client.listReleases(opts.repo)
   } else {
     const r = await opts.client.getRelease(opts.repo, opts.tag)
     releases = r ? [r] : []
+    if (!r) warnings.push(`${opts.repo}: no release found for tag "${opts.tag || ''}" — nothing to sync.`)
   }
 
-  // listReleases includes drafts (no published_at) — skip them; a changelog
-  // only covers published releases.
-  releases = releases.filter((r) => r && r.published_at)
+  // Skip drafts (no published_at) and prereleases — the changelog covers
+  // published, stable releases only.
+  releases = releases.filter((r) => r && r.published_at && !r.prerelease)
+
+  // Memoize PR fetches: a first-time contributor's PR usually also appears in
+  // "What's Changed", and on the monorepo each fetch includes a paginated file
+  // list — caching roughly halves API spend on a backfill.
+  const prCache = new Map()
+  const getPr = (repo, num) => {
+    const key = `${repo}#${num}`
+    if (!prCache.has(key)) prCache.set(key, opts.client.getPr(repo, num))
+    return prCache.get(key)
+  }
 
   const deps = {
-    enrich: (prRepo, pr) => enrichFromPr(prRepo, pr, opts.client.getPr),
+    enrich: (prRepo, pr) => enrichFromPr(prRepo, pr, getPr),
     readExisting: opts.readExisting,
     skipExisting: opts.skipExisting === true,
   }
 
   const written = []
-  const warnings = []
   for (const release of releases) {
     const built = await buildReleaseFile(opts.repo, release, deps)
     if (!built) continue
