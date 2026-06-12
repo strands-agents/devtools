@@ -43,7 +43,9 @@ jobs:
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
-        run: echo "sha=$(gh pr view ${{ github.event.issue.number }} --json headRefOid -q .headRefOid)" >> "$GITHUB_OUTPUT"
+          # Event payload data goes through env, never into the script body.
+          PR_NUM: ${{ github.event.issue.number }}
+        run: echo "sha=$(gh pr view "$PR_NUM" --json headRefOid -q .headRefOid)" >> "$GITHUB_OUTPUT"
       - name: Run Strands-TS Agent
         uses: strands-agents/devtools/strands-command/actions/strands-ts-runner@main
         with:
@@ -57,7 +59,10 @@ jobs:
 
   finalize:
     needs: [execute-readonly-agent]
-    if: ${{ always() && needs.execute-readonly-agent.result != 'cancelled' }}
+    # Only replay when the agent run succeeded: a crashed run may leave a
+    # partial artifact, and replaying it would post incomplete reviews while
+    # making the failure look green.
+    if: ${{ needs.execute-readonly-agent.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
