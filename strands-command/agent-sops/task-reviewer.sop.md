@@ -104,7 +104,17 @@ Analyze the test coverage and quality of tests.
 - You MUST flag tests that assert on individual fields when the full object or shape can be asserted in a single equality check, since per-field assertions silently miss unexpected or regressed fields
 - You MAY accept per-field assertions only when a field is non-deterministic or irrelevant to the behavior under test, and the test isolates that field rather than splitting the whole assertion
 
-### 4. Generate Review Comments
+### 4. Documentation Review
+
+If any changed files are under `site/src/content/docs/`, you MUST additionally review them against the documentation skills:
+
+- **Docs Audit**: Read and follow the procedure in `.agents/skills/docs-audit/SKILL.md`
+- **Docs Reviewer**: Read and follow the procedure in `.agents/skills/docs-reviewer/SKILL.md`
+- **MDX Authoring**: Read and follow the guidelines in `.agents/references/mdx-authoring.md`
+
+Include findings from these checks in your review comments and summary.
+
+### 5. Generate Review Comments
 
 Create specific, actionable review comments for identified issues.
 
@@ -124,7 +134,7 @@ Create specific, actionable review comments for identified issues.
 - You MUST prioritize feedback that helps the developer learn and improve
 - You MAY skip this step if you have no feedback to provide
 
-#### 4.1 Comment Structure
+#### 5.1 Comment Structure
 
 Format review comments to be clear and actionable.
 
@@ -138,7 +148,7 @@ Format review comments to be clear and actionable.
   **Suggestion**: [Specific recommendation]
   ```
 
-### 5. Post Review Comments
+### 6. Post Review Comments
 
 Add the review comments to the pull request.
 
@@ -154,7 +164,7 @@ Add the review comments to the pull request.
 - You MUST focus on improvements and suggestions only
 - You MUST NOT add inline comments praising good coding practices
 
-### 6. Summary Review Comment
+### 7. Summary Review Comment
 
 Provide a concise overall summary of the review.
 
