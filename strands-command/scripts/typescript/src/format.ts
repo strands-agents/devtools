@@ -9,6 +9,10 @@ function permalink(repo: string, sha: string, file: string, line: number, startL
   return `https://github.com/${repo}/blob/${sha}/${file}#L${lo}-L${hi}`
 }
 
+export function inlineBody(f: Finding): string {
+  return `**${f.lens}**: ${f.description}\n\n${f.reason} (confidence: ${f.score})`
+}
+
 export function formatReview(findings: Finding[], repo: string, sha: string): string {
   if (findings.length === 0) return NO_ISSUES_TEMPLATE
   const lines = findings.map((f, i) =>

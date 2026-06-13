@@ -1,6 +1,6 @@
 import { buildOrchestrator } from '../agents/orchestrator.js'
 import { scoreAndFilter } from '../scoreAndFilter.js'
-import { formatReview } from '../format.js'
+import { formatReview, inlineBody } from '../format.js'
 import { addPrComment } from '../tools/github.js'
 import { writeEnabled } from '../tools/deferredWrite.js'
 import { ReviewOutputSchema } from '../findings.js'
@@ -25,6 +25,23 @@ export async function runReviewer(ctx: ModeContext): Promise<void> {
     throw new Error(`Reviewer structured output failed validation: ${parsed.error.message}`)
   }
   const kept = scoreAndFilter(parsed.data.findings)
+  const mode = writeEnabled()
+  // Inline comments can fail at replay time if a finding targets a line outside
+  // the diff (GitHub 422). The summary comment independently lists every
+  // finding, so a failed inline degrades gracefully rather than losing the
+  // finding. (writeExecutor already continues past per-op failures and reports
+  // counts.)
+  for (const finding of kept) {
+    await addPrComment(mode, {
+      prNumber: ctx.prNumber,
+      body: inlineBody(finding),
+      path: finding.file,
+      line: finding.line,
+      startLine: finding.startLine,
+      commitId: ctx.headSha,
+      repo: ctx.repo,
+    })
+  }
   const body = formatReview(kept, ctx.repo, ctx.headSha)
-  await addPrComment(writeEnabled(), { prNumber: ctx.prNumber, body, repo: ctx.repo })
+  await addPrComment(mode, { prNumber: ctx.prNumber, body, repo: ctx.repo })
 }

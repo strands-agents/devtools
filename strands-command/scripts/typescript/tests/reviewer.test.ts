@@ -31,10 +31,30 @@ describe('runReviewer', () => {
       findings: [{ lens: 'bug', description: 'real bug', file: 'a.ts', line: 3, reason: 'r', score: 95 }],
     }) as any)
     await runReviewer(ctx)
-    const line = JSON.parse(readFileSync(ARTIFACT_PATH, 'utf8').trim())
-    expect(line.function).toBe('addPrComment')
-    expect(line.kwargs.body).toContain('real bug')
-    expect(line.kwargs.body).toContain('abc123')
+    const lines = readFileSync(ARTIFACT_PATH, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    expect(lines).toHaveLength(2)
+    // First line: the inline comment anchored to the finding's location.
+    expect(lines[0].function).toBe('addPrComment')
+    expect(lines[0].kwargs.path).toBe('a.ts')
+    expect(lines[0].kwargs.line).toBe(3)
+    expect(lines[0].kwargs.commitId).toBe('abc123')
+    expect(lines[0].kwargs.body).toContain('real bug')
+    // Last line: the summary comment (no path).
+    const summary = lines[lines.length - 1]
+    expect(summary.function).toBe('addPrComment')
+    expect(summary.kwargs.path).toBeUndefined()
+    expect(summary.kwargs.body).toContain('real bug')
+    expect(summary.kwargs.body).toContain('abc123')
+  })
+
+  it('passes startLine through to the inline comment', async () => {
+    vi.mocked(buildOrchestrator).mockReturnValue(mockAgent({
+      findings: [{ lens: 'bug', description: 'range bug', file: 'b.ts', line: 9, startLine: 7, reason: 'r', score: 88 }],
+    }) as any)
+    await runReviewer(ctx)
+    const lines = readFileSync(ARTIFACT_PATH, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    expect(lines[0].kwargs.startLine).toBe(7)
+    expect(lines[0].kwargs.commitId).toBe('abc123')
   })
 
   it('defers the designed-silence template when all findings are filtered out', async () => {
@@ -42,8 +62,9 @@ describe('runReviewer', () => {
       findings: [{ lens: 'bug', description: 'weak', file: 'a.ts', line: 3, reason: 'r', score: 40 }],
     }) as any)
     await runReviewer(ctx)
-    const line = JSON.parse(readFileSync(ARTIFACT_PATH, 'utf8').trim())
-    expect(line.kwargs.body).toContain('No issues found')
+    const lines = readFileSync(ARTIFACT_PATH, 'utf8').trim().split('\n').map((l) => JSON.parse(l))
+    expect(lines).toHaveLength(1)
+    expect(lines[0].kwargs.body).toContain('No issues found')
   })
 
   it('throws on malformed structured output without deferring anything', async () => {
