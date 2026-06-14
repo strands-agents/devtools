@@ -1,0 +1,82 @@
+name: 'Changelog Release PR'
+description: 'Parse a GitHub release into the harness-sdk changelog collection and open a PR'
+inputs:
+  source-repo:
+    description: 'owner/repo the release belongs to (e.g. strands-agents/evals)'
+    required: true
+  tag:
+    description: 'Release tag to sync (single mode). Omit for backfill.'
+    required: false
+    default: ''
+  mode:
+    description: 'single | backfill'
+    required: false
+    default: 'single'
+  skip-existing:
+    description: 'In backfill mode, only generate files for releases without one (cheap daily backstop; avoids re-enrichment API cost and never regresses existing files). Set false for a full refresh.'
+    required: false
+    default: 'false'
+  github-token:
+    description: 'Token to read releases/PRs and open the PR. Needs pull-requests:write (and contents:write) on target-repo.'
+    required: true
+  target-repo:
+    description: 'Repo to open the changelog PR against'
+    required: false
+    default: 'strands-agents/harness-sdk'
+runs:
+  using: 'composite'
+  steps:
+    - name: Checkout target repo
+      uses: actions/checkout@v6
+      with:
+        repository: ${{ inputs.target-repo }}
+        token: ${{ inputs.github-token }}
+        path: target
+        fetch-depth: 0
+
+    - name: Checkout devtools (scripts)
+      uses: actions/checkout@v6
+      with:
+        repository: strands-agents/devtools
+        # Track the ref the CALLER pinned this action to, so pinning
+        # `uses: ...@<sha>` pins the scripts too (a hard-coded `main` here
+        # would let script behavior float regardless of the caller's pin).
+        ref: ${{ github.action_ref }}
+        sparse-checkout: |
+          changelog-release-pr/scripts
+        path: devtools
+        persist-credentials: false
+
+    - name: Generate changelog files
+      id: generate
+      uses: actions/github-script@v8
+      env:
+        SOURCE_REPO: ${{ inputs.source-repo }}
+        TAG: ${{ inputs.tag }}
+        MODE: ${{ inputs.mode }}
+        SKIP_EXISTING: ${{ inputs.skip-existing }}
+        TARGET_DIR: ${{ github.workspace }}/target
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const runAction = require('./devtools/changelog-release-pr/scripts/run-action.cjs')
+          await runAction(github, context, core)
+
+    - name: Open PR
+      # Third-party action receiving a write-scoped token — pinned to a full
+      # commit SHA (v7.0.x) rather than a movable tag.
+      uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+      with:
+        token: ${{ inputs.github-token }}
+        path: target
+        branch: ${{ steps.generate.outputs.branch }}
+        title: "docs(changelog): sync ${{ inputs.source-repo }} ${{ inputs.tag || 'backfill' }}"
+        body: |
+          Automated changelog sync for `${{ inputs.source-repo }}` ${{ inputs.tag || '(backfill)' }}.
+
+          Add a curated `highlights:` block to any release file before merging if desired.
+
+          ${{ steps.generate.outputs.warnings != '' && '⚠️ Parser warnings were logged in the workflow run — review before merge.' || '' }}
+        commit-message: "docs(changelog): sync ${{ inputs.source-repo }} ${{ inputs.tag || 'backfill' }}"
+        delete-branch: true
+        draft: false

@@ -18,6 +18,7 @@ This repo serves as a central location for:
 | [`issue-labeler`](issue-labeler/) | Classify issues using an LLM and apply labels from a configurable allowlist |
 | [`authorization-check`](authorization-check/) | Check user authorization for workflow triggers |
 | [`strands-command`](strands-command/) | Run a Strands agent in GitHub Actions |
+| [`changelog-release-pr`](changelog-release-pr/) | Parse a GitHub release into the harness-sdk changelog and open a PR |
 
 ## Documentation
 
