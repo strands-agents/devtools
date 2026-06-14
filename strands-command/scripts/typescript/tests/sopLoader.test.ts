@@ -26,6 +26,12 @@ describe('loadSop', () => {
   })
 
   it('rubric covers all bands', () => {
-    for (const band of ['0', '25', '50', '75', '100']) expect(scorerRubric()).toContain(band)
+    for (const band of ['0', '25', '50', '80', '100']) expect(scorerRubric()).toContain(band)
+  })
+
+  it('rubric places verified/doc-cited findings at the 80 posting threshold', () => {
+    // Regression guard: convention violations must not be scored just below the
+    // filter cutoff. The 80 band must explicitly cover doc-cited violations.
+    expect(scorerRubric()).toMatch(/80:[^.]*cited convention/)
   })
 })
