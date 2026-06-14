@@ -13,6 +13,7 @@ By default, the strands command will do a few different things:
 You can trigger different agents by passing in a keyword after the `/strands` command:
 - `/strands implement` on an Issue will trigger the "Implementer" agent, and try to implement the issue as a feature request with a Pull Request
 - `/strands release-notes` on an Issue will trigger the "Release Notes" agent, and attempt to create release notes for a new release
+- `/strands dependabot-analyze` on a Pull Request will trigger the "Dependabot Analyze" agent, and assess whether a dependency update is safe to merge
 
 Any text after the `/strands` command will be passed along to the agent as input as well
 - `/strands <agent-keyword> <Input to agent>`
@@ -270,7 +271,7 @@ Permission Policy:
 Parses `/strands` command input and prepares execution parameters for the agent runner.
 
 **Inputs:**
-- `issue_id` (optional): Issue or PR number
+- `issue_id` (optional): Issue or PR number. Required for any event other than `issue_comment` (e.g., `workflow_dispatch`, `workflow_call`, `pull_request_target`); only comment events carry an issue in their payload
 - `command` (optional): Strands command text
 - `session_id` (optional): Session ID for resuming previous sessions
 
@@ -298,6 +299,7 @@ Executes AI agents with AWS integration and controlled permissions.
 - `aws_secrets_manager_secret_id` (required): AWS Secrets Manager secret ID containing agent configuration (fetches `sessions_bucket`, `langfuse_*`, and `evals_sqs_queue_arn`)
 - `sessions_bucket` (optional): S3 bucket for session storage. Overrides value from Secrets Manager if provided
 - `write_permission` (required): Permission level flag for Read-only Sandbox mode (`true`/`false`)
+- `sanitized_changelog` (optional): Pre-sanitized, untrusted changelog text. Only applied in `dependabot-analyze` mode, where the runner wraps it in `<untrusted-changelog>` tags before appending it to the agent's task; ignored in all other modes
 
 **Outputs:**
 - Artifact: `repository-state` containing modified repository files (if changes exist)
@@ -392,6 +394,26 @@ Creates high-quality release notes highlighting major features and bug fixes.
 
 **Trigger**:
 - `/strands release-notes` on an Issue
+
+### Dependabot Analyze (`task-dependabot-analyze.sop.md`)
+
+Assesses whether a dependabot dependency update is safe to merge. Runs read-only and posts a single analysis comment with a machine-readable verdict (`safe` / `needs-review` / `breaking`).
+
+**Workflow**: Setup → Understand Change → Assess Repo Impact → (optional) Inspect Upstream → Render Verdict
+
+**Capabilities:**
+- Reads the PR diff and searches the repository for usages of the updated package
+- Consumes a pre-sanitized changelog (passed via the `sanitized_changelog` input) as untrusted data
+- Instructed to fetch upstream commit diffs from GitHub commit URLs only (SOP constraint, not enforced URL validation)
+- Emits a verdict block consumed by downstream auto-merge automation
+
+**Tool restrictions**: this mode runs with a reduced tool set — no file editing and no issue/PR mutation tools other than `add_pr_comment` (used to deliver the verdict).
+
+**Trigger**:
+- `/strands dependabot-analyze` on a Pull Request
+- Automatically on dependabot PRs via a repository's dependabot-auto-merge workflow
+
+**Verdict consumers** must verify the verdict comment was authored by the agent's GitHub identity (anyone can post a comment containing the marker), use only the latest such comment, and should restrict auto-merge to patch/minor bumps as defense in depth.
 
 
 ## Security

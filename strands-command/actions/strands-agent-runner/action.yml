@@ -31,6 +31,10 @@ inputs:
     description: 'SQS queue ARN for eval triggers (optional, can be fetched from Secrets Manager)'
     required: false
     default: ''
+  sanitized_changelog:
+    description: 'Pre-sanitized, untrusted changelog text to provide to the agent as data. Optional.'
+    required: false
+    default: ''
 
 runs:
   using: 'composite'
@@ -47,6 +51,7 @@ runs:
         echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "session_id=$(jq -r .session_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "head_repo=$(jq -r '.head_repo // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "mode=$(jq -r '.mode // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "system_prompt<<EOF" >> $GITHUB_OUTPUT
         jq -r .system_prompt strands-parsed-input.json >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
@@ -216,6 +221,8 @@ runs:
         # Task Configuration
         INPUT_TASK: ${{ steps.read-input.outputs.task_prompt }}
         INPUT_SYSTEM_PROMPT: ${{ steps.read-input.outputs.system_prompt }}
+        AGENT_MODE: ${{ steps.read-input.outputs.mode }}
+        SANITIZED_CHANGELOG: ${{ inputs.sanitized_changelog }}
 
         # AWS Configuration
         AWS_REGION: 'us-west-2'
