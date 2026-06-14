@@ -14,6 +14,9 @@ Read the change and collect the context the reviewers will need.
 - You MUST call get_pr_diff to read the change
 - You SHOULD use get_file_contents (with the PR head commit you were given as the ref) for fuller context
 - You SHOULD use get_file_history and get_pr_comments to gather history context for the changed files
+- You MUST attempt to fetch governance/convention docs with get_file_contents at the PR head ref, trying CONVENTIONS.md, CONTRIBUTING.md, AGENTS.md, TENETS.md, DECISIONS.md, and CLAUDE.md, since these pre-exist on the base branch and never appear in the diff
+- You MUST try these paths both at the repo root AND in directories inferred from the changed files' paths (e.g. for a change to `pkg/src/foo.py`, also try `pkg/CONVENTIONS.md` and `pkg/src/CONVENTIONS.md`)
+- You SHOULD treat a 404 or error return from get_file_contents as "that doc does not exist" and move on without retrying
 
 ### 2. Dispatch Reviewers
 
@@ -22,6 +25,8 @@ Dispatch the reviewer lenses against the change.
 **Constraints:**
 - You MUST dispatch ALL five reviewer tools (adherence, api, bug, history, test), passing each the PR number and the context it needs
 - You MUST give the history lens the commit history and prior comments
+- You MUST include the full text of every governance doc you found in the adherence_reviewer's `context` argument, because the adherence lens has no tools and can only see what you give it
+- You SHOULD, when no governance docs were found, tell the adherence lens explicitly that none exist so it knowingly applies general API/convention sanity rather than silently finding nothing
 - You MAY set modelTier per dispatch to match task complexity: "haiku" for small/mechanical changes, "sonnet" (default) for typical changes, "opus" or "fable" for large, subtle, or high-risk changes
 - You MUST let a user-provided agent config, if present, override your modelTier choice
 - You SHOULD prefer the five tuned reviewer tools because their SOPs have been refined
