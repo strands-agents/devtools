@@ -1,0 +1,85 @@
+name: 'Strands TS Runner'
+description: 'Run the read-only Strands TypeScript agent against a pull request'
+
+inputs:
+  command:
+    description: 'The comment body that triggered the run (e.g. "/strands-ts review")'
+    required: true
+  pr_number:
+    description: 'Pull request number the agent should review'
+    required: true
+  pr_head_sha:
+    description: 'Head SHA of the pull request'
+    required: true
+  aws_role_arn:
+    description: 'AWS IAM role ARN to assume via OIDC for Bedrock access'
+    required: true
+  agents_config:
+    description: 'Optional per-agent config: JSON map of agent key -> {model?, sop?}'
+    required: false
+    default: ''
+
+runs:
+  using: 'composite'
+  steps:
+    # The TypeScript project ships inside this action's repository, which GitHub
+    # downloads (at the ref the consumer pinned) to run the action. Resolve its
+    # absolute path so consumer workflows don't need to check out devtools.
+    - name: Resolve TypeScript project directory
+      id: dirs
+      shell: bash
+      run: echo "ts_dir=$(cd "${{ github.action_path }}/../../scripts/typescript" && pwd)" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ steps.dirs.outputs.ts_dir }}
+      run: npm ci
+
+    - name: Build
+      shell: bash
+      working-directory: ${{ steps.dirs.outputs.ts_dir }}
+      run: npx tsc
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.aws_role_arn }}
+        role-session-name: GitHubActions-StrandsTS-${{ github.run_id }}
+        aws-region: us-west-2
+        mask-aws-account-id: true
+
+    - name: Run agent (read-only)
+      shell: bash
+      working-directory: ${{ steps.dirs.outputs.ts_dir }}
+      env:
+        # Read-only: write tool calls are deferred to .artifact/write_operations.jsonl
+        GITHUB_WRITE: 'false'
+
+        # GitHub Configuration
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+
+        # Task Configuration
+        # inputs.command is attacker-influenced PR comment text. Pass it (and the
+        # other inputs) via env only — never interpolate into the run script body.
+        INPUT_TASK: ${{ inputs.command }}
+        PR_NUMBER: ${{ inputs.pr_number }}
+        PR_HEAD_SHA: ${{ inputs.pr_head_sha }}
+        STRANDS_TS_AGENTS: ${{ inputs.agents_config }}
+
+        # AWS Configuration
+        AWS_REGION: 'us-west-2'
+      run: node dist/runner.js
+
+    - name: Upload artifact for write operations
+      uses: actions/upload-artifact@v4
+      with:
+        name: strands-ts-write-operations
+        path: ${{ steps.dirs.outputs.ts_dir }}/.artifact/write_operations.jsonl
+        retention-days: 1
+        if-no-files-found: ignore

@@ -1,0 +1,22 @@
+{
+  "name": "strands-command-ts",
+  "private": true,
+  "type": "module",
+  "main": "dist/runner.js",
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "runner": "node dist/runner.js",
+    "finalize": "node dist/writeExecutor.js"
+  },
+  "dependencies": {
+    "@strands-agents/sdk": "^1.4.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.6"
+  }
+}
