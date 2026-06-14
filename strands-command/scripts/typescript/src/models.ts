@@ -18,6 +18,11 @@ const FALLBACK_MAX_TOKENS = 16000
 // or a raw Bedrock model id (anything containing a dot).
 export type ModelChoice = ModelTier | (string & {})
 
+// Default tier for any agent when neither user config nor an agent-chosen tier
+// applies. Opus by default: review quality is worth the cost, and per-dispatch
+// downgrades (e.g. "haiku" for trivial changes) remain available.
+export const DEFAULT_TIER: ModelTier = 'opus'
+
 // Per-agent user config: STRANDS_TS_AGENTS env var — JSON map of
 // agentKey -> { model?: ModelChoice, sop?: string (path relative to the SOP dir) }.
 // Set by the workflow input; explicit human config always wins.

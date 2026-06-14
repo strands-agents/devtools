@@ -3,7 +3,7 @@ import { Agent, tool } from '@strands-agents/sdk'
 import { z } from 'zod'
 import { LENSES } from '../findings.js'
 import { loadSop } from '../prompts/sopLoader.js'
-import { makeModel, resolveModelChoice } from '../models.js'
+import { makeModel, resolveModelChoice, DEFAULT_TIER } from '../models.js'
 
 const TIER_ENUM = z.enum(['haiku', 'sonnet', 'opus', 'fable'])
 
@@ -22,7 +22,7 @@ export function buildSpecialistTools() {
       name: `${lens}_reviewer`,
       description:
         `Review the PR through the ${lens} lens using its tuned SOP; returns a JSON array of ` +
-        `findings. Optionally pass modelTier ("haiku" simple, "sonnet" default, "opus"/"fable" ` +
+        `findings. Optionally pass modelTier ("haiku" simple, "sonnet" mid, "opus" default / "fable" ` +
         `large or subtle) to match model strength to task complexity.`,
       inputSchema: z.object({
         prNumber: z.number().int(),
@@ -31,7 +31,7 @@ export function buildSpecialistTools() {
       }),
       callback: async (input) => {
         // Precedence: user config (STRANDS_TS_AGENTS) > orchestrator's modelTier > sonnet.
-        const choice = resolveModelChoice(lens, input.modelTier, 'sonnet')
+        const choice = resolveModelChoice(lens, input.modelTier, DEFAULT_TIER)
         const sop = loadSop(lens, `lenses/${lens}.sop.md`)
         return runSpecialist(sop, makeModel(choice), `PR #${input.prNumber}\n\n${input.context}`)
       },
@@ -55,7 +55,7 @@ export function buildSpecialistTools() {
     }),
     callback: async (input) => {
       // "custom" is the user-config key, so humans can also pin its model.
-      const choice = resolveModelChoice('custom', input.modelTier, 'sonnet')
+      const choice = resolveModelChoice('custom', input.modelTier, DEFAULT_TIER)
       return runSpecialist(input.systemPrompt, makeModel(choice), `PR #${input.prNumber}\n\n${input.context}`)
     },
   })

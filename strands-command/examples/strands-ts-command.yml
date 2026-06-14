@@ -28,8 +28,23 @@ jobs:
           username: ${{ github.event.comment.user.login }}
           allowed-roles: 'maintain,triage,write,admin'
 
-  execute-readonly-agent:
+  # Visible in-progress indicator + soft concurrency signal. Runs in its own
+  # write-capable job so the agent job below stays tokenless.
+  mark-running:
     needs: [authorization-check]
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write          # PR labels are managed via the issues API
+      pull-requests: write
+    steps:
+      - name: Add strands-running label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ github.event.issue.number }}
+        run: gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --add-label strands-running || true
+
+  execute-readonly-agent:
+    needs: [authorization-check, mark-running]
     environment: ${{ needs.authorization-check.outputs.approval-env }}
     runs-on: ubuntu-latest
     timeout-minutes: 20   # bounded execution: cap a hung multi-agent run
@@ -71,3 +86,19 @@ jobs:
       - uses: actions/checkout@v4
       - name: Replay deferred writes
         uses: strands-agents/devtools/strands-command/actions/strands-ts-finalize@main
+
+  # Always clear the label once the run is done (success, failure, or skip),
+  # mirroring the Python command's remove-on-finalize behavior.
+  clear-running:
+    needs: [mark-running, execute-readonly-agent, finalize]
+    if: ${{ always() && needs.mark-running.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - name: Remove strands-running label
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUM: ${{ github.event.issue.number }}
+        run: gh pr edit "$PR_NUM" --repo "${{ github.repository }}" --remove-label strands-running || true
