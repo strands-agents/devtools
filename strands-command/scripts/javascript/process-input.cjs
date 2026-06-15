@@ -89,7 +89,11 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs)
   };
   
   const scriptFile = scriptFiles[mode] || scriptFiles['refiner'];
-  const systemPrompt = fs.readFileSync(scriptFile, 'utf8');
+  let systemPrompt = fs.readFileSync(scriptFile, 'utf8');
+
+  if (inputs.system_prompt_suffix) {
+    systemPrompt += '\n\n' + inputs.system_prompt_suffix;
+  }
   
   let prompt = (isPullRequest) 
     ? 'The pull request id is:'

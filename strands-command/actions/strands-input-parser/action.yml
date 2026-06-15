@@ -10,6 +10,10 @@ inputs:
   session_id:
     description: 'Session ID'
     required: false
+  system_prompt_suffix:
+    description: 'Additional instructions to append to the system prompt'
+    required: false
+    default: ''
 runs:
   using: 'composite'
   steps:
@@ -43,7 +47,8 @@ runs:
           await processInput(context, github, core, {
             issue_id: '${{ inputs.issue_id }}',
             command: '${{ inputs.command }}',
-            session_id: '${{ inputs.session_id }}'
+            session_id: '${{ inputs.session_id }}',
+            system_prompt_suffix: `${{ inputs.system_prompt_suffix }}`
           });
 
     - name: Upload parsed input artifact
