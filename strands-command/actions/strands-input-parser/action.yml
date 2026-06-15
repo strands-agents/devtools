@@ -41,6 +41,11 @@ runs:
 
     - name: Process input
       uses: actions/github-script@v8
+      env:
+        # Passed via env, not script interpolation: the suffix is free-form text
+        # (markdown with backticks, ${...}, etc.) that would otherwise break the
+        # surrounding JS template literal and allow script injection.
+        SYSTEM_PROMPT_SUFFIX: ${{ inputs.system_prompt_suffix }}
       with:
         script: |
           const processInput = require('./devtools/strands-command/scripts/javascript/process-input.cjs');
@@ -48,7 +53,7 @@ runs:
             issue_id: '${{ inputs.issue_id }}',
             command: '${{ inputs.command }}',
             session_id: '${{ inputs.session_id }}',
-            system_prompt_suffix: `${{ inputs.system_prompt_suffix }}`
+            system_prompt_suffix: process.env.SYSTEM_PROMPT_SUFFIX
           });
 
     - name: Upload parsed input artifact
