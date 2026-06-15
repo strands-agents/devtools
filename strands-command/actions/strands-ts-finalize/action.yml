@@ -1,0 +1,44 @@
+name: 'Strands TS Finalize'
+description: 'Replay deferred write operations recorded by the read-only Strands TypeScript agent'
+
+runs:
+  using: 'composite'
+  steps:
+    # The TypeScript project ships inside this action's repository, which GitHub
+    # downloads (at the ref the consumer pinned) to run the action. Resolve its
+    # absolute path so consumer workflows don't need to check out devtools.
+    - name: Resolve TypeScript project directory
+      id: dirs
+      shell: bash
+      run: echo "ts_dir=$(cd "${{ github.action_path }}/../../scripts/typescript" && pwd)" >> "$GITHUB_OUTPUT"
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install dependencies
+      shell: bash
+      working-directory: ${{ steps.dirs.outputs.ts_dir }}
+      run: npm ci
+
+    - name: Build
+      shell: bash
+      working-directory: ${{ steps.dirs.outputs.ts_dir }}
+      run: npx tsc
+
+    # No artifact means the agent run deferred nothing — there is nothing to post.
+    - name: Download artifact with write operations
+      uses: actions/download-artifact@v4
+      with:
+        name: strands-ts-write-operations
+        path: ${{ steps.dirs.outputs.ts_dir }}/.artifact
+      continue-on-error: true
+
+    - name: Replay deferred writes
+      shell: bash
+      working-directory: ${{ steps.dirs.outputs.ts_dir }}
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: node dist/writeExecutor.js .artifact/write_operations.jsonl

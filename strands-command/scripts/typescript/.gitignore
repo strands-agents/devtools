@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.artifact/
+# Root .gitignore ignores all package-lock.json; track this one for CI npm ci.
+!package-lock.json
