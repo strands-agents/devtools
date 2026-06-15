@@ -52,6 +52,9 @@ STRANDS_REGION = "us-west-2"
 # Default values for environment variables used only in this file
 DEFAULT_SYSTEM_PROMPT = "You are an autonomous GitHub agent powered by Strands Agents SDK."
 
+# Read-only analysis mode that runs with a restricted tool set.
+ANALYZE_MODE = "dependabot-analyze"
+
 
 def _send_eval_trigger(session_id: str, eval_type: str) -> None:
     """Send evaluation trigger to SQS queue after agent completion.
@@ -180,6 +183,37 @@ def _get_all_tools() -> list[Any]:
     ]
 
 
+def _get_analysis_tools() -> list[Any]:
+    """Reduced tool set for the read-only analysis mode.
+
+    Excludes file editing and issue/PR mutation tools so the SOP's read-only
+    constraint is enforced at the tool level, not just by prompt instructions.
+    `add_pr_comment` is included because the verdict is delivered as a PR comment.
+    """
+    return [
+        # System tools
+        shell,
+        http_request,
+
+        # GitHub PR read tools
+        get_pull_request,
+        get_pr_files,
+        get_pr_review_and_comments,
+
+        # Verdict delivery
+        add_pr_comment,
+
+        # Agent tools
+        notebook,
+    ]
+
+
+def _get_tools_for_mode(mode: str) -> list[Any]:
+    if mode == ANALYZE_MODE:
+        return _get_analysis_tools()
+    return _get_all_tools()
+
+
 def run_agent(query: str):
     """Run the agent with the provided query."""
     try:
@@ -188,7 +222,7 @@ def run_agent(query: str):
         trace_attributes = _get_trace_attributes() if telemetry_enabled else {}
         
         # Get tools and create model
-        tools = _get_all_tools()
+        tools = _get_tools_for_mode(os.environ.get("AGENT_MODE", ""))
         
         # Create Bedrock model with inlined configuration
         additional_request_fields = {}
@@ -263,6 +297,15 @@ def main() -> None:
         if not task.strip():
             raise ValueError("Task cannot be empty")
         print(f"🤖 Running agent with task: {task}")
+
+        changelog = os.environ.get("SANITIZED_CHANGELOG", "").strip()
+        if changelog and os.environ.get("AGENT_MODE", "") == ANALYZE_MODE:
+            # Wrap at the trust boundary so the SOP's untrusted-data framing
+            # holds regardless of caller behavior. Strip embedded closing tags
+            # so the changelog cannot escape its wrapper. Not printed to logs.
+            changelog = changelog.replace("</untrusted-changelog>", "")
+            task = f"{task}\n\n<untrusted-changelog>\n{changelog}\n</untrusted-changelog>"
+            print(f"📋 Appended sanitized changelog ({len(changelog)} chars)")
 
         run_agent(task)
 
