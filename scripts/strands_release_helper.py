@@ -2,52 +2,66 @@
 """
 Strands Agents Release Helper
 
-Automates the release preparation process for all Strands Agents repositories.
+Automates the release preparation process for all Strands Agents packages,
+including the `harness-sdk` monorepo and the remaining standalone repos.
 
 WHAT IT DOES:
-  1. Clones all repos (or pulls if already cloned)
-  2. Gets latest tag and commits since that tag
+  1. Clones each git repo once (or pulls if already cloned)
+  2. For every package, gets the latest tag (using its tag prefix) and the
+     commits since that tag that touched the package's subdirectory
   3. Auto-determines version bump (MAJOR/MINOR/PATCH) from commit messages
-  4. Runs integration tests for each repo
-  5. Generates release parameters and release report
+  4. Runs the package's tests (from its subdirectory)
+  5. Generates release parameters and a release report
 
 USAGE:
-  python3 strands_release_helper.py                     # Full run with tests
-  python3 strands_release_helper.py --skip-tests        # Just changelogs, no tests
-  python3 strands_release_helper.py --skip-tests --parallel  # Fast parallel mode
-  python3 strands_release_helper.py --repos sdk-python,tools  # Specific repos
-  python3 strands_release_helper.py --work-dir /tmp/release  # Custom work dir
+  python3 strands_release_helper.py                      # Full run with tests
+  python3 strands_release_helper.py --skip-tests         # Just changelogs, no tests
+  python3 strands_release_helper.py --skip-tests --parallel   # Fast parallel mode
+  python3 strands_release_helper.py --packages python,tools   # Specific packages
+  python3 strands_release_helper.py --work-dir /tmp/release   # Custom work dir
+  python3 strands_release_helper.py --list                # List known packages
 
 OUTPUT:
   {work_dir}/
     ├── release_report.md   # Human-readable summary
     ├── release_params.txt  # Copy-paste ready release parameters
     ├── logs/               # Full test output logs
-    │   ├── sdk-python_tests.log
-    │   ├── sdk-typescript_tests.log
+    │   ├── python_tests.log
+    │   ├── typescript_tests.log
     │   └── ...
-    └── {repo}/             # Cloned repositories
+    └── {repo}/             # Cloned repositories (shared across packages)
 
-REPOS COVERED:
-  - sdk-python      (hatch run test-integ)
-  - sdk-typescript  (npm run test:integ)
-  - tools           (hatch run test-integ)
-  - agent-sop       (hatch test)
-  - agent-builder   (hatch test)
-  - evals           (hatch run test-integ)
-  - mcp-server      (hatch test)
+MONOREPO (strands-agents/harness-sdk):
+  The SDKs now live as packages inside a single monorepo. Each package has its
+  own subdirectory, prefixed git tags, and test command:
+
+    python       strands-py/        tag: python/vX.Y.Z        (strands-agents)
+    typescript   strands-ts/        tag: typescript/vX.Y.Z    (@strands-agents/sdk)
+    python-wasm  strands-py-wasm/   tag: python-wasm/vX.Y.Z   (strands-agents-wasm)
+
+  Because the repo is shared, commits are scoped to the package's `subdir` so a
+  Python change does not show up in the TypeScript changelog.
+
+STANDALONE REPOS (still their own repositories):
+    tools        strands-agents/tools         tag: vX.Y.Z
+    agent-sop    strands-agents/agent-sop     tag: vX.Y.Z
+    evals        strands-agents/evals         tag: vX.Y.Z
+    mcp-server   strands-agents/mcp-server    tag: vX.Y.Z
+
+  NOTE: sdk-python, sdk-typescript, agent-builder, and docs have been archived
+  and folded into the harness-sdk monorepo.
 
 VERSION BUMP LOGIC:
   For 1.x+ versions (standard semver):
     - MAJOR: Commits with "BREAKING" in message
     - MINOR: Commits starting with "feat:"
     - PATCH: All other commits (fix, perf, refactor, etc.)
-  
+
   For 0.x versions (pre-1.0 semver):
     - MINOR: Commits with "BREAKING" in message
     - PATCH: All other commits (including features)
     - This allows controlling when to go 1.0 while still using semver
-  
+
   - NONE: No commits since last tag
 
 NOTES:
@@ -71,6 +85,9 @@ from typing import Optional
 
 os.environ['AWS_DEFAULT_REGION'] = 'us-east-1'
 os.environ['AWS_REGION'] = 'us-east-1'
+
+# Shared monorepo housing the SDK packages.
+MONOREPO_URL = "https://github.com/strands-agents/harness-sdk"
 
 
 def ensure_uv_installed():
@@ -135,24 +152,61 @@ def setup_environment(work_dir: Path):
     print("Environment setup complete.\n")
 
 
-# Repository configurations
+# Package configurations.
+#
+# Each entry describes ONE releasable package. Several packages can share a
+# single git repository (the monorepo), so the clone is keyed on `repo` (the
+# local checkout directory derived from the URL) while everything else is
+# scoped per package.
+#
+# Fields:
+#   url            git URL to clone
+#   repo           local checkout dir name (defaults to the URL basename); shared
+#                  by every package that lives in the same repository
+#   subdir         path within the repo for this package ("" = repo root); used
+#                  to (a) run tests from the right directory and (b) scope the
+#                  commit log so unrelated packages don't pollute the changelog
+#   tag_prefix     prefix for this package's git tags, e.g. "python/" -> the
+#                  helper looks at tags matching "python/v*". "" means bare
+#                  "v*" tags (standalone repos).
+#   test_cmd       command to run the package's integration tests (run in subdir)
+#   release_params version/changelog placeholder names for the release template
 REPOS = {
-    "sdk-python": {
-        "url": "https://github.com/strands-agents/sdk-python",
+    # ---- harness-sdk monorepo packages -------------------------------------
+    "python": {
+        "url": MONOREPO_URL,
+        "repo": "harness-sdk",
+        "subdir": "strands-py",
+        "tag_prefix": "python/",
         "test_cmd": "hatch run test-integ",
         "release_params": {
             "version": ["strands-sdk-python-version", "strands-agent-sdk-python-version"],
             "changelog": ["strands-agent-sdk-python-changelog"],
         },
     },
-    "sdk-typescript": {
-        "url": "https://github.com/strands-agents/sdk-typescript",
+    "typescript": {
+        "url": MONOREPO_URL,
+        "repo": "harness-sdk",
+        "subdir": "strands-ts",
+        "tag_prefix": "typescript/",
         "test_cmd": "npm install && npm run test:integ",
         "release_params": {
             "version": ["strands-sdk-typescript-version", "strands-agent-sdk-typescript-version"],
             "changelog": ["strands-agent-sdk-typescript-changelog"],
         },
     },
+    "python-wasm": {
+        "url": MONOREPO_URL,
+        "repo": "harness-sdk",
+        "subdir": "strands-py-wasm",
+        "tag_prefix": "python-wasm/",
+        "test_cmd": "",  # No dedicated integ suite wired up yet; changelog only.
+        "release_params": {
+            "version": ["strands-agents-wasm-version", "strands-sdk-python-wasm-version"],
+            "changelog": ["strands-agents-wasm-changelog"],
+        },
+    },
+    # ---- standalone repos ---------------------------------------------------
     "tools": {
         "url": "https://github.com/strands-agents/tools",
         "test_cmd": "hatch run test-integ",
@@ -167,14 +221,6 @@ REPOS = {
         "release_params": {
             "version": ["strands-agent-sop-version"],
             "changelog": ["strands-agent-sop-changelog"],
-        },
-    },
-    "agent-builder": {
-        "url": "https://github.com/strands-agents/agent-builder",
-        "test_cmd": "hatch test",
-        "release_params": {
-            "version": ["strands-agent-builder-version"],
-            "changelog": ["strands-agent-builder-changelog"],
         },
     },
     "evals": {
@@ -194,6 +240,17 @@ REPOS = {
         },
     },
 }
+
+
+def repo_dir_name(name: str, config: dict) -> str:
+    """Local checkout directory for a package's repo.
+
+    Defaults to the URL basename so monorepo packages (which set an explicit
+    `repo`) share one clone, while standalone repos get their own directory.
+    """
+    if config.get("repo"):
+        return config["repo"]
+    return config["url"].rstrip("/").split("/")[-1]
 
 
 @dataclass
@@ -263,18 +320,23 @@ def run_cmd(cmd: str, cwd: Optional[Path] = None, timeout: int = 1800, stream: b
         return -1, "", str(e)
 
 
-def clone_repo(name: str, url: str, work_dir: Path) -> bool:
-    """Clone a repository (shallow clone for speed)"""
-    repo_path = work_dir / name
+def clone_repo(repo_name: str, url: str, work_dir: Path) -> bool:
+    """Clone a repository (shallow clone for speed).
+
+    `repo_name` is the local checkout directory. Multiple packages can share the
+    same repo, so this is idempotent: if the checkout already exists we just
+    pull/refetch tags rather than cloning again.
+    """
+    repo_path = work_dir / repo_name
     if repo_path.exists():
-        print(f"  {name}: Already exists, pulling latest...")
+        print(f"  {repo_name}: Already exists, pulling latest...")
         code, _, err = run_cmd("git fetch --tags && git pull", cwd=repo_path)
         return code == 0
 
-    print(f"  {name}: Cloning...")
-    code, _, err = run_cmd(f"git clone --depth 100 --no-single-branch {url} {name}", cwd=work_dir)
+    print(f"  {repo_name}: Cloning...")
+    code, _, err = run_cmd(f"git clone --depth 100 --no-single-branch {url} {repo_name}", cwd=work_dir)
     if code != 0:
-        print(f"  {name}: Clone failed - {err}")
+        print(f"  {repo_name}: Clone failed - {err}")
         return False
 
     # Fetch all tags
@@ -282,30 +344,53 @@ def clone_repo(name: str, url: str, work_dir: Path) -> bool:
     return True
 
 
-def get_latest_tag(repo_path: Path) -> str:
-    """Get the latest semver tag"""
+def get_latest_tag(repo_path: Path, tag_prefix: str = "") -> str:
+    """Get the latest semver tag for a package.
+
+    `tag_prefix` scopes the lookup to a package's tags (e.g. "python/" so the
+    monorepo's TypeScript tags don't get picked up for the Python package).
+    """
+    # Primary: prefixed 'v' tags, e.g. python/v1.2.3 or v1.2.3
+    pattern = f"{tag_prefix}v*"
     code, stdout, _ = run_cmd(
-        "git tag -l 'v*' --sort=-version:refname | head -1",
+        f"git tag -l '{pattern}' --sort=-version:refname | head -1",
         cwd=repo_path,
     )
     if code == 0 and stdout.strip():
         return stdout.strip()
 
-    # Fallback: try without 'v' prefix
+    # Fallback: prefixed numeric tags without 'v' prefix
+    pattern = f"{tag_prefix}[0-9]*"
     code, stdout, _ = run_cmd(
-        "git tag -l '[0-9]*' --sort=-version:refname | head -1",
+        f"git tag -l '{pattern}' --sort=-version:refname | head -1",
         cwd=repo_path,
     )
     return stdout.strip() if code == 0 else ""
 
 
-def get_commits_since_tag(repo_path: Path, tag: str) -> list[Commit]:
-    """Get all commits since a tag"""
+def strip_tag_prefix(tag: str, tag_prefix: str = "") -> str:
+    """Return the bare version portion of a (possibly prefixed) tag.
+
+    e.g. ("python/v1.2.3", "python/") -> "v1.2.3"
+    """
+    if tag_prefix and tag.startswith(tag_prefix):
+        return tag[len(tag_prefix):]
+    return tag
+
+
+def get_commits_since_tag(repo_path: Path, tag: str, subdir: str = "") -> list[Commit]:
+    """Get all commits since a tag, optionally scoped to a subdirectory.
+
+    In a monorepo each package only cares about commits that touched its own
+    `subdir`, so we pass that as a pathspec to `git log`. For standalone repos
+    `subdir` is empty and the whole repo is considered.
+    """
+    pathspec = f" -- {subdir}" if subdir else ""
     if not tag:
-        # No tag, get last 50 commits
-        cmd = 'git log -50 --pretty=format:"%H|%s|%an|%ai"'
+        # No tag, get last 50 commits (scoped to subdir if given)
+        cmd = f'git log -50 --pretty=format:"%H|%s|%an|%ai"{pathspec}'
     else:
-        cmd = f'git log {tag}..HEAD --pretty=format:"%H|%s|%an|%ai"'
+        cmd = f'git log {tag}..HEAD --pretty=format:"%H|%s|%an|%ai"{pathspec}'
 
     code, stdout, _ = run_cmd(cmd, cwd=repo_path)
     if code != 0 or not stdout.strip():
@@ -320,18 +405,23 @@ def get_commits_since_tag(repo_path: Path, tag: str) -> list[Commit]:
     return commits
 
 
-def determine_version_bump(commits: list[Commit], current_version: str) -> tuple[str, str]:
+def determine_version_bump(commits: list[Commit], current_version: str, tag_prefix: str = "") -> tuple[str, str]:
     """Determine version bump type and new version based on commits.
-    
+
+    `current_version` may be a prefixed tag (e.g. "python/v1.2.3"); the prefix is
+    stripped for parsing and re-applied to the returned new version so the result
+    is a ready-to-use tag.
+
     For 0.x versions, semantic versioning shifts down one level:
     - Breaking changes → MINOR (not MAJOR)
     - Features → PATCH (not MINOR)
     - Fixes → PATCH
-    
+
     This allows controlling when to go 1.0 while still using semver.
     """
-    version = current_version.lstrip("v")
-    
+    bare = strip_tag_prefix(current_version, tag_prefix)
+    version = bare.lstrip("v")
+
     if not commits:
         return "NONE", current_version
 
@@ -369,14 +459,17 @@ def determine_version_bump(commits: list[Commit], current_version: str) -> tuple
             bump_type = "PATCH"
             new_version = f"{major}.{minor}.{patch + 1}"
 
-    return bump_type, f"v{new_version}"
+    # Re-apply the tag prefix so the result is a ready-to-use tag name.
+    return bump_type, f"{tag_prefix}v{new_version}"
 
 
-def generate_changelog(commits: list[Commit], new_version: str) -> str:
-    """Generate a formatted changelog from commits"""
-    # Ensure version displays with 'v' prefix
-    display_version = new_version if new_version.startswith("v") else f"v{new_version}"
-    
+def generate_changelog(commits: list[Commit], new_version: str, tag_prefix: str = "") -> str:
+    """Generate a formatted changelog from commits."""
+    # Display the bare version (strip the tag prefix for readability) but ensure
+    # a leading 'v'.
+    bare = strip_tag_prefix(new_version, tag_prefix)
+    display_version = bare if bare.startswith("v") else f"v{bare}"
+
     if not commits:
         return f"## {display_version} - No changes since last release"
 
@@ -410,25 +503,26 @@ def generate_changelog(commits: list[Commit], new_version: str) -> str:
     return "\n".join(lines)
 
 
-def run_tests(name: str, repo_path: Path, test_cmd: str, log_dir: Path) -> tuple[bool, str]:
-    """Run integration tests for a repo"""
+def run_tests(name: str, run_path: Path, test_cmd: str, log_dir: Path) -> tuple[bool, str]:
+    """Run integration tests for a package (from its subdirectory)."""
     if not test_cmd:
         return True, "No tests configured"
 
     print(f"  {name}: Running tests...")
+    print(f"    Directory: {run_path}")
     print(f"    Command: {test_cmd}")
     print(f"    Log: {log_dir / f'{name}_tests.log'}")
     print()
-    
-    code, stdout, stderr = run_cmd(test_cmd, cwd=repo_path, timeout=1800, stream=True)
+
+    code, stdout, stderr = run_cmd(test_cmd, cwd=run_path, timeout=1800, stream=True)
 
     output = stdout + "\n" + stderr
-    
+
     # Save full log
     log_dir.mkdir(parents=True, exist_ok=True)
     log_file = log_dir / f"{name}_tests.log"
     log_file.write_text(output)
-    
+
     passed = code == 0
 
     # Extract summary from output
@@ -441,25 +535,32 @@ def run_tests(name: str, repo_path: Path, test_cmd: str, log_dir: Path) -> tuple
 
 
 def process_repo(name: str, config: dict, work_dir: Path, skip_tests: bool, log_dir: Path) -> RepoResult:
-    """Process a single repository"""
+    """Process a single package (which may live inside a shared monorepo)."""
     result = RepoResult(name=name)
-    repo_path = work_dir / name
+    repo_name = repo_dir_name(name, config)
+    repo_path = work_dir / repo_name
+    subdir = config.get("subdir", "")
+    tag_prefix = config.get("tag_prefix", "")
+    # Directory tests run from: the package subdir if any, else the repo root.
+    run_path = repo_path / subdir if subdir else repo_path
 
     try:
-        # Clone
-        if not clone_repo(name, config["url"], work_dir):
+        # Clone (idempotent — shared monorepo is only fetched once)
+        if not clone_repo(repo_name, config["url"], work_dir):
             result.error = "Failed to clone"
             return result
 
-        # Get version info
-        result.current_version = get_latest_tag(repo_path)
-        result.commits = get_commits_since_tag(repo_path, result.current_version)
-        result.bump_type, result.new_version = determine_version_bump(result.commits, result.current_version)
-        result.changelog = generate_changelog(result.commits, result.new_version)
+        # Get version info (scoped to this package's tags + subdir)
+        result.current_version = get_latest_tag(repo_path, tag_prefix)
+        result.commits = get_commits_since_tag(repo_path, result.current_version, subdir)
+        result.bump_type, result.new_version = determine_version_bump(
+            result.commits, result.current_version, tag_prefix
+        )
+        result.changelog = generate_changelog(result.commits, result.new_version, tag_prefix)
 
         # Run tests
         if not skip_tests and config["test_cmd"]:
-            result.test_passed, result.test_output = run_tests(name, repo_path, config["test_cmd"], log_dir)
+            result.test_passed, result.test_output = run_tests(name, run_path, config["test_cmd"], log_dir)
         elif not config["test_cmd"]:
             result.test_passed = True
             result.test_output = "No tests configured"
@@ -481,8 +582,8 @@ def generate_report(results: list[RepoResult], work_dir: Path) -> str:
 
     # Summary table
     lines.append("## Summary\n")
-    lines.append("| Repository | Current | New | Bump | Commits | Tests |")
-    lines.append("|------------|---------|-----|------|---------|-------|")
+    lines.append("| Package | Current | New | Bump | Commits | Tests |")
+    lines.append("|---------|---------|-----|------|---------|-------|")
 
     all_tests_pass = True
     for r in results:
@@ -548,10 +649,26 @@ def generate_release_params(results: list[RepoResult]) -> str:
 def main():
     parser = argparse.ArgumentParser(description="Strands Agents Release Helper")
     parser.add_argument("--skip-tests", action="store_true", help="Skip running integration tests")
-    parser.add_argument("--repos", type=str, help="Comma-separated list of repos to process (e.g., sdk-python,tools)")
+    parser.add_argument(
+        "--packages",
+        "--repos",
+        dest="packages",
+        type=str,
+        help="Comma-separated list of packages to process (e.g., python,typescript,tools)",
+    )
     parser.add_argument("--work-dir", type=str, default="./release_work", help="Working directory for clones")
-    parser.add_argument("--parallel", action="store_true", help="Run repos in parallel (tests may conflict)")
+    parser.add_argument("--parallel", action="store_true", help="Run packages in parallel (tests may conflict)")
+    parser.add_argument("--list", action="store_true", help="List known packages and exit")
     args = parser.parse_args()
+
+    if args.list:
+        print("Known packages:\n")
+        for name, config in REPOS.items():
+            repo = repo_dir_name(name, config)
+            subdir = config.get("subdir", "") or "(repo root)"
+            prefix = config.get("tag_prefix", "") or "(bare v*)"
+            print(f"  {name:14} repo={repo:14} subdir={subdir:18} tag_prefix={prefix}")
+        return
 
     work_dir = Path(args.work_dir).resolve()
     work_dir.mkdir(parents=True, exist_ok=True)
@@ -567,20 +684,20 @@ def main():
     print(f"Skip tests: {args.skip_tests}")
     print()
 
-    # Filter repos if specified
+    # Filter packages if specified
     repos_to_process = REPOS
-    if args.repos:
-        repo_names = [r.strip() for r in args.repos.split(",")]
+    if args.packages:
+        repo_names = [r.strip() for r in args.packages.split(",")]
         repos_to_process = {name: REPOS[name] for name in repo_names if name in REPOS}
         invalid = [name for name in repo_names if name not in REPOS]
         if invalid:
-            print(f"Warning: Unknown repos ignored: {invalid}")
+            print(f"Warning: Unknown packages ignored: {invalid}")
 
     results = []
 
     if args.parallel and args.skip_tests:
         # Parallel processing (only safe without tests)
-        print("Processing repos in parallel...")
+        print("Processing packages in parallel...")
         with ThreadPoolExecutor(max_workers=4) as executor:
             futures = {
                 executor.submit(process_repo, name, config, work_dir, args.skip_tests, log_dir): name
@@ -592,7 +709,7 @@ def main():
                 print(f"  ✓ {result.name}: {result.current_version} → {result.new_version} ({len(result.commits)} commits)")
     else:
         # Sequential processing
-        print("Processing repos sequentially...")
+        print("Processing packages sequentially...")
         for name, config in repos_to_process.items():
             print(f"\n{'='*60}")
             print(f"[{name}]")
@@ -609,7 +726,7 @@ def main():
                     test_str = " | Tests: ❌"
                 print(f"\n  ✓ {result.current_version} → {result.new_version} ({len(result.commits)} commits){test_str}")
 
-    # Sort results by repo order
+    # Sort results by package order
     repo_order = list(REPOS.keys())
     results.sort(key=lambda r: repo_order.index(r.name) if r.name in repo_order else 999)
 
