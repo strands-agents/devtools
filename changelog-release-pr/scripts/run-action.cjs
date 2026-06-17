@@ -98,7 +98,8 @@ async function runAction(github, context, core) {
   // archived sdk-typescript) can never collide on the same backfill branch.
   const repoSlug = sourceRepo.split('/')[1] || sourceRepo
   const tagSlug = (tag || 'backfill').replace(/[^A-Za-z0-9._-]+/g, '-')
-  core.setOutput('written_count', String(result.written.length))
+  // Only `branch` and `warnings` are consumed by the composite action (PR
+  // branch + body); the written count is already logged via core.info above.
   core.setOutput('warnings', result.warnings.join('\n'))
   core.setOutput('branch', `changelog/sync-${repoSlug}-${tagSlug}`)
   return result
