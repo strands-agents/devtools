@@ -23,6 +23,25 @@ const LANGUAGE_DIRS = {
 // an SDK+language, so it's dropped on every stream (see build-release-file).
 const DOCS_DIRS = new Set(['site', 'docs'])
 
+// A changed path is "docs" if it's under a docs dir OR is a top-level docs file
+// — a repo-root Markdown file (README.md, AGENTS.md, …) or a well-known root doc
+// regardless of extension (CONTRIBUTING, CHANGELOG, NOTICE, LICENSE, …). These
+// carry no SDK+language surface, so a PR confined to them is docs-only.
+const ROOT_DOC_NAMES = new Set([
+  'readme', 'contributing', 'changelog', 'notice', 'license', 'security',
+  'code_of_conduct', 'maintainers', 'authors', 'codeowners',
+])
+function isDocPath(f) {
+  const p = String(f)
+  const segs = p.split('/')
+  if (DOCS_DIRS.has(segs[0])) return true
+  if (segs.length > 1) return false // nested under a non-docs dir → code-ish
+  // top-level file: any markdown, or a known root doc by basename
+  if (/\.mdx?$/i.test(p)) return true
+  const base = p.replace(/\.[^.]*$/, '').toLowerCase()
+  return ROOT_DOC_NAMES.has(base)
+}
+
 /**
  * Derive SDK languages from changed-file paths. Returns:
  * - string[] of languages (possibly empty = site/ci/docs-only PR)
@@ -45,7 +64,7 @@ function languagesFromFiles(files) {
  */
 function docsOnlyFromFiles(files) {
   if (!Array.isArray(files) || files.length === 0) return false
-  return files.every((f) => DOCS_DIRS.has(String(f).split('/')[0]))
+  return files.every(isDocPath)
 }
 
 /**

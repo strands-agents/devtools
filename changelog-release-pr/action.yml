@@ -37,10 +37,12 @@ runs:
     - name: Checkout devtools (scripts)
       uses: actions/checkout@v6
       with:
-        repository: strands-agents/devtools
-        # Track the ref the CALLER pinned this action to, so pinning
-        # `uses: ...@<sha>` pins the scripts too (a hard-coded `main` here
-        # would let script behavior float regardless of the caller's pin).
+        # Track BOTH the repo and ref the caller pinned this action to, so
+        # `uses: <owner>/devtools/changelog-release-pr@<sha>` pins the scripts to
+        # that same owner+sha — including forks/mirrors. Hard-coding the repo (or
+        # ref) here would let script behavior float regardless of the caller's
+        # pin, and would break a fork whose ref doesn't exist upstream.
+        repository: ${{ github.action_repository }}
         ref: ${{ github.action_ref }}
         sparse-checkout: |
           changelog-release-pr/scripts

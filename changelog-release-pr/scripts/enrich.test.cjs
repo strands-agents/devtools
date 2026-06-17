@@ -50,6 +50,25 @@ test('docsOnly false on unknown or empty file info (do not drop)', async () => {
   assert.equal(empty.docsOnly, false)
 })
 
+test('docsOnly true for top-level doc files (README, AGENTS.md, CONTRIBUTING)', async () => {
+  const f = async () => ({ labels: [], merge_commit_sha: 'a', user: 'x', files: ['README.md', 'AGENTS.md', 'CONTRIBUTING'] })
+  const e = await enrichFromPr('r', 1, f)
+  assert.equal(e.docsOnly, true)
+})
+
+test('docsOnly false when a root doc PR also touches code', async () => {
+  const f = async () => ({ labels: [], merge_commit_sha: 'a', user: 'x', files: ['README.md', 'strands-py/src/agent.py'] })
+  const e = await enrichFromPr('r', 1, f)
+  assert.equal(e.docsOnly, false)
+})
+
+test('docsOnly false for a top-level non-doc file (e.g. pyproject.toml)', async () => {
+  // A root config/build file is not docs — don't drop a release-affecting change.
+  const f = async () => ({ labels: [], merge_commit_sha: 'a', user: 'x', files: ['pyproject.toml'] })
+  const e = await enrichFromPr('r', 1, f)
+  assert.equal(e.docsOnly, false)
+})
+
 test('no merge sha yields null commit', async () => {
   const f = async () => ({ labels: [], merge_commit_sha: null, user: null })
   const e = await enrichFromPr('r', 1, f)
