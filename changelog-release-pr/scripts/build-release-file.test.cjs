@@ -198,6 +198,46 @@ test('docs-only first-time contributors are dropped on every stream', async () =
   assert.doesNotMatch(old.contents, /login: blogger/)
 })
 
+test('monorepo new contributor whose PR is in the OLD flat repo is not language-gated', async () => {
+  // Mirror of the entries-loop guard for the contributors loop: a python/v*
+  // release's first-contributor PR can live in sdk-python (no strands-py/ dir →
+  // languages []). It must NOT be dropped by the language gate.
+  const body = [
+    '* feat: x by @a in https://github.com/strands-agents/harness-sdk/pull/1',
+    '',
+    '## New Contributors',
+    '* @earlybird made their first contribution in https://github.com/strands-agents/sdk-python/pull/900',
+  ].join('\n')
+  const deps = {
+    enrich: async (_r, pr) => pr === 900
+      ? { areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: false } // cross-repo, code-touching
+      : { areas: [], breaking: false, commit: null, author: null, languages: ['python'], docsOnly: false },
+    readExisting: async () => null,
+  }
+  const py = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
+  assert.match(py.contents, /login: earlybird/) // survives — cross-repo, not dir-gated
+})
+
+test('docs-only contributor is dropped even on a monorepo stream', async () => {
+  // Pins the gate ordering: docs-only check runs before the language gate.
+  const body = [
+    '* feat: x by @a in https://github.com/strands-agents/harness-sdk/pull/1',
+    '',
+    '## New Contributors',
+    '* @docsdev made their first contribution in https://github.com/strands-agents/harness-sdk/pull/5',
+  ].join('\n')
+  const deps = {
+    enrich: async (_r, pr) => pr === 5
+      ? { areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: true }
+      : { areas: [], breaking: false, commit: null, author: null, languages: ['python'], docsOnly: false },
+    readExisting: async () => null,
+  }
+  const py = await buildReleaseFile('strands-agents/harness-sdk',
+    { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
+  assert.doesNotMatch(py.contents, /login: docsdev/)
+})
+
 test('new contributors flow into frontmatter, not entries', async () => {
   const body = [
     '* feat: real thing by @a in https://github.com/strands-agents/harness-sdk/pull/1',

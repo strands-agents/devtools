@@ -13,7 +13,7 @@ function fileNameFor(sdk, language, version) {
 /**
  * @param {string} repo  the SOURCE repo the release belongs to
  * @param {{tag_name:string, published_at:string, html_url:string, body:string|null}} release
- * @param {{enrich:(prRepo:string,pr:number)=>Promise<{areas:string[],breaking:boolean,commit:string|null,author:string|null}>, readExisting:(path:string)=>Promise<string|null>, skipExisting?:boolean}} deps
+ * @param {{enrich:(prRepo:string,pr:number)=>Promise<{areas:string[],breaking:boolean,commit:string|null,author:string|null,languages:string[]|null,docsOnly:boolean}>, readExisting:(path:string)=>Promise<string|null>, skipExisting?:boolean}} deps
  * @returns {Promise<{path:string, contents:string, warning?:string}|null>}
  */
 async function buildReleaseFile(repo, release, deps) {
