@@ -69,6 +69,39 @@ async function runAction(github, context, core) {
         return null
       }
     },
+    // Tags for prior-tag-in-stream detection.
+    listTags: async (repoFull) => {
+      const { owner, repo } = splitRepo(repoFull)
+      const tags = await github.paginate(github.rest.repos.listTags, { owner, repo, per_page: 100 })
+      return tags.map((t) => ({ name: t.name, commitSha: t.commit && t.commit.sha }))
+    },
+    // Merged commits between two tags. GitHub caps a compare at 250 commits;
+    // total_commits tells us when the list is truncated so callers can warn.
+    compareCommits: async (repoFull, base, head) => {
+      const { owner, repo } = splitRepo(repoFull)
+      try {
+        const res = await github.rest.repos.compareCommitsWithBasehead({ owner, repo, basehead: `${base}...${head}`, per_page: 100 })
+        const data = res.data
+        const commits = (data.commits || []).map((c) => ({ sha: c.sha, message: c.commit && c.commit.message }))
+        return { commits, truncated: typeof data.total_commits === 'number' && data.total_commits > commits.length }
+      } catch (e) {
+        core.warning(`compare ${repoFull} ${base}...${head}: ${e.status || e.message} — no entries derived`)
+        return { commits: [], truncated: false }
+      }
+    },
+    // PRs associated with a commit (authoritative; handles squash + merge).
+    commitPulls: async (repoFull, sha) => {
+      const { owner, repo } = splitRepo(repoFull)
+      try {
+        const res = await github.rest.repos.listPullRequestsAssociatedWithCommit({ owner, repo, commit_sha: sha, per_page: 100 })
+        return (res.data || [])
+          .filter((pr) => pr.merged_at) // only merged PRs
+          .map((pr) => ({ number: pr.number, title: pr.title, user: pr.user ? pr.user.login : null }))
+      } catch (e) {
+        if (e.status !== 404) core.warning(`commit ${repoFull}@${sha} pulls: ${e.status || e.message} — skipped`)
+        return []
+      }
+    },
   }
 
   const result = await run({

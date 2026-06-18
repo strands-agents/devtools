@@ -1,6 +1,14 @@
 const { test } = require('node:test')
 const assert = require('node:assert/strict')
 const { buildReleaseFile } = require('./build-release-file.cjs')
+const { parseReleaseBody } = require('./parse-release-body.cjs')
+
+// buildReleaseFile now sources entries from deps.deriveEntries (compare-driven)
+// rather than parsing the release body. These tests describe the desired entry
+// set as a bullet body for readability, so this stub turns that body back into
+// the parsed-line shape deriveEntries returns — exercising the same downstream
+// enrichment + gating the real derive feeds.
+const bodyDerive = async (_repo, release) => ({ entries: parseReleaseBody(release.body), warning: undefined })
 
 const release = {
   tag_name: 'python/v1.42.0',
@@ -12,7 +20,7 @@ const release = {
 test('produces correct path + parsed/enriched contents', async () => {
   const result = await buildReleaseFile('strands-agents/harness-sdk', release, {
     enrich: async () => ({ areas: ['model'], breaking: false, commit: '155239d', author: 'yatszhash' }),
-    readExisting: async () => null,
+    deriveEntries: bodyDerive, readExisting: async () => null,
   })
   assert.equal(result.path, 'site/src/content/changelog/harness/python-v1.42.0.md')
   assert.match(result.contents, /sdk: harness/)
@@ -32,7 +40,7 @@ test('evals file path + no language', async () => {
   }
   const r = await buildReleaseFile('strands-agents/evals', evalsRelease, {
     enrich: async () => ({ areas: [], breaking: false, commit: 'aaa1111', author: 'x' }),
-    readExisting: async () => null,
+    deriveEntries: bodyDerive, readExisting: async () => null,
   })
   assert.equal(r.path, 'site/src/content/changelog/evals/v0.2.1.md')
   assert.doesNotMatch(r.contents, /\nlanguage:/)
@@ -41,18 +49,18 @@ test('evals file path + no language', async () => {
 test('skips out-of-scope tags', async () => {
   const r = await buildReleaseFile('strands-agents/harness-sdk',
     { ...release, tag_name: 'python-wasm/v0.0.1' },
-    { enrich: async () => ({ areas: [], breaking: false, commit: null, author: null }), readExisting: async () => null })
+    { enrich: async () => ({ areas: [], breaking: false, commit: null, author: null }), deriveEntries: bodyDerive, readExisting: async () => null })
   assert.equal(r, null)
 })
 
-test('flags format-drift warning when bullets parse poorly', async () => {
-  const drifted = { ...release, body: "## What's Changed\n* updated thing #11\n* fixed thing #12\n* added thing #13\n" }
-  const r = await buildReleaseFile('strands-agents/harness-sdk', drifted, {
+test('passes through a derive warning (e.g. truncated compare range)', async () => {
+  const r = await buildReleaseFile('strands-agents/harness-sdk', release, {
+    deriveEntries: async () => ({ entries: [], warning: 'python/v1.42.0: compare range exceeded 250 commits' }),
     enrich: async () => ({ areas: [], breaking: false, commit: null, author: null }),
     readExisting: async () => null,
   })
   assert.ok(r)
-  assert.match(r.warning, /parsed 0 of 3/)
+  assert.match(r.warning, /exceeded 250 commits/)
 })
 
 test('monorepo release filters entries by stream language from PR files', async () => {
@@ -66,7 +74,7 @@ test('monorepo release filters entries by stream language from PR files', async 
   const langByPr = { 1: ['python'], 2: ['typescript'], 3: ['python', 'typescript'], 4: [], 5: null }
   const deps = {
     enrich: async (_repo, pr) => ({ areas: [], breaking: false, commit: null, author: null, languages: langByPr[pr] }),
-    readExisting: async () => null,
+    deriveEntries: bodyDerive, readExisting: async () => null,
   }
   const py = await buildReleaseFile('strands-agents/harness-sdk',
     { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
@@ -98,7 +106,7 @@ test('monorepo-tagged release with PRs in the OLD flat repo is not language-gate
   const deps = {
     // old-repo PRs touch src/ etc → languagesFromFiles yields [] (empty)
     enrich: async () => ({ areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: false }),
-    readExisting: async () => null,
+    deriveEntries: bodyDerive, readExisting: async () => null,
   }
   const r = await buildReleaseFile('strands-agents/harness-sdk',
     { tag_name: 'python/v1.0.0', published_at: '2026-01-01T00:00:00Z', html_url: 'h', body }, deps)
@@ -112,7 +120,7 @@ test('pre-monorepo and evals releases are not language-filtered', async () => {
   const deps = {
     // even if files say typescript, a single-language-repo release keeps everything
     enrich: async () => ({ areas: [], breaking: false, commit: null, author: null, languages: ['typescript'] }),
-    readExisting: async () => null,
+    deriveEntries: bodyDerive, readExisting: async () => null,
   }
   const old = await buildReleaseFile('strands-agents/harness-sdk',
     { tag_name: 'v1.9.1', published_at: '2026-01-01T00:00:00Z', html_url: 'h',
@@ -137,7 +145,7 @@ test('new contributors are language-gated, but docs/ci-only ones appear in both 
   const langByPr = { 1: ['python'], 10: ['python'], 11: ['typescript'], 12: [], 13: null }
   const deps = {
     enrich: async (_r, pr) => ({ areas: [], breaking: false, commit: null, author: null, languages: langByPr[pr] }),
-    readExisting: async () => null,
+    deriveEntries: bodyDerive, readExisting: async () => null,
   }
   const py = await buildReleaseFile('strands-agents/harness-sdk',
     { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
@@ -164,7 +172,7 @@ test('docs-only PRs are dropped on every stream (incl. pre-monorepo and evals)',
     enrich: async (_r, pr) => pr === 2
       ? { areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: true }
       : { areas: [], breaking: false, commit: null, author: null, languages: null, docsOnly: false },
-    readExisting: async () => null,
+    deriveEntries: bodyDerive, readExisting: async () => null,
   }
   // pre-monorepo bare-v (no language gate, but docs-only still drops)
   const old = await buildReleaseFile('strands-agents/harness-sdk',
@@ -175,7 +183,7 @@ test('docs-only PRs are dropped on every stream (incl. pre-monorepo and evals)',
   const ev = await buildReleaseFile('strands-agents/evals',
     { tag_name: 'v0.2.1', published_at: '2026-01-01T00:00:00Z', html_url: 'h',
       body: '* docs: site only by @b in https://github.com/strands-agents/evals/pull/2' },
-    { enrich: async () => ({ areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: true }), readExisting: async () => null })
+    { enrich: async () => ({ areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: true }), deriveEntries: bodyDerive, readExisting: async () => null })
   assert.doesNotMatch(ev.contents, /site only/)
 })
 
@@ -190,7 +198,7 @@ test('docs-only first-time contributors are dropped on every stream', async () =
     enrich: async (_r, pr) => pr === 2
       ? { areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: true }
       : { areas: [], breaking: false, commit: null, author: null, languages: null, docsOnly: false },
-    readExisting: async () => null,
+    deriveEntries: bodyDerive, readExisting: async () => null,
   }
   // pre-monorepo stream: a blog-only first contribution does NOT appear
   const old = await buildReleaseFile('strands-agents/harness-sdk',
@@ -212,7 +220,7 @@ test('monorepo new contributor whose PR is in the OLD flat repo is not language-
     enrich: async (_r, pr) => pr === 900
       ? { areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: false } // cross-repo, code-touching
       : { areas: [], breaking: false, commit: null, author: null, languages: ['python'], docsOnly: false },
-    readExisting: async () => null,
+    deriveEntries: bodyDerive, readExisting: async () => null,
   }
   const py = await buildReleaseFile('strands-agents/harness-sdk',
     { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
@@ -231,7 +239,7 @@ test('docs-only contributor is dropped even on a monorepo stream', async () => {
     enrich: async (_r, pr) => pr === 5
       ? { areas: [], breaking: false, commit: null, author: null, languages: [], docsOnly: true }
       : { areas: [], breaking: false, commit: null, author: null, languages: ['python'], docsOnly: false },
-    readExisting: async () => null,
+    deriveEntries: bodyDerive, readExisting: async () => null,
   }
   const py = await buildReleaseFile('strands-agents/harness-sdk',
     { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body }, deps)
@@ -247,7 +255,7 @@ test('new contributors flow into frontmatter, not entries', async () => {
   ].join('\n')
   const r = await buildReleaseFile('strands-agents/harness-sdk',
     { tag_name: 'python/v1.43.0', published_at: '2026-06-12T00:00:00Z', html_url: 'h', body },
-    { enrich: async () => ({ areas: [], breaking: false, commit: null, author: null, languages: ['python'] }), readExisting: async () => null })
+    { enrich: async () => ({ areas: [], breaking: false, commit: null, author: null, languages: ['python'] }), deriveEntries: bodyDerive, readExisting: async () => null })
   assert.match(r.contents, /newContributors:\n  - \{ login: newdev, pr: 2700 \}/)
   assert.doesNotMatch(r.contents, /first contribution/) // not an entry
 })
@@ -256,7 +264,7 @@ test('breaking marker promotes type when no conventional type', async () => {
   // a non-conventional line that the PR labels mark breaking → type becomes 'breaking'
   const r = await buildReleaseFile('strands-agents/harness-sdk',
     { ...release, body: '* drop the old api by @x in https://github.com/strands-agents/harness-sdk/pull/1\n' },
-    { enrich: async () => ({ areas: [], breaking: true, commit: 'bbb2222', author: 'x' }), readExisting: async () => null })
+    { enrich: async () => ({ areas: [], breaking: true, commit: 'bbb2222', author: 'x' }), deriveEntries: bodyDerive, readExisting: async () => null })
   assert.match(r.contents, /type: breaking/)
   assert.match(r.contents, /breaking: true/)
 })

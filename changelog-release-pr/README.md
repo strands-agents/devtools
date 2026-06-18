@@ -6,9 +6,13 @@ for the docs site in `strands-agents/harness-sdk` and opens a PR there.
 Pipeline (deterministic — no LLM):
 
 1. Fetch the release (single tag) or all releases (backfill) from `source-repo`.
-2. Parse the auto-generated "What's Changed" body into structured entries
-   (conventional-commit type/scope, title, PR, author). "New Contributors"
-   lines are extracted separately and never become entries.
+2. Derive structured entries from the GitHub **compare API**: list every merged
+   commit between the prior tag in the same stream and this release, resolve
+   each to its PR (commit→PR API), and classify the PR title
+   (conventional-commit type/scope). This is independent of how the release
+   notes are written, so it doesn't break when the body format drifts. The
+   release body is NOT parsed for entries; "New Contributors" lines are still
+   extracted from it separately and never become entries.
 3. Enrich each entry from its PR: `area-*` labels → areas, `breaking change`
    label, merge-commit SHA, author. For monorepo releases the PR's changed
    files gate entries by language (`strands-py` → python stream, `strands-ts` →

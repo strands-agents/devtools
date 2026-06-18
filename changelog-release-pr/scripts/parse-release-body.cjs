@@ -24,6 +24,24 @@ const KNOWN_TYPES = new Set(['feat', 'fix', 'docs', 'perf', 'refactor', 'test', 
 const FIRST_CONTRIBUTION = /^@([\w-]+(?:\[[\w-]+\])?) made their first contribution\s+in\s+https?:\/\/github\.com\/([^/]+\/[^/]+)\/pull\/(\d+)\s*$/i
 
 /**
+ * Classify a PR title / commit message into changelog fields. Strips the
+ * cross-SDK "_(shared with …)_" annotation, then applies the conventional-commit
+ * grammar (type/scope/!), falling back to type "other" for non-conventional
+ * titles. Shared by parseReleaseBody and the compare-driven derive-entries path.
+ * @param {string} message
+ * @returns {{type:string, scope:string|null, breaking:boolean, title:string}}
+ */
+function classifyTitle(message) {
+  const msg = String(message).trim().replace(SHARED_ANNOTATION, '')
+  const cc = msg.match(CONVENTIONAL)
+  if (cc) {
+    const type = cc[1].toLowerCase()
+    return { type: KNOWN_TYPES.has(type) ? type : 'other', scope: cc[2] || null, breaking: cc[3] === '!', title: cc[4].trim() }
+  }
+  return { type: 'other', scope: null, breaking: false, title: msg }
+}
+
+/**
  * @param {string|null|undefined} body
  * @returns {Array<{type:string,scope:string|null,breaking:boolean,title:string,author:string|null,pr:number|null,prRepo:string|null}>}
  */
@@ -37,26 +55,12 @@ function parseReleaseBody(body) {
     if (FIRST_CONTRIBUTION.test(li[1].trim())) continue // celebrated separately
     const tail = li[1].trim().match(TAIL)
     if (!tail) continue // not an itemized PR line (skips "omitted" notes, footers)
-    const message = tail[1].trim().replace(SHARED_ANNOTATION, '')
     const author = tail[2] || null
     // Full-URL form fills groups 3 (repo) + 4 (pr); short "#n" form fills group 5
     // with no repo, so prRepo stays null and the caller uses the release repo.
     const prRepo = tail[3] || null
     const pr = tail[4] ? Number(tail[4]) : tail[5] ? Number(tail[5]) : null
-
-    const cc = message.match(CONVENTIONAL)
-    if (cc) {
-      const type = cc[1].toLowerCase()
-      out.push({
-        type: KNOWN_TYPES.has(type) ? type : 'other',
-        scope: cc[2] || null,
-        breaking: cc[3] === '!',
-        title: cc[4].trim(),
-        author, pr, prRepo,
-      })
-    } else {
-      out.push({ type: 'other', scope: null, breaking: false, title: message, author, pr, prRepo })
-    }
+    out.push({ ...classifyTitle(tail[1]), author, pr, prRepo })
   }
   return out
 }
@@ -96,4 +100,4 @@ function parseNewContributors(body) {
   return out
 }
 
-module.exports = { parseReleaseBody, countChangelogBullets, parseNewContributors }
+module.exports = { parseReleaseBody, classifyTitle, countChangelogBullets, parseNewContributors }

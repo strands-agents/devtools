@@ -5,6 +5,9 @@
 
 const { buildReleaseFile } = require('./build-release-file.cjs')
 const { enrichFromPr } = require('./enrich.cjs')
+const { deriveEntries, previousTagInStream } = require('./derive-entries.cjs')
+const { tagToMeta } = require('./tag-meta.cjs')
+const { compareVersionDesc } = require('./semver-compare.cjs')
 
 /**
  * @param {{
@@ -43,7 +46,43 @@ async function run(opts) {
     return prCache.get(key)
   }
 
+  // Resolve the prior tag (same stream) to diff each release against.
+  // Backfill: derive it from the already-fetched release list (no extra tag
+  // listing). Single: query tags via previousTagInStream. Cached per tag.
+  const priorCache = new Map()
+  const streamKey = (m) => (m ? `${m.sdk}:${m.language ?? ''}` : null)
+  let backfillPrior = null
+  if (opts.mode === 'backfill') {
+    // Group in-scope release tags by stream, newest-first, so each release's
+    // predecessor is the next one down in its own stream.
+    backfillPrior = new Map()
+    const byStream = new Map()
+    for (const r of releases) {
+      const m = tagToMeta(opts.repo, r.tag_name)
+      const k = streamKey(m)
+      if (!k) continue
+      if (!byStream.has(k)) byStream.set(k, [])
+      byStream.get(k).push({ tag: r.tag_name, version: m.version })
+    }
+    for (const list of byStream.values()) {
+      list.sort((a, b) => compareVersionDesc(a.version, b.version)) // newest-first
+      for (let i = 0; i < list.length; i++) {
+        backfillPrior.set(list[i].tag, list[i + 1] ? list[i + 1].tag : null)
+      }
+    }
+  }
+  const priorTagFor = async (tag) => {
+    if (priorCache.has(tag)) return priorCache.get(tag)
+    const prior = backfillPrior ? backfillPrior.get(tag) ?? null : await previousTagInStream(opts.repo, tag, opts.client)
+    priorCache.set(tag, prior)
+    return prior
+  }
+
   const deps = {
+    deriveEntries: async (repo, release) => {
+      const base = await priorTagFor(release.tag_name)
+      return deriveEntries({ repo, base, head: release.tag_name, client: opts.client })
+    },
     enrich: (prRepo, pr) => enrichFromPr(prRepo, pr, getPr),
     readExisting: opts.readExisting,
     skipExisting: opts.skipExisting === true,

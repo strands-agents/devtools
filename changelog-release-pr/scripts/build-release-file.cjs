@@ -2,7 +2,7 @@
 // injected deps (enrich + readExisting), so it's unit-testable without network.
 
 const { tagToMeta, getPackageUrl } = require('./tag-meta.cjs')
-const { parseReleaseBody, countChangelogBullets, parseNewContributors } = require('./parse-release-body.cjs')
+const { parseNewContributors } = require('./parse-release-body.cjs')
 const { renderMarkdown, mergePreserving } = require('./render-markdown.cjs')
 
 function fileNameFor(sdk, language, version) {
@@ -13,7 +13,7 @@ function fileNameFor(sdk, language, version) {
 /**
  * @param {string} repo  the SOURCE repo the release belongs to
  * @param {{tag_name:string, published_at:string, html_url:string, body:string|null}} release
- * @param {{enrich:(prRepo:string,pr:number)=>Promise<{areas:string[],breaking:boolean,commit:string|null,author:string|null,languages:string[]|null,docsOnly:boolean}>, readExisting:(path:string)=>Promise<string|null>, skipExisting?:boolean}} deps
+ * @param {{deriveEntries:(repo:string,release:object)=>Promise<{entries:Array,warning?:string}>, enrich:(prRepo:string,pr:number)=>Promise<{areas:string[],breaking:boolean,commit:string|null,author:string|null,languages:string[]|null,docsOnly:boolean}>, readExisting:(path:string)=>Promise<string|null>, skipExisting?:boolean}} deps
  * @returns {Promise<{path:string, contents:string, warning?:string}|null>}
  */
 async function buildReleaseFile(repo, release, deps) {
@@ -30,16 +30,11 @@ async function buildReleaseFile(repo, release, deps) {
   // rate-limited re-run. A full refresh is an explicit backfill dispatch.
   if (deps.skipExisting && existing) return null
 
-  const parsed = parseReleaseBody(release.body)
-
-  // Format-drift guard: if the body clearly has changelog bullets but few/none
-  // parsed, the format likely changed (or notes are hand-written). Don't fail —
-  // emit the file (still links the release) and attach a warning for the PR.
-  const bullets = countChangelogBullets(release.body)
-  const warning =
-    bullets >= 3 && parsed.length < bullets * 0.8
-      ? `${release.tag_name}: parsed ${parsed.length} of ${bullets} changelog bullets — release-note format may have changed; review before merge.`
-      : undefined
+  // Entries come from the GitHub compare API (every merged PR between the prior
+  // tag and this one) — deterministic and independent of release-note format.
+  // The release body is NOT parsed for entries; it's preserved as curated
+  // narrative via mergePreserving below.
+  const { entries: parsed, warning } = await deps.deriveEntries(repo, release)
 
   // Two gates apply to every entry:
   //
