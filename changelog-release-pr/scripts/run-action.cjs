@@ -5,6 +5,7 @@
 
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
 const { run } = require('./run.cjs')
 
 function splitRepo(full) {
@@ -144,13 +145,46 @@ async function runAction(github, context, core) {
   // Expose for the PR body + a git-safe branch name (tags contain '/' and '.').
   // Slug from the repo NAME so different source repos (harness-sdk vs the
   // archived sdk-typescript) can never collide on the same backfill branch.
-  const repoSlug = sourceRepo.split('/')[1] || sourceRepo
-  const tagSlug = (tag || 'backfill').replace(/[^A-Za-z0-9._-]+/g, '-')
   // Only `branch` and `warnings` are consumed by the composite action (PR
   // branch + body); the written count is already logged via core.info above.
   core.setOutput('warnings', result.warnings.join('\n'))
-  core.setOutput('branch', `changelog/sync-${repoSlug}-${tagSlug}`)
+  core.setOutput('branch', branchName(sourceRepo, tag, result.written))
   return result
 }
 
+/**
+ * Git-safe PR branch name for a sync run. Slug from the repo NAME so different
+ * source repos (harness-sdk vs the archived sdk-typescript) can never collide.
+ *
+ * In single mode the tag is unique, so it identifies the branch. In backfill
+ * mode there's no tag — a constant ('backfill') would make every run reuse one
+ * branch, so an open-but-unmerged PR from one run would be clobbered by the next
+ * (especially via push-to-fork, where the branch lives on the fork). Hash the
+ * SET of written files instead. `written` is the set of releases NOT yet on the
+ * checked-out base (the PR target), so it equals the PR's content: a re-run that
+ * regenerates the same pending release(s) hashes identically and UPDATES the
+ * open PR; a run whose pending set differs gets a distinct branch (a separate,
+ * independent PR). Caveat: if more releases become pending while an earlier PR
+ * is still open, the grown set hashes differently and opens a second PR — which
+ * is correct for backfill-opens-one-PR semantics and self-heals once merged.
+ * Empty `written` (nothing new) hashes to a constant, but with no file changes
+ * create-pull-request no-ops, so that branch never materializes.
+ *
+ * @param {string} sourceRepo owner/repo
+ * @param {string} tag release tag, or '' / undefined for backfill
+ * @param {string[]} written paths written this run (order-independent)
+ */
+function branchName(sourceRepo, tag, written) {
+  const repoSlug = sourceRepo.split('/')[1] || sourceRepo
+  let suffix
+  if (tag) {
+    suffix = tag.replace(/[^A-Za-z0-9._-]+/g, '-')
+  } else {
+    const fingerprint = [...written].sort().join('\n')
+    suffix = `backfill-${crypto.createHash('sha256').update(fingerprint).digest('hex').slice(0, 12)}`
+  }
+  return `changelog/sync-${repoSlug}-${suffix}`
+}
+
 module.exports = runAction
+module.exports.branchName = branchName

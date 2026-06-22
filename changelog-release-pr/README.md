@@ -32,7 +32,8 @@ Pipeline (deterministic — no LLM):
 | `tag` | single mode | `''` | release tag to sync |
 | `mode` | no | `single` | `single` \| `backfill` |
 | `skip-existing` | no | `false` | backfill only: generate just the missing files (zero PR-API cost for existing ones, never regresses enrichment). Used by the daily cron backstop. |
-| `github-token` | yes | — | reads releases/PRs and opens the PR. Needs `contents:write` + `pull-requests:write` on `target-repo`. NOTE: PRs created with the default `GITHUB_TOKEN` don't trigger `pull_request` workflows (required checks won't run) — use an App/PAT token where that matters. |
+| `github-token` | yes | — | reads releases/PRs and opens the PR. Same-repo push: needs `contents:write` + `pull-requests:write` on `target-repo`. Fork flow (see `push-to-fork`): a classic PAT with the `public_repo` scope is sufficient — it grants write to the account's own fork plus cross-repo PR creation against the public upstream. NOTE: PRs created with the default `GITHUB_TOKEN` don't trigger `pull_request` workflows (required checks won't run); a real-user PAT (or fork PR) does — use one where that matters. |
+| `push-to-fork` | no | `''` | `owner/repo` of a fork to push the PR branch to, for tokens whose account can't push to `target-repo` directly (an outside collaborator). The branch lands on the fork; the PR is still opened against `target-repo`. Empty = same-repo branch push. |
 | `target-repo` | no | `strands-agents/harness-sdk` | repo that hosts the changelog |
 
 ## Consumers

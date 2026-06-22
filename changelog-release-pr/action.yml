@@ -17,8 +17,21 @@ inputs:
     required: false
     default: 'false'
   github-token:
-    description: 'Token to read releases/PRs and open the PR. Needs pull-requests:write (and contents:write) on target-repo.'
+    description: >
+      Token to read releases/PRs and open the PR. For a same-repo PR the token
+      needs contents:write + pull-requests:write on target-repo. For the
+      fork-based flow (push-to-fork set, e.g. an account outside the org), it
+      instead needs write on the FORK and only public/read on target-repo — a
+      classic PAT with the `public_repo` scope is sufficient.
     required: true
+  push-to-fork:
+    description: >
+      owner/repo of a fork to push the PR branch to (e.g. strands-agent/harness-sdk).
+      Use when the token's account cannot push to target-repo directly (outside
+      collaborator). Leave empty for a same-repo branch push. The branch lands on
+      the fork; the PR is still opened against target-repo.
+    required: false
+    default: ''
   target-repo:
     description: 'Repo to open the changelog PR against'
     required: false
@@ -68,8 +81,16 @@ runs:
       # Third-party action receiving a write-scoped token — pinned to a full
       # commit SHA (v7.0.x) rather than a movable tag.
       uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+      # Do NOT add labels/assignees/reviewers/team-reviewers/milestone here: in
+      # the push-to-fork flow the token only has read/public on target-repo, and
+      # create-pull-request silently drops those fields without write on the
+      # parent — they'd appear to work locally and no-op in production.
       with:
         token: ${{ inputs.github-token }}
+        # When set, push the branch to this fork and open a cross-repo PR against
+        # target-repo (for tokens whose account can't push to target-repo
+        # directly). Empty = same-repo branch push.
+        push-to-fork: ${{ inputs.push-to-fork }}
         path: target
         branch: ${{ steps.generate.outputs.branch }}
         title: "docs(changelog): sync ${{ inputs.source-repo }} ${{ inputs.tag || 'backfill' }}"
