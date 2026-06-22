@@ -17,6 +17,7 @@ from strands.telemetry import StrandsTelemetry
 from strands.agent.conversation_manager import SlidingWindowConversationManager
 from strands.session import S3SessionManager
 from strands.models import BedrockModel, CacheConfig
+from strands.vended_plugins.context_offloader import ContextOffloader, InMemoryStorage
 from botocore.config import Config
 
 from strands_tools import http_request, shell
@@ -229,17 +230,25 @@ def run_agent(query: str):
         else:
             raise ValueError("Both SESSION_ID and S3_SESSION_BUCKET must be set")
 
+        # Offload oversized tool results (large PR diffs, file reads, shell output)
+        # to storage instead of letting them crowd out the context window. The
+        # plugin registers a retrieval tool so the agent can fetch the full content
+        # on demand. In-memory storage is sufficient: the agent runs as a single
+        # process per invocation, so offloaded content only needs to outlive the run.
+        context_offloader = ContextOffloader(storage=InMemoryStorage())
+
         # Create agent with optional trace attributes for Langfuse
         agent_kwargs = {
             "model": model,
             "system_prompt": system_prompt,
             "tools": tools,
             "session_manager": session_manager,
+            "plugins": [context_offloader],
         }
-        
+
         if trace_attributes:
             agent_kwargs["trace_attributes"] = trace_attributes
-        
+
         agent = Agent(**agent_kwargs)
 
         print("Processing user query...")

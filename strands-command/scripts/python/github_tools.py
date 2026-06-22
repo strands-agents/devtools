@@ -77,15 +77,6 @@ from strands_tools.utils import console_util
 
 console = console_util.create()
 
-# Total characters of PR diff inlined into a single prompt by get_pr_files before
-# remaining files are listed for on-demand fetch instead of being inlined.
-TOTAL_DIFF_BUDGET_CHARS = 100_000
-
-# When a single file does not fully fit the remaining budget, inline this much of
-# its head (trimmed to a line boundary) so the reviewer always has some inline
-# signal, unless less than this remains.
-MIN_PARTIAL_HEAD_CHARS = 2_000
-
 
 class GitHubOperation(TypedDict):
     """Type definition for GitHub operation records in JSONL files."""
@@ -538,16 +529,10 @@ def get_pr_files(pr_number: int, repo: str | None = None) -> str:
 
     output = f"Files changed in PR #{pr_number}:\n\n"
 
-    # Bound total inlined diff by a character budget rather than a per-file line
-    # cap (which silently hid the tail of larger changes). Inline full patches
-    # while the budget allows; for a file that does not fully fit, inline a head
-    # slice so there is always some inline signal, and note the rest is fetchable.
-    # The budget is consumed in GitHub API file order, so a large early file can
-    # push later files into overflow; this order dependence is accepted (we do not
-    # sort, to keep inline output in the same order the API returns).
-    used = 0
-    overflow: list[str] = []
-
+    # Return each file's full patch. Large results are managed centrally by the
+    # ContextOffloader plugin (configured on the agent), which offloads oversized
+    # tool results to storage and gives the agent a tool to retrieve them on
+    # demand -- so this function does not truncate diffs itself.
     for file in result:
         filename = file['filename']
         status = file['status']
@@ -561,51 +546,10 @@ def get_pr_files(pr_number: int, repo: str | None = None) -> str:
         )
         patch = file.get('patch')
 
-        if not patch:
-            output += header + "   (Binary file or no diff available)\n\n"
-            continue
-
-        remaining = TOTAL_DIFF_BUDGET_CHARS - used
-
-        if len(patch) <= remaining:
-            used += len(patch)
+        if patch:
             output += header + "   Diff:\n" + patch + "\n\n"
-            continue
-
-        # Patch does not fully fit. Inline a head slice trimmed to a line
-        # boundary if enough budget remains, otherwise defer the whole file.
-        head = ""
-        if remaining >= MIN_PARTIAL_HEAD_CHARS:
-            head = patch[:remaining]
-            newline = head.rfind("\n")
-            if newline != -1:
-                head = head[:newline]
-
-        if head:
-            used += len(head)
-            omitted = len(patch) - len(head)
-            overflow.append(f"{filename} (+{additions} -{deletions}, partially shown)")
-            output += (
-                header
-                + "   Diff (head only):\n"
-                + head
-                + f"\n   ... ({omitted} more chars omitted; fetch full diff on demand)\n\n"
-            )
         else:
-            # Either too little budget remains for a head slice, or trimming to a
-            # line boundary left an empty head (patch starts with a newline);
-            # defer the whole file rather than emit an empty "head only" diff.
-            overflow.append(f"{filename} (+{additions} -{deletions})")
-            output += header + "   (diff omitted to stay within budget; fetch on demand)\n\n"
-
-    if overflow:
-        listing = "\n".join(f"   - {f}" for f in overflow)
-        output += (
-            "Some diffs were omitted to stay within the prompt budget. Fetch their "
-            "full contents on demand (e.g. with the shell tool) rather than skipping "
-            "them:\n"
-            f"{listing}\n"
-        )
+            output += header + "   (Binary file or no diff available)\n\n"
 
     console.print(Panel(escape(output), title=f"[bold green]PR #{pr_number} Files", border_style="blue"))
     return output
