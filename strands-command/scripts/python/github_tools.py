@@ -151,6 +151,61 @@ def _github_request(
         return f"Error {e!s}"
 
 
+# Max pages to follow when fetching a paginated list endpoint, as a safety bound
+# (100 items/page x 30 pages = 3000 items) against an unbounded follow loop.
+_MAX_LIST_PAGES = 30
+
+
+def _github_get_all_pages(endpoint: str, repo: str | None = None) -> list[dict[str, Any]] | str:
+    """GET a paginated list endpoint, following Link rel="next" until exhausted.
+
+    GitHub list endpoints (e.g. a PR's files) return at most 100 items per page,
+    so reading a single response silently drops the rest. This follows the
+    pagination links and concatenates every page.
+
+    Args:
+        endpoint: API endpoint path (e.g., "pulls/123/files")
+        repo: Repository in "owner/repo" format
+
+    Returns:
+        The combined list of items, or an error string on failure.
+    """
+    if repo is None:
+        repo = os.environ.get("GITHUB_REPOSITORY")
+    if not repo:
+        return "Error: GITHUB_REPOSITORY environment variable not found"
+
+    token = os.environ.get("GITHUB_TOKEN", "")
+    if not token:
+        return "Error: GITHUB_TOKEN environment variable not found"
+
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/vnd.github.v3+json",
+    }
+    url: str | None = f"https://api.github.com/repos/{repo}/{endpoint}"
+    params: dict | None = {"per_page": 100}
+    items: list[dict[str, Any]] = []
+
+    try:
+        for _ in range(_MAX_LIST_PAGES):
+            response = requests.get(url, headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            page = response.json()
+            if not isinstance(page, list):
+                return f"Error: expected a list from {endpoint}, got {type(page).__name__}"
+            items.extend(page)
+            # The "next" link already carries the page/per_page query params.
+            url = response.links.get("next", {}).get("url")
+            params = None
+            if not url:
+                return items
+        # Hit the page cap; return what we have rather than looping unbounded.
+        return items
+    except Exception as e:
+        return f"Error {e!s}"
+
+
 def check_should_call_write_api_or_record(func):
     """Decorator that checks if a write api should be called, or if the tool should record to JSONL."""
     @wraps(func)
@@ -522,38 +577,35 @@ def get_pr_files(pr_number: int, repo: str | None = None) -> str:
     Returns:
         Formatted list of changed files with their diffs
     """
-    result = _github_request("GET", f"pulls/{pr_number}/files", repo)
+    result = _github_get_all_pages(f"pulls/{pr_number}/files", repo)
     if isinstance(result, str):
         console.print(Panel(escape(result), title="[bold red]Error", border_style="red"))
         return result
 
     output = f"Files changed in PR #{pr_number}:\n\n"
-    
+
+    # Return each file's full patch. Large results are managed centrally by the
+    # ContextOffloader plugin (configured on the agent), which offloads oversized
+    # tool results to storage and gives the agent a tool to retrieve them on
+    # demand -- so this function does not truncate diffs itself.
     for file in result:
         filename = file['filename']
         status = file['status']
         additions = file['additions']
         deletions = file['deletions']
         changes = file['changes']
-        
-        output += f"📄 **{filename}** ({status})\n"
-        output += f"   +{additions} -{deletions} (~{changes} changes)\n"
-        
-        if file.get('patch'):
-            output += f"   Diff:\n"
-            # Limit diff size to avoid overwhelming output
-            patch_lines = file['patch'].split('\n')
-            if len(patch_lines) > 50:
-                output += '\n'.join(patch_lines[:50])
-                output += f"\n   ... (truncated, {len(patch_lines) - 50} more lines)\n"
-            else:
-                output += file['patch']
-            output += "\n"
+
+        header = (
+            f"📄 **{filename}** ({status})\n"
+            f"   +{additions} -{deletions} (~{changes} changes)\n"
+        )
+        patch = file.get('patch')
+
+        if patch:
+            output += header + "   Diff:\n" + patch + "\n\n"
         else:
-            output += "   (Binary file or no diff available)\n"
-        
-        output += "\n"
-    
+            output += header + "   (Binary file or no diff available)\n\n"
+
     console.print(Panel(escape(output), title=f"[bold green]PR #{pr_number} Files", border_style="blue"))
     return output
 
