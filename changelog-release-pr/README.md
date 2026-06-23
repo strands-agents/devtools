@@ -102,7 +102,7 @@ Two curated fields, both survive re-syncs (the parser never overwrites them):
 Copy this skeleton into a release file's body (after the frontmatter). The
 frontmatter itself is generated; you add `highlights:` and the body.
 
-```markdown
+````markdown
 ---
 # ...generated frontmatter (sdk, language, version, tag, date, urls, entries,
 # newContributors)...
@@ -124,9 +124,10 @@ Short narrative. Note any migration steps or breaking behavior here.
 ### Notes
 
 - Smaller call-outs, deprecations, or upgrade guidance as a short list.
-```
+````
 
-The six files under `site/src/content/changelog/` that carry hand-written
-bodies today (`harness/python-v1.25.0`, `harness/python-v1.35.0`,
-`harness/typescript-v0.2.1`, `harness/typescript-v1.0.0-rc.3`, `evals/v0.1.5`,
-`evals/v0.1.14`) follow this convention and serve as worked examples.
+The files under `site/src/content/changelog/` that carry hand-written bodies
+today (`harness/python-v1.25.0`, `harness/python-v1.35.0`,
+`harness/typescript-v0.2.1`, `harness/typescript-v1.0.0-rc.3`, `evals/v0.1.0`,
+`evals/v0.1.5`, `evals/v0.1.14`) follow this convention and serve as worked
+examples.
