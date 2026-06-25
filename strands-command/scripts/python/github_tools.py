@@ -327,6 +327,39 @@ def add_issue_comment(issue_number: int, comment_text: str, repo: str | None = N
 @tool
 @log_inputs
 @check_should_call_write_api_or_record
+def add_issue_labels(issue_number: int, labels: list[str], repo: str | None = None) -> str:
+    """Adds one or more labels to an issue or pull request without removing existing labels.
+
+    This is an additive operation: labels already on the issue are preserved. The labels
+    must already exist in the repository (create them in repo settings first).
+
+    Args:
+        issue_number: The issue or PR number to label
+        labels: List of label names to add (e.g., ["bug-validated", "P1"])
+        repo: GitHub repository in the format "owner/repo" (optional; falls back to env var)
+
+    Returns:
+        Result of the operation
+    """
+    if not labels:
+        error_msg = "Error: At least one label must be provided"
+        console.print(Panel(escape(error_msg), title="[bold red]Error", border_style="red"))
+        return error_msg
+
+    result = _github_request("POST", f"issues/{issue_number}/labels", repo, {"labels": labels})
+    if isinstance(result, str):
+        console.print(Panel(escape(result), title="[bold red]Error", border_style="red"))
+        return result
+
+    applied = ", ".join(label["name"] for label in result) if isinstance(result, list) else ", ".join(labels)
+    message = f"Labels added to #{issue_number}: {applied}"
+    console.print(Panel(escape(message), title="[bold green]Success", border_style="green"))
+    return message
+
+
+@tool
+@log_inputs
+@check_should_call_write_api_or_record
 def create_pull_request(title: str, head: str, base: str, body: str = "", repo: str | None = None, fallback_issue_id: int | None = None) -> str:
     """Creates a new pull request, or optionally comments on the fallback_issue_id for a link to create a pull request.
 
