@@ -76,7 +76,7 @@ async function determineBranch(github, context, issueId, mode, isPullRequest) {
   return { branchName, headRepo };
 }
 
-function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs) {
+function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue) {
   const sessionId = inputs.session_id || (mode === 'implementer' 
     ? `${mode}-${branchName}`.replace(/[\/\\]/g, '-')
     : `${mode}-${issueId}`);
@@ -96,6 +96,18 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs)
     ? 'The pull request id is:'
     : 'The issue id is:';
   prompt += `${issueId}\n${command}\nreview and continue`;
+
+  // For the bug verifier, snapshot the issue title/body into the prompt at
+  // command time. The agent executes reproduction code derived from this
+  // content, so it must work off what the maintainer approved when they ran
+  // the command — not a live re-fetch that an attacker could edit mid-run.
+  if (mode === 'bug-verifier' && issue) {
+    const title = issue.data?.title ?? '';
+    const body = issue.data?.body ?? '';
+    prompt += `\n\n--- ISSUE SNAPSHOT (captured at command time; authoritative; do NOT re-fetch the live issue body) ---\n`;
+    prompt += `Title: ${title}\n\n${body}\n`;
+    prompt += `--- END ISSUE SNAPSHOT ---`;
+  }
 
   return { sessionId, systemPrompt, prompt };
 }
@@ -127,7 +139,7 @@ module.exports = async (context, github, core, inputs) => {
     const { branchName, headRepo } = await determineBranch(github, context, issueId, mode, isPullRequest);
     console.log(`Building prompts - mode: ${mode}, issue: ${issueId}, is PR: ${isPullRequest}`);
 
-    const { sessionId, systemPrompt, prompt } = buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs);
+    const { sessionId, systemPrompt, prompt } = buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue);
     
     console.log(`Session ID: ${sessionId}`);
     console.log(`Task prompt: "${prompt}"`);
