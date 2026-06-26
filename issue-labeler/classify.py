@@ -42,6 +42,44 @@ def load_config(config_path: str) -> dict:
     return config
 
 
+def _label_def_dict(label_def) -> dict:
+    """Return the dict form of a label definition, or {} for the shorthand string form."""
+    return label_def if isinstance(label_def, dict) else {}
+
+
+def parse_label_type_map(config: dict) -> dict:
+    """Map label_name -> native issue type name for labels declaring a `type:`."""
+    type_map = {}
+    for label_name, label_def in config["labels"].items():
+        type_name = _label_def_dict(label_def).get("type")
+        if type_name:
+            type_map[label_name] = type_name
+    return type_map
+
+
+def parse_field_config(config: dict) -> dict | None:
+    """Parse the optional top-level `field:` block into {name, option_map}.
+
+    Returns None when no `field:` block is present. option_map maps
+    label_name -> single-select option name for labels declaring an `option:`.
+    """
+    field_block = config.get("field")
+    if field_block is None:
+        return None
+
+    if not isinstance(field_block, dict) or not field_block.get("name"):
+        print("::error::Config 'field' must be a mapping with a non-empty 'name'.")
+        sys.exit(1)
+
+    option_map = {}
+    for label_name, label_def in config["labels"].items():
+        option_name = _label_def_dict(label_def).get("option")
+        if option_name:
+            option_map[label_name] = option_name
+
+    return {"name": field_block["name"], "option_map": option_map}
+
+
 def build_system_prompt(config: dict, max_labels: int) -> str:
     """Build the classification prompt from config."""
     label_lines = []
