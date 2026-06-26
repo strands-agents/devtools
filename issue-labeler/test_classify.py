@@ -7,7 +7,7 @@ accept labels from the configured allowlist. No Bedrock call is made.
 import pytest
 from pydantic import ValidationError
 
-from classify import build_classification_model, build_system_prompt, parse_field_config, parse_label_type_map, sanitize
+from classify import build_classification_model, build_system_prompt, parse_field_config, parse_label_type_map, parse_native_ids, sanitize, select_option, select_type
 
 
 def test_accepts_allowlisted_labels():
@@ -75,3 +75,43 @@ def test_parse_field_config_extracts_name_and_option_map():
         "name": "Language",
         "option_map": {"python": "Python", "typescript": "TypeScript"},
     }
+
+
+_SAMPLE_GRAPHQL_DATA = {
+    "repository": {
+        "issueTypes": {"nodes": [
+            {"id": "IT_bug", "name": "Bug"},
+            {"id": "IT_feature", "name": "Feature"},
+        ]},
+        "issueFields": {"nodes": [
+            {"__typename": "IssueFieldSingleSelect", "id": "IFSS_lang", "name": "Language",
+             "options": [
+                 {"id": "OPT_py", "name": "Python"},
+                 {"id": "OPT_ts", "name": "TypeScript"},
+             ]},
+            {"__typename": "IssueFieldDate", "id": "IFD_x", "name": "Target date"},
+        ]},
+    }
+}
+
+
+def test_parse_native_ids_indexes_types_and_single_select_fields():
+    ids = parse_native_ids(_SAMPLE_GRAPHQL_DATA)
+    assert ids["types"] == {"bug": "IT_bug", "feature": "IT_feature"}
+    assert ids["fields"]["language"]["id"] == "IFSS_lang"
+    assert ids["fields"]["language"]["options"] == {"python": "OPT_py", "typescript": "OPT_ts"}
+    # non-single-select fields are skipped
+    assert "target date" not in ids["fields"]
+
+
+def test_select_type_returns_first_mapped_label():
+    type_map = {"bug": "Bug", "enhancement": "Feature"}
+    assert select_type(["enhancement"], type_map) == "Feature"
+    assert select_type(["question"], type_map) is None
+    assert select_type([], type_map) is None
+
+
+def test_select_option_returns_first_mapped_label():
+    option_map = {"python": "Python", "typescript": "TypeScript"}
+    assert select_option(["typescript"], option_map) == "TypeScript"
+    assert select_option(["rust"], option_map) is None

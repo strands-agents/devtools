@@ -80,6 +80,40 @@ def parse_field_config(config: dict) -> dict | None:
     return {"name": field_block["name"], "option_map": option_map}
 
 
+def parse_native_ids(graphql_data: dict) -> dict:
+    """Index a resolution-query response into case-insensitive name -> ID maps."""
+    repo = graphql_data.get("repository") or {}
+
+    types = {}
+    for node in (repo.get("issueTypes") or {}).get("nodes", []):
+        types[node["name"].lower()] = node["id"]
+
+    fields = {}
+    for node in (repo.get("issueFields") or {}).get("nodes", []):
+        if node.get("__typename") != "IssueFieldSingleSelect":
+            continue
+        options = {opt["name"].lower(): opt["id"] for opt in node.get("options", [])}
+        fields[node["name"].lower()] = {"id": node["id"], "options": options}
+
+    return {"types": types, "fields": fields}
+
+
+def select_type(labels: list, type_map: dict) -> str | None:
+    """First classified label that maps to a native type name."""
+    for label in labels:
+        if label in type_map:
+            return type_map[label]
+    return None
+
+
+def select_option(labels: list, option_map: dict) -> str | None:
+    """First classified label that maps to a field option name."""
+    for label in labels:
+        if label in option_map:
+            return option_map[label]
+    return None
+
+
 def build_system_prompt(config: dict, max_labels: int) -> str:
     """Build the classification prompt from config."""
     label_lines = []
