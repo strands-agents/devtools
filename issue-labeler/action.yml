@@ -99,4 +99,5 @@ runs:
         AWS_REGION: ${{ inputs.aws_region }}
         MAX_LABELS: ${{ inputs.max_labels }}
         MAX_BODY_LENGTH: ${{ inputs.max_body_length }}
+        EVENT_NAME: ${{ github.event_name }}
       run: python3 "${{ github.action_path }}/classify.py"
