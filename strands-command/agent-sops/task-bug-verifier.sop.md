@@ -154,9 +154,10 @@ Apply triage labels (via `add_issue_labels`) and record your verification report
 
   **Environment:** Strands <version> · <language> <runtime version> · <sandbox>
 
+  Use a `python` code block for a Python repro, or a `typescript` block for a TypeScript repro, matching the affected SDK:
+
   ```python
-  # validated minimal reproduction — use a ```python block for Python bugs
-  # or a ```typescript block for TypeScript bugs, matching the affected SDK
+  # validated minimal reproduction
   ```
 
   <details>
@@ -213,9 +214,10 @@ Apply triage labels (via `add_issue_labels`) and record your verification report
   <details>
   <summary>Reproduction script & output</summary>
 
+  Use a `python` or `typescript` code block matching the affected SDK:
+
   ```python
-  # minimal repro — use a ```python block for Python bugs or a
-  # ```typescript block for TypeScript bugs, matching the affected SDK
+  # minimal repro
   ```
 
   ```
