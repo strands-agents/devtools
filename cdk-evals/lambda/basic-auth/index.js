@@ -1,9 +1,10 @@
 'use strict';
 
 // Basic Auth credentials for Strands Evals Dashboard
-// These placeholders are replaced at CDK deploy time with values from Secrets Manager
-const USERNAME = '__BASIC_AUTH_USERNAME__';
-const PASSWORD = '__BASIC_AUTH_PASSWORD__';
+// These placeholders are replaced at CDK deploy time with JSON-encoded string
+// literals built from values in Secrets Manager (see dashboard-stack.ts).
+const USERNAME = __BASIC_AUTH_USERNAME__;
+const PASSWORD = __BASIC_AUTH_PASSWORD__;
 
 // Pre-compute the expected Authorization header value
 const EXPECTED_AUTH = 'Basic ' + Buffer.from(`${USERNAME}:${PASSWORD}`).toString('base64');

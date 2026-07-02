@@ -78,7 +78,7 @@ npm run deploy:pipeline
        --secret-string '{"LANGFUSE_SECRET_KEY":"sk-...","LANGFUSE_PUBLIC_KEY":"pk-...","LANGFUSE_HOST":"https://your-langfuse-host.com"}'
    ```
 
-> **Note:** Dashboard auth credentials are read from Secrets Manager at CDK synth time and injected into Lambda@Edge. If you deploy without creating the secret first, placeholder values will be used and authentication won't work.
+> **Note:** Dashboard auth credentials are read from Secrets Manager at CDK synth time and injected into Lambda@Edge. The secret must exist before deployment. If it is missing or unreadable, synthesis fails so the dashboard is never deployed without configured credentials.
 
 ## Stack Outputs
 
@@ -130,7 +130,7 @@ aws secretsmanager put-secret-value \
 npm run deploy:dashboard
 ```
 
-> **Important:** Credentials are baked into the Lambda function at deploy time. You must redeploy after changing the secret for changes to take effect. The secret must exist before deployment or placeholder values will be used.
+> **Important:** Credentials are baked into the Lambda function at deploy time. You must redeploy after changing the secret for changes to take effect. The secret must exist before deployment; otherwise synthesis fails and the stack is not deployed.
 
 ## Useful Commands
 
