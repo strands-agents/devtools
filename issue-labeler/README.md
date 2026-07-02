@@ -104,6 +104,45 @@ labels:
   area-tool: "Tool behavior, execution, @tool decorator"
 ```
 
+### Setting native issue type and issue fields (issues only)
+
+In addition to labels, the action can set the org's native **issue type** and a
+single-select **issue field**, but only when triggered by an `issues` event
+(these features do not apply to pull requests). This is additive: labels are
+still applied exactly as before.
+
+Add a `type:` key to a label to map it to a native issue type:
+
+```yaml
+labels:
+  bug:
+    description: "Something is broken"
+    type: Bug          # native issue type name (resolved at runtime)
+  enhancement:
+    description: "New feature or improvement"
+    type: Feature
+```
+
+Add a top-level `field:` block plus per-label `option:` keys to set a
+single-select issue field:
+
+```yaml
+field:
+  name: Language       # issue field name (resolved at runtime)
+labels:
+  python:
+    description: "Python SDK"
+    option: Python     # single-select option name
+  typescript:
+    description: "TypeScript SDK"
+    option: TypeScript
+```
+
+Names (`Bug`, `Language`, `Python`) are resolved to GitHub node IDs at runtime
+via a repo-level GraphQL query and matched case-insensitively. Unmatched names
+emit a warning and are skipped, and never fail the workflow. Existing values
+are always overwritten. The action's existing `issues: write` permission is expected to cover these mutations; verify against a test issue before rolling out broadly.
+
 ## Inputs
 
 | Input | Required | Default | Description |
@@ -130,3 +169,27 @@ labels:
 2. The role needs `bedrock:InvokeModel` and `bedrock:InvokeModelWithResponseStream` permissions
 3. Bedrock access enabled for the configured model in `aws_region`
 4. The labels referenced in your config must already exist on the repo
+
+## Backfilling existing issues
+
+`backfill.py` applies the same native type/field logic to existing issues. For
+each issue it reuses an existing type/language label when present, and only
+calls the LLM for issues missing one. Run locally with `gh` authenticated and
+AWS credentials available:
+
+```bash
+pip install --upgrade strands-agents pyyaml "boto3>=1.35.0"
+
+# Dry run first (prints intended changes, writes nothing):
+python3 backfill.py --repo strands-agents/harness-sdk \
+  --type-config path/to/type.yml \
+  --language-config path/to/language.yml \
+  --dry-run
+
+# Apply (all issues, open and closed, by default):
+python3 backfill.py --repo strands-agents/harness-sdk \
+  --type-config path/to/type.yml \
+  --language-config path/to/language.yml
+```
+
+For Python-only repos (e.g. evals) omit `--language-config`.
