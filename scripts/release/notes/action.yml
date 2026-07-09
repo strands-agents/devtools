@@ -1,0 +1,51 @@
+name: 'Release Notes'
+description: >-
+  Draft release notes for a tag range, grouped by conventional-commit type
+  (feat, fix, docs, ...). Runs `git log` over `<prev_tag>..<new_ref>` and
+  buckets the commits into Markdown sections. Shared by the strands release
+  workflows so every package renders notes the same way. Requires a checkout
+  with full history and tags (fetch-depth: 0, fetch-tags: true).
+
+inputs:
+  prev_tag:
+    description: 'Previous release tag; the low end of the commit range.'
+    required: true
+  new_tag:
+    description: 'Proposed new tag; used as the notes heading.'
+    required: true
+  new_ref:
+    description: 'High end of the commit range (a SHA or ref). Defaults to new_tag.'
+    required: false
+    default: ''
+  output_file:
+    description: 'Where to write the rendered Markdown, relative to the workspace.'
+    required: false
+    default: 'release-notes.md'
+
+outputs:
+  notes_file:
+    description: 'Path to the rendered release-notes Markdown file.'
+    value: ${{ steps.render.outputs.notes_file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Render notes
+      id: render
+      shell: bash
+      env:
+        PREV_TAG: ${{ inputs.prev_tag }}
+        NEW_TAG: ${{ inputs.new_tag }}
+        # Fall back to the tag when no explicit ref is given.
+        NEW_REF: ${{ inputs.new_ref || inputs.new_tag }}
+        OUTPUT_FILE: ${{ inputs.output_file }}
+      run: |
+        set -euo pipefail
+        # Feed commits to the grouper as `hash<TAB>subject` lines and let it
+        # bucket them by conventional-commit type (feat, fix, ...). The script
+        # is stdlib-only, so no dependency install is needed. github.action_path
+        # points at this action's checkout, wherever the runner placed it.
+        git log --no-merges --pretty=format:'%h%x09%s' "$PREV_TAG..$NEW_REF" \
+          | NEW_TAG="$NEW_TAG" PREV_TAG="$PREV_TAG" \
+            python3 "${{ github.action_path }}/group-release-notes.py" > "$OUTPUT_FILE"
+        echo "notes_file=$OUTPUT_FILE" >> "$GITHUB_OUTPUT"
