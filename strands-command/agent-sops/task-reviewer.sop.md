@@ -12,7 +12,7 @@ Initialize the review environment by checking out the main branch for guidance.
 
 **Constraints:**
 - You MUST checkout the main branch first to read repository review guidance
-- You MUST create a progress notebook to track your review process using markdown checklists
+- You MUST use the `notebook` tool (mode="create") to create a progress notebook to track your review process using markdown checklists. Do NOT use `create_issue` for this purpose.
 - You MUST read repository guidelines from `README.md`, `CONTRIBUTING.md`, and `AGENTS.md` (if present)
 - You MUST read API bar raising guidelines from https://github.com/strands-agents/docs/blob/main/team/API_BAR_RAISING.md
 - You MUST create a checklist of items to review based on the repository guidelines

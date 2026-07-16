@@ -153,11 +153,11 @@ def _get_all_tools() -> list[Any]:
     return [
         # File editing
         str_replace_based_edit_tool,
-        
+
         # System tools
         shell,
         http_request,
-        
+
         # GitHub issue tools
         create_issue,
         get_issue,
@@ -166,7 +166,7 @@ def _get_all_tools() -> list[Any]:
         add_issue_comment,
         add_issue_labels,
         get_issue_comments,
-        
+
         # GitHub PR tools
         create_pull_request,
         get_pull_request,
@@ -176,11 +176,35 @@ def _get_all_tools() -> list[Any]:
         get_pr_review_and_comments,
         reply_to_review_comment,
         add_pr_comment,
-        
+
         # Agent tools
         notebook,
         handoff_to_user,
     ]
+
+
+# Tools that should NOT be available to specific agent modes.
+# Reviewer/refiner/release-notes/bug-verifier agents only read and comment —
+# they should never create issues or PRs.
+_MODE_TOOL_DENYLIST: dict[str, list[Any]] = {
+    "reviewer": [create_issue, create_pull_request],
+    "refiner": [create_issue, create_pull_request],
+    "release-notes": [create_issue, create_pull_request],
+    "bug-verifier": [create_issue, create_pull_request],
+}
+
+
+def _get_tools_for_mode(mode: str | None) -> list[Any]:
+    """Return the tool set filtered by agent mode.
+
+    Modes that should not have access to certain write tools (e.g. reviewer
+    should not create issues) have those tools removed.
+    """
+    all_tools = _get_all_tools()
+    if not mode or mode not in _MODE_TOOL_DENYLIST:
+        return all_tools
+    denied = _MODE_TOOL_DENYLIST[mode]
+    return [t for t in all_tools if t not in denied]
 
 
 def run_agent(query: str):
@@ -190,8 +214,9 @@ def run_agent(query: str):
         telemetry_enabled = _setup_langfuse_telemetry()
         trace_attributes = _get_trace_attributes() if telemetry_enabled else {}
         
-        # Get tools and create model
-        tools = _get_all_tools()
+        # Get tools filtered by agent mode (e.g. reviewer can't create issues)
+        agent_mode = os.getenv("AGENT_MODE")
+        tools = _get_tools_for_mode(agent_mode)
         
         # Create Bedrock model with inlined configuration
         additional_request_fields = {}

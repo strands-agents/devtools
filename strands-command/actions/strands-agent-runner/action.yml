@@ -47,6 +47,7 @@ runs:
         echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "session_id=$(jq -r .session_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "head_repo=$(jq -r '.head_repo // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "mode=$(jq -r '.mode // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "system_prompt<<EOF" >> $GITHUB_OUTPUT
         jq -r .system_prompt strands-parsed-input.json >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
@@ -223,6 +224,9 @@ runs:
         # Session Manager (input overrides Secrets Manager)
         S3_SESSION_BUCKET: ${{ inputs.sessions_bucket || steps.secrets.outputs.sessions_bucket }}
         SESSION_ID: ${{ steps.read-input.outputs.session_id }}
+
+        # Agent mode (reviewer, implementer, etc.) for tool filtering
+        AGENT_MODE: ${{ steps.read-input.outputs.mode }}
 
         # Strands Env Vars
         STRANDS_TOOL_CONSOLE_MODE: 'enabled'

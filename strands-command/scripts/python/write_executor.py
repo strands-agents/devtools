@@ -36,6 +36,23 @@ logging.basicConfig(
 logger = logging.getLogger("write_executor")
 
 
+_PLACEHOLDER_VALUES = {"placeholder", "todo", "tbd", "test", "tmp", "temp", "xxx", "fixme"}
+
+
+def _is_placeholder(value: str) -> bool:
+    """Check if a string value is an obvious placeholder."""
+    return value.strip().lower() in _PLACEHOLDER_VALUES
+
+
+def _validate_operation(func_name: str, kwargs: Dict[str, Any]) -> str | None:
+    """Reject operations with obviously placeholder or empty titles."""
+    if func_name in ("create_issue", "create_pull_request"):
+        title = kwargs.get("title", "")
+        if not title.strip() or _is_placeholder(title):
+            return f"Rejected {func_name}: title is placeholder or empty ('{title}')"
+    return None
+
+
 def get_function_mapping() -> Dict[str, Any]:
     """Get mapping of function names to actual functions."""
     return {
@@ -90,11 +107,17 @@ def process_jsonl_file(file_path: Path, default_issue_id: int | None = None):
                     continue
                 
                 func = function_map[func_name]
-                
+
+                # Validate operation before executing
+                rejection = _validate_operation(func_name, kwargs)
+                if rejection:
+                    logger.warning(f"Line {line_num}: {rejection}")
+                    continue
+
                 # Set default issue ID for create_pull_request if not already set
                 if func_name == "create_pull_request" and default_issue_id and not kwargs.get("fallback_issue_id"):
                     kwargs["fallback_issue_id"] = default_issue_id
-                
+
                 # Execute function
                 logger.info(f"Executing {func_name} with args={args}, kwargs={kwargs}")
                 result = func(*args, **kwargs)
