@@ -28,8 +28,11 @@ run `gh auth refresh -s workflow` and stop.
    refuse a "nothing new" / undetermined target if the user insists (the
    workflow's own `scan-commits` is the real guard).
 
-3. **Version per target.** Show the latest version from the status output and
-   ask the user to **type** the new version. Never auto-bump or suggest one.
+3. **Version per target.** State the current published version explicitly in
+   the prompt — "harness-python is at **1.50.0**; what should the new version
+   be?" — and ask the user to **type** the new version. Never auto-bump or
+   suggest one. The script rejects anything that isn't a single major/minor/
+   patch increment of the published version.
 
 4. **Dispatch.** Confirm the exact command, then run
    `./release_dispatch.py dispatch <target> <version>`. This is a **real
@@ -37,8 +40,8 @@ run `gh auth refresh -s workflow` and stop.
    for a reviewer to approve the `release-gate` environment before it tags and
    publishes — so the dispatch alone ships nothing. Give the user the printed
    run URL and tell them to approve there when ready. The script validates the
-   version (bare semver, greater than published) and prints any error — surface
-   it, don't work around it.
+   version (bare semver, a single increment of the published version) and
+   prints any error — surface it, don't work around it.
 
 Repeat 3–4 per selected target, **one at a time**, confirming each.
 

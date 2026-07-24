@@ -205,6 +205,18 @@ def dispatch(name: str, version: str, preview: bool, sha: str) -> int:
         if higher != version:
             print(f"error: {version} is not greater than published {published}.", file=sys.stderr)
             return 2
+        # Require a single-step increment (major, minor, or patch) so a typo
+        # like 1.48.0 -> 1.84.0 fails here instead of at scan (or worse, at the
+        # approver). Mirrors the scan-commits check in the release workflows.
+        maj, minor, pat = (int(x) for x in published.split("."))
+        valid = {f"{maj + 1}.0.0", f"{maj}.{minor + 1}.0", f"{maj}.{minor}.{pat + 1}"}
+        if version not in valid:
+            print(
+                f"error: {version} is not a single increment of published {published} "
+                f"(expected one of: {', '.join(sorted(valid))}).",
+                file=sys.stderr,
+            )
+            return 2
 
     args = [
         "workflow", "run", t["workflow"],
