@@ -14,6 +14,7 @@ runs:
       shell: bash
       run: |
         REF="$(jq -r .branch_name strands-parsed-input.json)"
+        HEAD_SHA="$(jq -r '.head_sha // ""' strands-parsed-input.json)"
         ISSUE_ID="$(jq -r .issue_id strands-parsed-input.json)"
         HEAD_REPO="$(jq -r '.head_repo // ""' strands-parsed-input.json)"
         MODE="$(jq -r '.mode // ""' strands-parsed-input.json)"
@@ -31,6 +32,7 @@ runs:
         fi
 
         echo "ref=$REF" >> $GITHUB_OUTPUT
+        echo "head_sha=$HEAD_SHA" >> $GITHUB_OUTPUT
         echo "issue_id=$ISSUE_ID" >> $GITHUB_OUTPUT
         echo "head_repo=$HEAD_REPO" >> $GITHUB_OUTPUT
         echo "mode=$MODE" >> $GITHUB_OUTPUT
@@ -69,6 +71,7 @@ runs:
       env:
         GITHUB_TOKEN: ${{ github.token }}
         REF: ${{ steps.read-input.outputs.ref }}
+        HEAD_SHA: ${{ steps.read-input.outputs.head_sha }}
       run: |
 
         if [ -f "$RUNNER_TEMP/repository_state.tar.gz" ]; then
@@ -91,6 +94,16 @@ runs:
 
           # Fetch the remote repository
           git fetch origin "$REF"
+
+          # Validate that the repository state descends from the approved SHA
+          if [ -n "$HEAD_SHA" ]; then
+            if ! git merge-base --is-ancestor "$HEAD_SHA" HEAD; then
+              echo "::error::Repository state does not descend from approved commit $HEAD_SHA — aborting push"
+              cd "$ORIGINAL_DIRECTORY"
+              rm -rf "$RUNNER_TEMP/temp_git_repo"
+              exit 1
+            fi
+          fi
 
           # Stage and commit any changes first
           if [ -n "$(git status --porcelain)" ]; then

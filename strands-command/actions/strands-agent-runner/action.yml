@@ -45,6 +45,7 @@ runs:
       shell: bash
       run: |
         echo "ref=$(jq -r .branch_name strands-parsed-input.json)" >> $GITHUB_OUTPUT
+        echo "head_sha=$(jq -r '.head_sha // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "session_id=$(jq -r .session_id strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "head_repo=$(jq -r '.head_repo // ""' strands-parsed-input.json)" >> $GITHUB_OUTPUT
         echo "system_prompt<<EOF" >> $GITHUB_OUTPUT
@@ -76,8 +77,19 @@ runs:
     - name: Checkout repository
       uses: actions/checkout@v6
       with:
-        ref: ${{ steps.read-input.outputs.ref }}
+        ref: ${{ steps.read-input.outputs.head_sha || steps.read-input.outputs.ref }}
         repository: ${{ steps.read-input.outputs.head_repo || github.repository }}
+
+    - name: Verify checkout SHA
+      if: steps.read-input.outputs.head_sha != ''
+      shell: bash
+      run: |
+        ACTUAL=$(git rev-parse HEAD)
+        EXPECTED="${{ steps.read-input.outputs.head_sha }}"
+        if [ "$ACTUAL" != "$EXPECTED" ]; then
+          echo "::error::Checkout SHA mismatch: expected $EXPECTED, got $ACTUAL"
+          exit 1
+        fi
 
     - name: Set up Python
       uses: actions/setup-python@v4

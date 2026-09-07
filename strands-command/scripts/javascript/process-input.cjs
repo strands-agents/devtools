@@ -26,6 +26,7 @@ async function getIssueInfo(github, context, inputs) {
 async function determineBranch(github, context, issueId, mode, isPullRequest) {
   let branchName = 'main';
   let headRepo = null;
+  let headSha = null;
 
   if (mode === 'implementer' && !isPullRequest) {
     branchName = `agent-tasks/${issueId}`;
@@ -62,18 +63,19 @@ async function determineBranch(github, context, issueId, mode, isPullRequest) {
       pull_number: issueId
     });
     branchName = pr.data.head.ref;
-    
+    headSha = pr.data.head.sha;
+
     // Check if PR is from a fork
     const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
     const prHeadRepo = pr.data.head.repo?.full_name;
-    
+
     if (prHeadRepo && prHeadRepo !== baseRepo) {
       headRepo = prHeadRepo;
       console.log(`Detected fork PR from ${headRepo}`);
     }
   }
 
-  return { branchName, headRepo };
+  return { branchName, headRepo, headSha };
 }
 
 function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue) {
@@ -140,7 +142,7 @@ module.exports = async (context, github, core, inputs) => {
     }
     console.log(`Is PR: ${isPullRequest}, Command: "${command}", Mode: ${mode}`);
 
-    const { branchName, headRepo } = await determineBranch(github, context, issueId, mode, isPullRequest);
+    const { branchName, headRepo, headSha } = await determineBranch(github, context, issueId, mode, isPullRequest);
     console.log(`Building prompts - mode: ${mode}, issue: ${issueId}, is PR: ${isPullRequest}`);
 
     const { sessionId, systemPrompt, prompt } = buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue);
@@ -150,6 +152,7 @@ module.exports = async (context, github, core, inputs) => {
 
     const outputs = {
       branch_name: branchName,
+      head_sha: headSha,
       session_id: sessionId,
       system_prompt: systemPrompt,
       prompt: prompt,
