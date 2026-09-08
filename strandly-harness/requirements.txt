@@ -1,0 +1,25 @@
+# Dependencies for the deployed AgentCore Runtime (agentcore configure --requirements-file).
+# The starter toolkit resolves these with uv and cross-compiles for ARM64. We list the runtime's
+# real needs explicitly (the package's base deps + the agentcore/mcp/s3 extras) because the deployed
+# runtime genuinely uses all of them — the AgentCore sandbox + Memory session, the MCP doc server,
+# and boto3 (Secrets Manager / KB). Locally these stay optional extras in pyproject.toml.
+#
+# Supply-chain note: at deploy time the workflow OVERWRITES this file with a fully pinned and
+# sha256-hashed export of the committed uv.lock (the step named Pin runtime requirements from
+# uv.lock in .github/workflows/deploy.yml), so the runtime image is built from the exact locked
+# versions. This checked-in copy stays the human-readable list of the top-level runtime deps;
+# pyproject.toml + uv.lock are the source of truth (after a dep change, run: uv lock).
+strands-agents
+strands-agents-tools
+pydantic>=2
+bedrock-agentcore[strands-agents]
+mcp
+# `uv` provides the `uvx` binary that launches the strands-agents docs MCP server
+# (`uvx strands-agents-mcp-server`). The AgentCore Runtime image has no uv/uvx, so without this the
+# docs MCP is silently skipped ("uvx not found on PATH") and the agent loses its Strands doc source.
+uv
+boto3
+# Observability: the starter toolkit only wraps the entrypoint in `opentelemetry-instrument` (the
+# thing that emits GenAI traces to CloudWatch/X-Ray) when this distro is in the requirements. Paired
+# with AGENT_OBSERVABILITY_ENABLED=true (set by `strandly deploy`), it powers the dashboard's traces.
+aws-opentelemetry-distro

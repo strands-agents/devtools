@@ -1,0 +1,170 @@
+# Deploy Strandly (strandly-harness/) to a hosted Bedrock AgentCore Runtime — keyless, via OIDC.
+#
+# Drives the `provision -> deploy -> runtime-iam` lifecycle with the privileged *deploy* role
+# minted by the OidcStack (strandly-harness/infra/stacks/oidc_stack.py). The deploy role's trust
+# is locked to this repo's protected refs (main + the `production` environment), so only reviewed,
+# merged code can deploy.
+#
+# Triggers:
+#   - push to main touching strandly-harness/** — ship on code changes (the deploy is idempotent:
+#     provision re-synthesizes the CDK stacks and `strandly deploy` updates the runtime in place).
+#   - workflow_dispatch — manual redeploy (e.g. to a different environment suffix).
+#
+# Setup (one-time, after `cdk deploy 'Strandly-Oidc-<env>'`): set repo secrets
+#   AWS_DEPLOY_ROLE_ARN = <DeployRoleArn output>
+#   AWS_REGION          = us-west-2   (optional; defaults below)
+name: Strandly Deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "strandly-harness/**"
+      - ".github/workflows/strandly-deploy.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment suffix (dev/prod/...)"
+        required: false
+        default: "dev"
+        type: string
+
+# Never run two deploys of the same ref at once (CreateAgentRuntime + multi-stack cdk deploy are
+# not safe to interleave); let an in-flight deploy finish rather than cancelling it mid-create.
+concurrency:
+  group: strandly-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # REQUIRED: mint the OIDC token to assume the deploy role
+  contents: read
+
+defaults:
+  run:
+    working-directory: strandly-harness
+
+jobs:
+  deploy:
+    name: provision + deploy + runtime-iam
+    runs-on: ubuntu-latest
+    env:
+      STRANDLY_NAME: strandly
+      STRANDLY_ENV: ${{ inputs.environment || 'dev' }}
+      AWS_REGION: ${{ secrets.AWS_REGION || 'us-west-2' }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: strandly-harness/uv.lock
+
+      # The agentcore starter toolkit resolves requirements.txt with `uv` (cloud build, ARM64).
+      - uses: astral-sh/setup-uv@f98e06938123ccabd21905ea5d0069192241f9f1 # v8.3.1
+
+      # Supply-chain gate: install EXACTLY the committed uv.lock BEFORE we touch AWS. With
+      # --locked, uv hard-fails if uv.lock is stale vs pyproject.toml (a dep changed without
+      # relocking) and verifies every artifact against the hashes recorded in the lock, so a
+      # poisoned/yanked transitive release or an unreviewed dep change fails the deploy loudly
+      # here instead of shipping silently. Installs into the project .venv only; the pip env
+      # the deploy steps below use is untouched.
+      - name: Verify uv.lock (locked-install supply-chain gate)
+        run: uv sync --locked --all-extras
+
+      # Close the build-path gap: the agentcore starter toolkit resolves requirements.txt with uv
+      # inside the ARM64 CodeBuild, so an unpinned file would re-resolve at image build time.
+      # Regenerate requirements.txt from the committed uv.lock instead: exact == pins + sha256
+      # hashes for every wheel variant. --frozen exports the lock as-is; combined with the sync
+      # gate above the export is guaranteed consistent with pyproject.toml.
+      - name: Pin runtime requirements from uv.lock (uv export)
+        run: |
+          set -euo pipefail
+          uv export --frozen --format requirements-txt --no-emit-project --no-dev --extra agentcore --extra mcp --extra s3 --extra observability -o requirements.txt
+          test -s requirements.txt
+          for pkg in strands-agents strands-agents-tools pydantic bedrock-agentcore mcp uv boto3 aws-opentelemetry-distro; do
+            grep -qE "^${pkg}==" requirements.txt || { echo "::error::${pkg} missing from uv export"; exit 1; }
+          done
+          echo "requirements.txt pinned from uv.lock: $(grep -cE "^[a-zA-Z0-9._-]+==" requirements.txt) packages"
+
+      - name: Assume the deploy role (OIDC — no static AWS keys)
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install Strandly + the agentcore toolkit
+        run: |
+          pip install -e ".[all]" bedrock-agentcore-starter-toolkit
+          # CDK Python libs for `strandly provision` (drives `cdk deploy` of the Backend/Data
+          # stacks) and the RuntimeIam step below. `cdk` itself resolves via `npx aws-cdk@2`.
+          pip install -r infra/requirements.txt
+
+      - name: Provision backends (CDK Backend + Data stacks)
+        run: |
+          set -euo pipefail
+          # `provision` prints eval-able `export ...` lines (STRANDLY_SECRETS_ARN, AWS_REGION) to
+          # stdout and writes every backend output to infra/cdk.provision-outputs.json.
+          eval "$(strandly provision --name "$STRANDLY_NAME" --env "$STRANDLY_ENV" --region "$AWS_REGION")"
+          echo "STRANDLY_SECRETS_ARN=$STRANDLY_SECRETS_ARN" >> "$GITHUB_ENV"
+
+          # Surface the backend ids (Backend stack outputs) for the deploy step.
+          OUT=infra/cdk.provision-outputs.json
+          BACKEND_KEY="$(python -c "import os;print(os.environ['STRANDLY_NAME'].capitalize() + '-Backend-' + os.environ['STRANDLY_ENV'])")"
+          echo "Backend outputs ($BACKEND_KEY):"
+          jq -r --arg k "$BACKEND_KEY" '.[$k] // {} | to_entries[] | "  \(.key)=\(.value)"' "$OUT"
+          {
+            echo "MEMORY_ID=$(jq -r --arg k "$BACKEND_KEY" '.[$k].MemoryId // empty' "$OUT")"
+            echo "CODE_INTERPRETER_ID=$(jq -r --arg k "$BACKEND_KEY" '.[$k].CodeInterpreterId // empty' "$OUT")"
+            echo "KB_ID=$(jq -r --arg k "$BACKEND_KEY" '.[$k].KnowledgeBaseId // empty' "$OUT")"
+            echo "DATA_SOURCE_ID=$(jq -r --arg k "$BACKEND_KEY" '.[$k].DataSourceId // empty' "$OUT")"
+          } >> "$GITHUB_ENV"
+
+      - name: Deploy the AgentCore runtime
+        id: deploy
+        run: |
+          set -euo pipefail
+          # Pass the backend ids as runtime env vars — the deployed Config.load() reads them from
+          # the process env. STRANDLY_SECRETS_ARN lets the runtime fetch tokens too, once its exec
+          # role is granted GetSecretValue (the RuntimeIam step below). Empty ids are omitted.
+          ENV_ARGS=(--env AWS_REGION="$AWS_REGION" --env STRANDLY_SECRETS_ARN="$STRANDLY_SECRETS_ARN")
+          [ -n "${MEMORY_ID:-}" ]           && ENV_ARGS+=(--env AGENTCORE_MEMORY_ID="$MEMORY_ID")
+          [ -n "${CODE_INTERPRETER_ID:-}" ] && ENV_ARGS+=(--env AGENTCORE_CODE_INTERPRETER_ID="$CODE_INTERPRETER_ID")
+          [ -n "${KB_ID:-}" ]               && ENV_ARGS+=(--env STRANDLY_KB_ID="$KB_ID")
+          [ -n "${DATA_SOURCE_ID:-}" ]      && ENV_ARGS+=(--env STRANDLY_KB_DATA_SOURCE_ID="$DATA_SOURCE_ID")
+
+          strandly deploy --name "$STRANDLY_NAME" --region "$AWS_REGION" "${ENV_ARGS[@]}" 2>&1 | tee deploy.log
+
+          # `strandly deploy` records the runtime ARN to ~/.strandly/runtime.json (and the
+          # toolkit's .bedrock_agentcore.yaml). Surface it for invoke/poll + the summary.
+          RUNTIME_ARN="$(python -c "import json,os;p=os.path.expanduser('~/.strandly/runtime.json');print(json.load(open(p)).get('runtime_arn','') if os.path.exists(p) else '')")"
+          echo "runtime_arn=$RUNTIME_ARN" >> "$GITHUB_OUTPUT"
+
+          # The toolkit auto-creates the runtime execution role; grab its name to attach
+          # data-plane perms next (the #1 cause of post-deploy AccessDenied).
+          EXEC_ROLE="$(grep -oiE 'role/[A-Za-z0-9_+=,.@-]+' deploy.log | sed 's#[Rr]ole/##' | tail -1 || true)"
+          echo "exec_role=$EXEC_ROLE" >> "$GITHUB_OUTPUT"
+
+      - name: Grant the runtime exec role its data-plane perms (RuntimeIam stack)
+        if: steps.deploy.outputs.exec_role != ''
+        run: |
+          set -euo pipefail
+          STACK="$(python -c "import os;print(os.environ['STRANDLY_NAME'].capitalize() + '-RuntimeIam-' + os.environ['STRANDLY_ENV'])")"
+          ( cd infra && npx --yes aws-cdk@2 deploy "$STACK" --require-approval never \
+              -c env="$STRANDLY_ENV" -c name="$STRANDLY_NAME" -c region="$AWS_REGION" \
+              -c exec_role_name="${{ steps.deploy.outputs.exec_role }}" \
+              -c kb_id="${KB_ID:-}" \
+              -c run_ledger_table="${STRANDLY_NAME}-${STRANDLY_ENV}-runledger" )
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Strandly deploy"
+            echo ""
+            echo "- **Env:** \`${STRANDLY_ENV}\` · **Region:** \`${AWS_REGION}\`"
+            echo "- **Runtime ARN:** \`${{ steps.deploy.outputs.runtime_arn }}\`"
+            echo "- **Exec role:** \`${{ steps.deploy.outputs.exec_role }}\`"
+            echo ""
+            echo "Invoke it from the **Strandly Invoke** workflow (uses the minimal invoke role)."
+          } >> "$GITHUB_STEP_SUMMARY"

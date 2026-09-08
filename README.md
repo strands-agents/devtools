@@ -19,6 +19,12 @@ This repo serves as a central location for:
 | [`authorization-check`](authorization-check/) | Check user authorization for workflow triggers |
 | [`strands-command`](strands-command/) | Run a Strands agent in GitHub Actions |
 
+## Tools
+
+| Tool | Description |
+|------|-------------|
+| [`strandly-harness`](strandly-harness/) | One opinionated Strands agent that runs locally or on Bedrock AgentCore, served as a CLI, MCP server, or AgentCore runtime |
+
 ## Documentation
 
 For more information about Strands Agents, visit our [documentation](https://strandsagents.com/latest/documentation/docs/).
