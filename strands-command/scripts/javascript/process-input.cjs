@@ -23,7 +23,7 @@ async function getIssueInfo(github, context, inputs) {
   return { issueId, command, issue };
 }
 
-async function determineBranch(github, context, issueId, mode, isPullRequest) {
+async function determineBranch(github, context, issueId, mode, isPullRequest, inputs) {
   let branchName = 'main';
   let headRepo = null;
   let headSha = null;
@@ -57,20 +57,20 @@ async function determineBranch(github, context, issueId, mode, isPullRequest) {
       }
     }
   } else if (isPullRequest) {
-    const pr = await github.rest.pulls.get({
-      owner: context.repo.owner,
-      repo: context.repo.repo,
-      pull_number: issueId
-    });
-    branchName = pr.data.head.ref;
-    headSha = pr.data.head.sha;
+    // Require the head resolved upstream (the authorization job for a /strands
+    // comment, the pull_request event SHA for auto-review). Don't re-resolve
+    // live HEAD here: this runs later in the pipeline, so a re-fetch could pick
+    // up a different commit than the command was issued against. Stop if it is
+    // missing rather than fall back to resolving HEAD.
+    if (!inputs.head_sha) {
+      throw new Error('Missing head_sha for pull request; not resolving live HEAD');
+    }
+    headSha = inputs.head_sha;
+    branchName = inputs.head_ref || branchName;
 
-    // Check if PR is from a fork
     const baseRepo = `${context.repo.owner}/${context.repo.repo}`;
-    const prHeadRepo = pr.data.head.repo?.full_name;
-
-    if (prHeadRepo && prHeadRepo !== baseRepo) {
-      headRepo = prHeadRepo;
+    if (inputs.head_repo && inputs.head_repo !== baseRepo) {
+      headRepo = inputs.head_repo;
       console.log(`Detected fork PR from ${headRepo}`);
     }
   }
@@ -142,7 +142,7 @@ module.exports = async (context, github, core, inputs) => {
     }
     console.log(`Is PR: ${isPullRequest}, Command: "${command}", Mode: ${mode}`);
 
-    const { branchName, headRepo, headSha } = await determineBranch(github, context, issueId, mode, isPullRequest);
+    const { branchName, headRepo, headSha } = await determineBranch(github, context, issueId, mode, isPullRequest, inputs);
     console.log(`Building prompts - mode: ${mode}, issue: ${issueId}, is PR: ${isPullRequest}`);
 
     const { sessionId, systemPrompt, prompt } = buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue);

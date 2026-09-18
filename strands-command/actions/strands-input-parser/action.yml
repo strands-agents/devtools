@@ -14,6 +14,18 @@ inputs:
     description: 'Additional instructions to append to the system prompt'
     required: false
     default: ''
+  head_sha:
+    description: 'PR head SHA resolved up front (from the authorization job for a /strands comment, or the pull_request event SHA for auto-review). Required for pull requests; the parser stops rather than resolve live HEAD.'
+    required: false
+    default: ''
+  head_repo:
+    description: 'PR head repository (owner/name)'
+    required: false
+    default: ''
+  head_ref:
+    description: 'PR head branch name'
+    required: false
+    default: ''
 runs:
   using: 'composite'
   steps:
@@ -44,8 +56,12 @@ runs:
       env:
         # Passed via env, not script interpolation: the suffix is free-form text
         # (markdown with backticks, ${...}, etc.) that would otherwise break the
-        # surrounding JS template literal and allow script injection.
+        # surrounding JS template literal. head_ref is an arbitrary branch name,
+        # so it gets the same treatment.
         SYSTEM_PROMPT_SUFFIX: ${{ inputs.system_prompt_suffix }}
+        HEAD_SHA: ${{ inputs.head_sha }}
+        HEAD_REPO: ${{ inputs.head_repo }}
+        HEAD_REF: ${{ inputs.head_ref }}
       with:
         script: |
           const processInput = require('./devtools/strands-command/scripts/javascript/process-input.cjs');
@@ -53,6 +69,9 @@ runs:
             issue_id: '${{ inputs.issue_id }}',
             command: '${{ inputs.command }}',
             session_id: '${{ inputs.session_id }}',
+            head_sha: process.env.HEAD_SHA,
+            head_repo: process.env.HEAD_REPO,
+            head_ref: process.env.HEAD_REF,
             system_prompt_suffix: process.env.SYSTEM_PROMPT_SUFFIX
           });
 
