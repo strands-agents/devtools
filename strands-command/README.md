@@ -79,6 +79,21 @@ on:
         required: false
         type: string
         default: ''
+      # For an auto-review workflow that dispatches this one on a pull_request
+      # event: pass the event's head SHA/repo/ref so the run pins them. Leave
+      # unset for manual dispatch and /strands comments.
+      head_sha:
+        required: false
+        type: string
+        default: ''
+      head_repo:
+        required: false
+        type: string
+        default: ''
+      head_ref:
+        required: false
+        type: string
+        default: ''
 
 jobs:
   authorization-check:
@@ -88,6 +103,11 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       approval-env: ${{ steps.auth.outputs.approval-env }}
+      # Head resolved once up front so the run acts on that commit, not
+      # whatever HEAD is later.
+      head-sha: ${{ steps.auth.outputs.head-sha }}
+      head-repo: ${{ steps.auth.outputs.head-repo }}
+      head-ref: ${{ steps.auth.outputs.head-ref }}
     steps:
       - name: Check Authorization
         id: auth
@@ -96,6 +116,7 @@ jobs:
           skip-check: ${{ github.event_name == 'workflow_dispatch' }}
           username: ${{ github.event.comment.user.login || 'invalid' }}
           allowed-roles: 'maintain,triage,write,admin'
+          issue-id: ${{ inputs.issue_id || github.event.issue.number }}
 
   setup-and-process:
     needs: [authorization-check]
@@ -115,6 +136,12 @@ jobs:
           issue_id: ${{ inputs.issue_id }}
           command: ${{ inputs.command }}
           session_id: ${{ inputs.session_id }}
+          # Use the resolved head instead of re-resolving live HEAD. inputs.head_sha
+          # covers auto-review (it passes the pull_request event SHA through the
+          # dispatch); the authorization-check output covers /strands comments.
+          head_sha: ${{ inputs.head_sha || needs.authorization-check.outputs.head-sha }}
+          head_repo: ${{ inputs.head_repo || needs.authorization-check.outputs.head-repo }}
+          head_ref: ${{ inputs.head_ref || needs.authorization-check.outputs.head-ref }}
 
   execute-readonly-agent:
     needs: [setup-and-process]

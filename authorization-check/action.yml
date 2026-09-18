@@ -12,17 +12,29 @@ inputs:
   allowed-roles:
     description: 'Comma-separated list of allowed roles (e.g., "triage,write,admin")'
     required: true
+  issue-id:
+    description: 'Issue or PR number the command targets (defaults to the comment/PR from the event)'
+    required: false
+    default: ''
 
 outputs:
   approval-env:
     description: 'Approval environment name (auto-approve or manual-approval)'
     value: ${{ steps.collab-check.outputs.result || steps.auto-approve.outputs.result }}
+  head-sha:
+    description: 'PR head SHA resolved once in the authorization job so downstream acts on the same commit; empty for non-PR targets'
+    value: ${{ steps.pin.outputs.head-sha }}
+  head-repo:
+    description: 'PR head repository (owner/name), for fork checkouts'
+    value: ${{ steps.pin.outputs.head-repo }}
+  head-ref:
+    description: 'PR head branch name'
+    value: ${{ steps.pin.outputs.head-ref }}
 
 runs:
   using: 'composite'
   steps:
     - name: Checkout action
-      if: inputs.skip-check != 'true'
       uses: actions/checkout@v6
       with:
         repository: strands-agents/devtools
@@ -52,3 +64,19 @@ runs:
         result-encoding: string
         script: |
           return "auto-approve"
+
+    # Resolve the PR head once so the downstream jobs all act on the same
+    # commit, and for a /strands comment, stop if the head moved after the
+    # command was issued. No-op for non-PR targets.
+    - name: Pin and verify head commit
+      id: pin
+      uses: actions/github-script@v8
+      with:
+        script: |
+          const pinAndVerify = require('./_authorization-check/authorization-check/scripts/pin-and-verify.cjs');
+          const result = await pinAndVerify(context, github, { issueId: '${{ inputs.issue-id }}' });
+          if (result) {
+            core.setOutput('head-sha', result.headSha);
+            core.setOutput('head-repo', result.headRepo);
+            core.setOutput('head-ref', result.headRef);
+          }
