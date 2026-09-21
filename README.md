@@ -1,3 +1,12 @@
+<div align="center">
+  <a href="https://strandsagents.com">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://strandsagents.com/latest/assets/wordmark-github-dark.svg">
+      <img src="https://strandsagents.com/latest/assets/wordmark-github-light.svg" alt="Strands" width="320">
+    </picture>
+  </a>
+</div>
+
 # Strands Agents - Shared Workflows & Tools
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
