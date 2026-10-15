@@ -1,0 +1,213 @@
+# Invoke the *deployed* Strandly AgentCore runtime from a GitHub Action — keyless, via OIDC.
+#
+# Uses the **minimal invoke role** minted by the OidcStack (strandly-harness/infra/stacks/oidc_stack.py):
+# it can only `bedrock-agentcore:InvokeAgentRuntime` + read AgentCore Memory back for `strandly poll`.
+# It can NEVER redeploy the agent — that is the whole point of splitting it from the deploy role. So a
+# compromised invoke run (or a prompt it handles) can't escalate to changing the deployed code.
+#
+# Three entry points:
+#   - workflow_dispatch — a human/automation kicks off a one-shot prompt and gets the result.
+#   - workflow_call     — other workflows reuse it as a step (e.g. a scheduled "daily review"),
+#                         forwarding their own `github` context so the run threads into the *same*
+#                         AgentCore Memory session as every other ingress.
+#   - @strandly mention — an OWNER/MEMBER/COLLABORATOR mentions `@strandly` in an issue, PR, or
+#                         comment body. The mention body becomes the prompt. Gated on author
+#                         association so an arbitrary drive-by account cannot spend invocations or
+#                         steer the agent; the deployed agent replies on the thread itself (it holds
+#                         its own GitHub credential — this workflow needs no write permission).
+#
+# Session scoping (the "same agent regardless of ingress" guarantee): the session id is NOT
+# hard-coded here. It is derived by `strandly_harness.ops.lambdas.mention_poller.sessions.session_id_from_github_event`
+# from the GitHub context, exactly like the mention poller and a native issue/PR event:
+#   1. an explicit `session_id` input  -> used verbatim (SESSION_ID env override), else
+#   2. the `github_context` input (a caller's `toJSON(github)`) -> `gh-<owner>-<repo>-<kind>-<number>`, else
+#   3. this run's own `toJSON(github)` — which for a mention trigger carries the issue/PR, so a
+#      `@strandly` mention on PR #42 lands in `gh-<owner>-<repo>-pr-42` alongside every other ingress.
+#
+# Setup (one-time, after `cdk deploy 'Strandly-Oidc-<env>'`): set repo secrets
+#   AWS_INVOKE_ROLE_ARN  = <InvokeRoleArn output>
+#   AWS_REGION           = us-west-2          (optional; defaults below)
+#   STRANDLY_RUNTIME_ARN = <deployed runtime> (optional; else resolved from --runtime-arn)
+name: Strandly Invoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      prompt:
+        description: "Prompt / task for the deployed agent"
+        required: true
+        type: string
+      session_id:
+        description: "Explicit session id override (affinity + Memory continuity). Default: derived from github_context / this run."
+        required: false
+        type: string
+      github_context:
+        description: "JSON `toJSON(github)` to scope the session to an issue/PR/discussion. Usually passed by a calling workflow."
+        required: false
+        type: string
+      poll_attempts:
+        description: "How many times to poll for the result before giving up"
+        required: false
+        default: "60"
+        type: string
+      poll_interval:
+        description: "Seconds between polls"
+        required: false
+        default: "15"
+        type: string
+  workflow_call:
+    inputs:
+      prompt:
+        required: true
+        type: string
+      session_id:
+        required: false
+        type: string
+      github_context:
+        required: false
+        type: string
+      poll_attempts:
+        required: false
+        default: "60"
+        type: string
+      poll_interval:
+        required: false
+        default: "15"
+        type: string
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+# Serialize runs that share a session id so two invokes don't fight over the same Memory session.
+# Best-effort: an explicit session_id groups exactly; a mention groups by its issue/PR number;
+# otherwise fall back to the unique run id.
+concurrency:
+  group: strandly-invoke-${{ inputs.session_id || github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+permissions:
+  id-token: write # REQUIRED: mint the OIDC token to assume the invoke role
+  contents: read
+
+jobs:
+  invoke:
+    name: invoke + poll
+    # Mention ingress is double-gated: the body must contain `@strandly`, AND the author must be a
+    # maintainer-class association (OWNER/MEMBER/COLLABORATOR) and not a bot — so a drive-by account
+    # (or the agent's own replies) can never trigger an invocation. Dispatch/call pass through.
+    if: >-
+      (github.event_name != 'issues' && github.event_name != 'issue_comment') ||
+      (github.event_name == 'issues' &&
+       contains(github.event.issue.body, '@strandly') &&
+       github.event.issue.user.type != 'Bot' &&
+       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.issue.author_association)) ||
+      (github.event_name == 'issue_comment' &&
+       contains(github.event.comment.body, '@strandly') &&
+       github.event.comment.user.type != 'Bot' &&
+       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION || 'us-west-2' }}
+      STRANDLY_RUNTIME_ARN: ${{ secrets.STRANDLY_RUNTIME_ARN }}
+      # Session derivation inputs (read by strandly_harness.ops.lambdas.mention_poller.sessions):
+      #   SESSION_ID    — explicit override; empty => derive (the helper treats "" as unset).
+      #   GITHUB_CONTEXT — caller-forwarded context if given, else this run's own context (which
+      #                    carries the issue/PR for a mention trigger).
+      SESSION_ID: ${{ inputs.session_id }}
+      GITHUB_CONTEXT: ${{ inputs.github_context || toJSON(github) }}
+      POLL_ATTEMPTS: ${{ inputs.poll_attempts || '60' }}
+      POLL_INTERVAL: ${{ inputs.poll_interval || '15' }}
+    defaults:
+      run:
+        working-directory: strandly-harness
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: strandly-harness/uv.lock
+
+      # `.[s3]` pulls boto3 (the only runtime dep invoke/poll need) — no agentcore/mcp/toolkit.
+      - name: Install Strandly (boto3 client only)
+        run: pip install -e ".[s3]"
+
+      - name: Resolve the canonical session id
+        id: session
+        # One source of truth for every ingress: derive the id the same way the mention poller and a
+        # native issue/PR event do, so an Action invoke threads into the same Memory session. Reads
+        # SESSION_ID (override) + GITHUB_CONTEXT from the job env above.
+        run: |
+          set -euo pipefail
+          SID="$(python -c 'from strandly_harness.ops.lambdas.mention_poller.sessions import session_id_from_github_event as s; print(s())')"
+          echo "Resolved session id: $SID"
+          echo "id=$SID" >> "$GITHUB_OUTPUT"
+
+      - name: Assume the invoke role (OIDC — no static AWS keys)
+        uses: aws-actions/configure-aws-credentials@254c19bd240aabef8777f48595e9d2d7b972184b # v6.2.1
+        with:
+          role-to-assume: ${{ secrets.AWS_INVOKE_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Invoke the deployed runtime (fire-and-forget)
+        id: invoke
+        # PROMPT is passed via env (NOT inlined as ${{ }}) so an arbitrary prompt / mention body
+        # can't break out of the shell command — the standard Actions script-injection guard. For a
+        # mention trigger the issue/comment body *is* the prompt (the agent gets the full thread
+        # context from its own GitHubContextInjector; the body tells it what's being asked now).
+        env:
+          PROMPT: ${{ inputs.prompt || github.event.comment.body || github.event.issue.body }}
+          SESSION_ID: ${{ steps.session.outputs.id }}
+        run: |
+          set -euo pipefail
+          # `invoke` returns {status: accepted, taskId}. The runtime ARN resolves from
+          # --runtime-arn / $STRANDLY_RUNTIME_ARN automatically (serving/deploy.resolve_runtime_arn).
+          RESP="$(strandly invoke "$PROMPT" --session-id "$SESSION_ID" --region "$AWS_REGION")"
+          echo "$RESP"
+          TASK_ID="$(echo "$RESP" | python -c "import sys,json;print(json.load(sys.stdin).get('taskId',''))")"
+          if [ -z "$TASK_ID" ]; then
+            echo "::error::invoke did not return a taskId — is the runtime deployed and STRANDLY_RUNTIME_ARN set?"
+            exit 1
+          fi
+          echo "task_id=$TASK_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Poll for the result
+        id: poll
+        env:
+          SESSION_ID: ${{ steps.session.outputs.id }}
+        run: |
+          set -euo pipefail
+          TASK_ID="${{ steps.invoke.outputs.task_id }}"
+          STATUS="unknown"; RESULT=""
+          for i in $(seq 1 "$POLL_ATTEMPTS"); do
+            RESP="$(strandly poll "$TASK_ID" --session-id "$SESSION_ID" --region "$AWS_REGION" || true)"
+            STATUS="$(echo "$RESP" | python -c "import sys,json;d=json.load(sys.stdin);print(d.get('status','unknown'))" 2>/dev/null || echo unknown)"
+            echo "poll $i/$POLL_ATTEMPTS -> $STATUS"
+            case "$STATUS" in
+              completed)
+                RESULT="$(echo "$RESP" | python -c "import sys,json;print(json.load(sys.stdin).get('result',''))")"
+                break ;;
+              failed)
+                RESULT="$(echo "$RESP" | python -c "import sys,json;print(json.load(sys.stdin).get('error',''))")"
+                break ;;
+            esac
+            sleep "$POLL_INTERVAL"
+          done
+          {
+            echo "## Strandly invoke"
+            echo ""
+            echo "- **Session:** \`$SESSION_ID\` · **Task:** \`$TASK_ID\` · **Status:** \`$STATUS\`"
+            echo ""
+            echo "**Result:**"
+            echo '```'
+            echo "$RESULT"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$STATUS" = "failed" ]; then
+            echo "::error::run failed: $RESULT"; exit 1
+          fi
+          if [ "$STATUS" != "completed" ]; then
+            echo "::warning::run did not complete within the poll budget (last status: $STATUS)"
+          fi

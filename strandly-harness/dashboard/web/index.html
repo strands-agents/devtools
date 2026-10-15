@@ -1,0 +1,1071 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Strandly Dashboard</title>
+  <meta name="description" content="Strandly — runtime telemetry &amp; control dashboard" />
+  <meta name="theme-color" content="#0a0a0b" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Strandly" />
+  <link rel="manifest" href="/manifest.json" />
+  <link rel="icon" href="/icon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js"></script>
+  <!-- Markdown for agent responses: marked parses, DOMPurify sanitizes (transcript text is
+       untrusted). Pinned; renderMarkdown falls back to plain text if either fails to load. -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@14.1.3/marked.min.js"
+          integrity="sha384-k8o8HikHweyzW55Wd3wl18ovJj6vHVYNQeQbeSM0fxx+0WiH4TcccOG9uz8Xd2JR"
+          crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.7/dist/purify.min.js"
+          integrity="sha384-XQqX/4yiUGu+oyr87jvWzRuqBUK/adrY0DunhL+tID9m/9dwSpV8h9Fk/Sg6ifVQ"
+          crossorigin="anonymous"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: 'Inter', system-ui, sans-serif; background:#0a0a0b; color:#e4e4e7; -webkit-font-smoothing: antialiased; }
+    .card { background:#111113; border:1px solid #1f1f24; border-radius:12px; }
+    .badge { padding:2px 10px; border-radius:9999px; font-size:11px; font-weight:600; white-space:nowrap; }
+    .b-completed { background:rgba(34,197,94,0.12); color:#4ade80; }
+    .b-failed    { background:rgba(239,68,68,0.12); color:#f87171; }
+    .b-running   { background:rgba(59,130,246,0.12); color:#60a5fa; }
+    .b-unknown   { background:#1f1f24; color:#9ca3af; }
+    .b-ok           { background:rgba(34,197,94,0.12); color:#4ade80; }
+    .b-alarm        { background:rgba(239,68,68,0.12); color:#f87171; }
+    .b-insufficient { background:#1f1f24; color:#9ca3af; }
+    .tab { display:flex; align-items:center; gap:6px; }
+    .tab.active { color:#fff; border-color:#6366f1; }
+    .row:hover { background:#1a1a1e; cursor:pointer; }
+    .spin { animation: sp 0.8s linear infinite; } @keyframes sp { to { transform: rotate(360deg); } }
+    #chat-log { max-height: 60vh; overflow-y: auto; }
+    .tool-details { border:1px solid #1f1f24; border-radius:10px; background:#0e0e10; }
+    .tool-details summary { cursor:pointer; padding:6px 10px; font-size:12px; color:#9ca3af; user-select:none; list-style-position: inside; }
+    .tool-details[open] summary { border-bottom:1px solid #1f1f24; color:#e4e4e7; }
+    .tool-details pre { padding:8px 10px; font-size:11px; white-space:pre-wrap; word-break:break-word; color:#9ca3af; max-height:16rem; overflow-y:auto; }
+    mark { background:#6366f1; color:#fff; border-radius:2px; padding:0 1px; }
+    .logline { display:flex; gap:10px; padding:1px 0; }
+    .logline .lts { color:#52525b; flex-shrink:0; }
+    .log-error { color:#f87171; } .log-warn { color:#fbbf24; }
+    /* Markdown bubbles (.md-body): Tailwind's preflight strips every element default (headings,
+       list bullets, margins, code styling), so the agent's rendered Markdown needs them back. */
+    .md-body > :first-child { margin-top:0; } .md-body > :last-child { margin-bottom:0; }
+    .md-body p, .md-body ul, .md-body ol, .md-body pre, .md-body blockquote, .md-body table { margin:0.5rem 0; }
+    .md-body h1, .md-body h2, .md-body h3, .md-body h4, .md-body h5, .md-body h6 { font-weight:700; color:#fff; margin:0.75rem 0 0.35rem; }
+    .md-body h1 { font-size:1.15rem; } .md-body h2 { font-size:1.05rem; } .md-body h3, .md-body h4, .md-body h5, .md-body h6 { font-size:1rem; }
+    .md-body ul { list-style:disc; padding-left:1.25rem; } .md-body ol { list-style:decimal; padding-left:1.25rem; }
+    .md-body li { margin:0.15rem 0; }
+    .md-body code { background:#1f1f24; border-radius:4px; padding:1px 5px; font-size:0.85em; }
+    .md-body pre { background:#0e0e10; border:1px solid #1f1f24; border-radius:8px; padding:8px 10px; overflow-x:auto; }
+    .md-body pre code { background:transparent; padding:0; }
+    .md-body blockquote { border-left:3px solid #2a2a30; padding-left:10px; color:#9ca3af; }
+    .md-body hr { border:0; border-top:1px solid #2a2a30; margin:0.75rem 0; }
+    .md-body table { border-collapse:collapse; font-size:0.85em; display:block; overflow-x:auto; }
+    .md-body th, .md-body td { border:1px solid #2a2a30; padding:3px 8px; text-align:left; }
+    .md-body th { background:#1a1a1e; }
+    ::-webkit-scrollbar { width:5px; height:5px; }
+    ::-webkit-scrollbar-track { background:transparent; }
+    ::-webkit-scrollbar-thumb { background:#2a2a30; border-radius:4px; }
+    ::-webkit-scrollbar-thumb:hover { background:#3f3f46; }
+  </style>
+</head>
+<body class="bg-[#0a0a0b] text-gray-200 min-h-screen">
+  <!-- Login gate -->
+  <div id="login" class="hidden min-h-screen flex items-center justify-center px-4">
+    <div class="card p-8 max-w-md w-full text-center">
+      <h1 class="text-2xl font-bold text-white flex items-center justify-center gap-2.5"><svg width="26" height="26" viewBox="0 0 290 463" fill="none" xmlns="http://www.w3.org/2000/svg" class="shrink-0"><path d="M97.29 52.79C85.07 49.17 72.22 56.14 68.6 68.36C64.98 80.58 71.95 93.43 84.17 97.05L235.12 139.78C245.22 142.77 246.36 156.63 236.87 161.23L32.55 260.29C-14.94 283.32-9.16 352.74 41.48 367.59L189.55 411.01 190.13 411.17C202.18 414.38 214.67 407.4 218.2 395.36C221.78 383.12 214.77 370.3 202.54 366.71L54.47 323.29C44.34 320.32 43.19 306.44 52.69 301.83L257.01 202.77C304.43 179.78 298.76 110.48 248.23 95.51L97.29 52.79Z" fill="currentColor" opacity="0.4"/><path d="M259.15.98C271.39-2.57 284.2 4.47 287.75 16.71C291.31 28.95 284.27 41.76 272.03 45.31L71.17 103.67C40.71 112.52 37.2 154.26 65.75 168.08L241.34 253.09C307.87 285.3 299.79 382.55 228.86 403.34L30.4 461.5C18.17 465.09 5.35 458.08 1.76 445.84C-1.82 433.61 5.19 420.79 17.42 417.2L215.88 359.04C246.28 350.13 249.74 308.45 221.23 294.65L45.63 209.64C-20.98 177.39-12.78 79.99 58.29 59.34L259.15.98Z" fill="#00FF77"/></svg>Strandly Dashboard</h1>
+      <p class="text-gray-400 mt-2 mb-6">Runtime telemetry for the Strandly agent. Maintainer sign-in required.</p>
+      <button id="signin" class="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-semibold py-3 rounded-lg transition">Sign in</button>
+      <p id="login-err" class="text-red-400 text-sm mt-4 hidden"></p>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div id="app" class="hidden max-w-6xl mx-auto px-4 py-6">
+    <header class="flex items-center justify-between mb-6">
+      <div class="flex items-center gap-2.5">
+        <svg width="24" height="24" viewBox="0 0 290 463" fill="none" xmlns="http://www.w3.org/2000/svg" class="shrink-0 text-white"><path d="M97.29 52.79C85.07 49.17 72.22 56.14 68.6 68.36C64.98 80.58 71.95 93.43 84.17 97.05L235.12 139.78C245.22 142.77 246.36 156.63 236.87 161.23L32.55 260.29C-14.94 283.32-9.16 352.74 41.48 367.59L189.55 411.01 190.13 411.17C202.18 414.38 214.67 407.4 218.2 395.36C221.78 383.12 214.77 370.3 202.54 366.71L54.47 323.29C44.34 320.32 43.19 306.44 52.69 301.83L257.01 202.77C304.43 179.78 298.76 110.48 248.23 95.51L97.29 52.79Z" fill="currentColor" opacity="0.4"/><path d="M259.15.98C271.39-2.57 284.2 4.47 287.75 16.71C291.31 28.95 284.27 41.76 272.03 45.31L71.17 103.67C40.71 112.52 37.2 154.26 65.75 168.08L241.34 253.09C307.87 285.3 299.79 382.55 228.86 403.34L30.4 461.5C18.17 465.09 5.35 458.08 1.76 445.84C-1.82 433.61 5.19 420.79 17.42 417.2L215.88 359.04C246.28 350.13 249.74 308.45 221.23 294.65L45.63 209.64C-20.98 177.39-12.78 79.99 58.29 59.34L259.15.98Z" fill="#00FF77"/></svg>
+        <h1 class="text-xl font-bold text-white">Strandly Dashboard</h1>
+      </div>
+      <div class="flex items-center gap-3">
+        <span id="who" class="text-sm text-gray-400 hidden sm:inline"></span>
+        <button id="refresh" class="flex items-center gap-1.5 text-sm text-gray-300 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5"><i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> Refresh</button>
+        <button id="signout" class="flex items-center gap-1.5 text-sm text-gray-400 hover:text-white" title="Sign out"><i data-lucide="log-out" class="w-4 h-4"></i></button>
+      </div>
+    </header>
+
+    <nav class="flex gap-6 border-b border-[#1f1f24] mb-6 text-sm font-medium text-gray-400 overflow-x-auto">
+      <button data-tab="overview" class="tab active pb-3 border-b-2 border-transparent shrink-0"><i data-lucide="layout-dashboard" class="w-4 h-4"></i>Overview</button>
+      <button data-tab="runs" class="tab pb-3 border-b-2 border-transparent shrink-0"><i data-lucide="list" class="w-4 h-4"></i>Runs</button>
+      <button data-tab="sessions" class="tab pb-3 border-b-2 border-transparent shrink-0"><i data-lucide="messages-square" class="w-4 h-4"></i>Sessions</button>
+      <button data-tab="activity" class="tab pb-3 border-b-2 border-transparent shrink-0"><i data-lucide="github" class="w-4 h-4"></i>Activity</button>
+      <button data-tab="mentions" class="tab pb-3 border-b-2 border-transparent shrink-0"><i data-lucide="at-sign" class="w-4 h-4"></i>Mentions</button>
+    </nav>
+
+    <section id="view-overview"></section>
+    <section id="view-runs" class="hidden"></section>
+    <section id="view-sessions" class="hidden"></section>
+    <section id="view-activity" class="hidden"></section>
+    <section id="view-mentions" class="hidden"></section>
+  </div>
+
+  <!-- Run detail drawer -->
+  <div id="drawer-bg" class="hidden fixed inset-0 bg-black/60 z-40"></div>
+  <aside id="drawer" class="hidden fixed top-0 right-0 h-full w-full max-w-lg bg-[#0e0e10] border-l border-[#1f1f24] z-50 overflow-y-auto p-6"></aside>
+
+  <!-- Full-screen runtime-logs viewer -->
+  <div id="logs-modal" class="hidden fixed inset-0 z-[60] bg-[#0a0a0b] flex-col">
+    <div class="flex items-center gap-3 px-4 py-3 border-b border-[#1f1f24]">
+      <i data-lucide="scroll-text" class="w-4 h-4 text-gray-400 shrink-0"></i>
+      <span class="text-sm font-semibold text-white shrink-0">Runtime logs</span>
+      <span id="logs-run" class="text-xs text-gray-500 font-mono truncate"></span>
+      <div class="flex-1"></div>
+      <button id="logs-reload" class="text-sm text-gray-300 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5 shrink-0">↻ Reload</button>
+      <button id="logs-close" class="text-gray-400 hover:text-white text-xl px-2 shrink-0" title="Close (Esc)">✕</button>
+    </div>
+    <div class="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-[#1f1f24]">
+      <input id="logs-search" placeholder="Search logs…" autocomplete="off"
+        class="flex-1 min-w-[12rem] bg-[#111113] border border-[#2a2a30] rounded-lg px-3 py-1.5 text-sm text-gray-200 focus:outline-none focus:border-indigo-500" />
+      <span id="logs-count" class="text-xs text-gray-500"></span>
+      <label class="flex items-center gap-1.5 text-xs text-gray-400 select-none"><input id="logs-wrap" type="checkbox" checked class="accent-indigo-500" /> wrap</label>
+    </div>
+    <div id="logs-body" class="flex-1 overflow-auto px-4 py-3 font-mono text-xs leading-5"></div>
+  </div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const LS = { verifier: "strandly_pkce_verifier", tokens: "strandly_tokens", recent: "strandly_recent_sessions" };
+const RECENT_MAX = 8; // how many recently-opened sessions to keep as quick-jump shortcuts
+const GH_HANDLE = "strandly-the-agent"; // the agent's GitHub identity (public data, no token)
+let CONFIG = null;
+
+const refreshIcons = () => { if (window.lucide) window.lucide.createIcons(); };
+
+// ---------- config ----------
+async function loadConfig() {
+  // Deploy-time config.json (written by the CDK BucketDeployment) sits next to index.html.
+  const r = await fetch("/config.json", { cache: "no-store" });
+  if (!r.ok) throw new Error("config.json missing — is the site deployed?");
+  return r.json();
+}
+
+// ---------- PKCE helpers ----------
+function randString(n = 64) {
+  const a = new Uint8Array(n); crypto.getRandomValues(a);
+  return Array.from(a, (b) => ("0" + (b & 0xff).toString(16)).slice(-2)).join("");
+}
+function b64url(buf) {
+  return btoa(String.fromCharCode(...new Uint8Array(buf)))
+    .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+async function challenge(verifier) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+  return b64url(digest);
+}
+const redirectUri = () => window.location.origin + "/";
+
+async function login() {
+  const verifier = randString(64);
+  sessionStorage.setItem(LS.verifier, verifier);
+  const url = new URL(CONFIG.cognitoDomain + "/oauth2/authorize");
+  url.search = new URLSearchParams({
+    response_type: "code",
+    client_id: CONFIG.clientId,
+    redirect_uri: redirectUri(),
+    scope: "openid email profile",
+    code_challenge_method: "S256",
+    code_challenge: await challenge(verifier),
+  }).toString();
+  window.location.assign(url.toString());
+}
+
+async function exchangeCode(code) {
+  const verifier = sessionStorage.getItem(LS.verifier) || "";
+  const body = new URLSearchParams({
+    grant_type: "authorization_code",
+    client_id: CONFIG.clientId,
+    code,
+    redirect_uri: redirectUri(),
+    code_verifier: verifier,
+  });
+  const r = await fetch(CONFIG.cognitoDomain + "/oauth2/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!r.ok) throw new Error("token exchange failed (" + r.status + ")");
+  return storeTokens(await r.json());
+}
+
+async function refresh() {
+  const t = getTokens();
+  if (!t || !t.refresh_token) return null;
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    client_id: CONFIG.clientId,
+    refresh_token: t.refresh_token,
+  });
+  const r = await fetch(CONFIG.cognitoDomain + "/oauth2/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!r.ok) return null;
+  const data = await r.json();
+  data.refresh_token = data.refresh_token || t.refresh_token; // refresh token is not re-issued
+  return storeTokens(data);
+}
+
+function storeTokens(data) {
+  data.expires_at = Date.now() + (data.expires_in || 3600) * 1000;
+  localStorage.setItem(LS.tokens, JSON.stringify(data));
+  return data;
+}
+function getTokens() {
+  try { return JSON.parse(localStorage.getItem(LS.tokens) || "null"); } catch { return null; }
+}
+function clearTokens() { localStorage.removeItem(LS.tokens); }
+
+async function validAccessToken() {
+  let t = getTokens();
+  if (!t) return null;
+  if (Date.now() > (t.expires_at || 0) - 60000) t = await refresh(); // refresh ~1min before expiry
+  return t ? t.access_token : null;
+}
+
+function logout() {
+  clearTokens();
+  const url = new URL(CONFIG.cognitoDomain + "/logout");
+  url.search = new URLSearchParams({ client_id: CONFIG.clientId, logout_uri: redirectUri() }).toString();
+  window.location.assign(url.toString());
+}
+
+// ---------- API ----------
+async function api(path, opts = {}) {
+  const token = await validAccessToken();
+  if (!token) { showLogin(); throw new Error("not authenticated"); }
+  const headers = Object.assign({ Authorization: "Bearer " + token }, opts.headers || {});
+  const r = await fetch(CONFIG.apiBase + path, Object.assign({}, opts, { headers }));
+  if (r.status === 401) { clearTokens(); showLogin(); throw new Error("session expired"); }
+  if (!r.ok) {
+    let detail = "";
+    try { detail = (await r.json()).error || ""; } catch (_) {}
+    const err = new Error("API " + path + " → " + r.status + (detail ? ": " + detail : ""));
+    err.status = r.status;
+    throw err;
+  }
+  return r.json();
+}
+const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
+
+// GitHub public API (no token — same as the Activity tab).
+async function gh(path) {
+  const r = await fetch("https://api.github.com/" + path, { headers: { Accept: "application/vnd.github+json" } });
+  if (!r.ok) throw new Error("GitHub → " + r.status);
+  return r.json();
+}
+
+// ---------- rendering ----------
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const fmtTokens = (n) => (n == null ? "—" : Number(n).toLocaleString());
+const fmtDur = (ms) => (ms == null ? "—" : ms < 1000 ? ms + "ms" : (ms / 1000).toFixed(1) + "s");
+const fmtTime = (iso) => { try { return new Date(iso).toLocaleString(); } catch { return iso || "—"; } };
+const badge = (s) => `<span class="badge b-${esc(s) || "unknown"}">${esc(s || "unknown")}</span>`;
+const errBox = (e) => `<div class="text-red-400">${esc(e.message)}</div>`;
+const card = (label, value, sub = "") =>
+  `<div class="card p-5"><div class="text-gray-400 text-xs uppercase tracking-wide">${label}</div>
+   <div class="text-3xl font-bold text-white mt-1">${value}</div>
+   <div class="text-gray-500 text-xs mt-1">${sub}</div></div>`;
+function commonPrefix(names) {
+  if (names.length < 2) return "";
+  let p = names[0];
+  for (const n of names.slice(1)) { while (p && !n.startsWith(p)) p = p.slice(0, -1); }
+  return p;
+}
+
+// ---------- overview ----------
+// Three independent loaders into placeholders: run stats (ledger), health (poller + alarms),
+// GitHub (public API). Each degrades on its own — one failing source never blanks the others.
+async function renderOverview() {
+  const el = $("#view-overview");
+  el.innerHTML = `
+    <div id="ov-health" class="mb-4"><div class="text-gray-500 text-sm">Checking agent health…</div></div>
+    <div id="ov-runs"><div class="text-gray-500">Loading…</div></div>
+    <div id="ov-github" class="mt-6"><div class="text-gray-500 text-sm">Loading GitHub activity…</div></div>`;
+  loadRunStats(); loadHealth(); loadGithubStats();
+}
+
+async function loadRunStats() {
+  const el = $("#ov-runs"); if (!el) return;
+  try {
+    const o = await api("/api/overview");
+    const rate = o.success_rate == null ? "—" : Math.round(o.success_rate * 100) + "%";
+    el.innerHTML = `<div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+      ${card("Runs today", o.runs_today)}
+      ${card("Success rate", rate, o.completed + " completed · " + o.failed + " failed")}
+      ${card("Active now", o.active, "of last " + o.window + " runs")}
+    </div>`;
+  } catch (e) { el.innerHTML = errBox(e); }
+}
+
+async function loadHealth() {
+  const el = $("#ov-health"); if (!el) return;
+  try {
+    const h = await api("/api/health");
+    const p = h.poller || { status: "unknown" };
+    const pollBadge = p.status === "active" ? `<span class="badge b-ok">● active</span>`
+      : p.status === "silent" ? `<span class="badge b-alarm">● silent</span>`
+      : `<span class="badge b-insufficient">● unknown</span>`;
+    const alarms = h.alarms || [];
+    const prefix = commonPrefix(alarms.map((a) => a.name));
+    const pills = alarms.map((a) => {
+      const cls = a.state === "OK" ? "b-ok" : a.state === "ALARM" ? "b-alarm" : "b-insufficient";
+      const label = a.name.slice(prefix.length) || a.name;
+      return `<span class="badge ${cls}" title="${esc(a.state)}${a.reason ? " — " + esc(a.reason) : ""}">${esc(label)}</span>`;
+    }).join(" ");
+    const firing = alarms.filter((a) => a.state === "ALARM").length;
+    const alarmSummary = alarms.length
+      ? `<span class="${firing ? "text-red-400" : "text-emerald-400"} font-semibold">${firing ? firing + " firing" : "all clear"}</span>`
+      : `<span class="text-gray-500">${h.configured ? "none found" : "not configured"}</span>`;
+    el.innerHTML = `<div class="card p-4">
+      <div class="flex flex-wrap items-center gap-x-5 gap-y-2">
+        <div class="flex items-center gap-2 text-sm"><span class="text-gray-400">Mentions poller</span> ${pollBadge}</div>
+        <div class="h-4 w-px bg-[#2a2a30] hidden sm:block"></div>
+        <div class="flex items-center gap-2 text-sm"><span class="text-gray-400">Alarms</span> ${alarmSummary}</div>
+      </div>
+      ${alarms.length ? `<div class="flex flex-wrap gap-2 mt-3">${pills}</div>` : ""}
+      ${p.detail ? `<div class="text-gray-600 text-xs mt-2">${esc(p.detail)}</div>` : ""}
+    </div>`;
+  } catch (e) { el.innerHTML = errBox(e); }
+}
+
+async function loadGithubStats() {
+  const el = $("#ov-github"); if (!el) return;
+  try {
+    const [prs, issues, ev1, ev2] = await Promise.all([
+      gh("search/issues?q=" + encodeURIComponent(`involves:${GH_HANDLE} type:pr state:open`) + "&per_page=1"),
+      gh("search/issues?q=" + encodeURIComponent(`involves:${GH_HANDLE} type:issue state:open`) + "&per_page=1"),
+      gh(`users/${GH_HANDLE}/events/public?per_page=100&page=1`),
+      gh(`users/${GH_HANDLE}/events/public?per_page=100&page=2`).catch(() => []),
+    ]);
+    const events = [...(ev1 || []), ...(ev2 || [])];
+    // Interactions per day: bucket the public events feed by UTC day, last 14 days.
+    const days = []; const counts = {};
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+      days.push(d); counts[d] = 0;
+    }
+    events.forEach((ev) => { const d = (ev.created_at || "").slice(0, 10); if (d in counts) counts[d]++; });
+    const max = Math.max(1, ...days.map((d) => counts[d]));
+    const bars = days.map((d) => {
+      const n = counts[d];
+      const h = Math.max(Math.round((n / max) * 100), n ? 6 : 2);
+      return `<div class="flex-1 flex flex-col items-center gap-1 min-w-0" title="${d}: ${n} event${n === 1 ? "" : "s"}">
+        <div class="w-full flex items-end" style="height:64px"><div class="w-full rounded-t ${n ? "bg-indigo-500/80" : "bg-[#1f1f24]"}" style="height:${h}%"></div></div>
+        <div class="text-[9px] text-gray-600">${d.slice(8)}</div>
+      </div>`;
+    }).join("");
+    const today = counts[days[days.length - 1]];
+    el.innerHTML = `
+      <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">GitHub · @${GH_HANDLE}</h3>
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-4">
+        ${card("Open PRs", fmtTokens(prs.total_count), "involving the agent")}
+        ${card("Open issues", fmtTokens(issues.total_count), "involving the agent")}
+        ${card("Interactions today", today, "public events, UTC")}
+      </div>
+      <div class="card p-4 mt-4">
+        <div class="text-gray-400 text-xs uppercase tracking-wide mb-2">Interactions per day <span class="text-gray-600 normal-case">· last 14 days, public events feed</span></div>
+        <div class="flex gap-1.5">${bars}</div>
+      </div>`;
+  } catch (e) {
+    el.innerHTML = `<div class="text-gray-500 text-sm">GitHub stats unavailable: ${esc(e.message)} — likely rate-limited, try again in a minute.</div>`;
+  }
+}
+
+// ---------- runs ----------
+async function renderRuns() {
+  const el = $("#view-runs");
+  el.innerHTML = `<div class="text-gray-500">Loading…</div>`;
+  try {
+    const { runs } = await api("/api/runs?limit=50");
+    if (!runs.length) { el.innerHTML = `<div class="text-gray-500">No runs recorded yet.</div>`; return; }
+    const rows = runs.map((r) => `<tr class="row border-t border-[#1f1f24]" data-id="${esc(r.task_id)}">
+      <td class="py-3 pr-3">${badge(r.status)}</td>
+      <td class="py-3 pr-3 text-gray-300 whitespace-nowrap">${fmtTime(r.started_at)}</td>
+      <td class="py-3 pr-3 text-gray-400">${fmtDur(r.duration_ms)}</td>
+      <td class="py-3 pr-3 text-gray-400">${fmtTokens(r.tokens_total)}</td>
+      <td class="py-3 pr-3 text-indigo-400 truncate max-w-[14rem]">${r.github_target ? esc(r.github_target.replace("https://github.com/", "")) : "—"}</td>
+      <td class="py-3 pr-3">${r.session_id
+        ? `<button class="jump-session text-indigo-400 hover:text-indigo-300 text-xs underline whitespace-nowrap" data-session="${esc(r.session_id)}" title="Open this run's session">session →</button>`
+        : `<span class="text-gray-600">—</span>`}</td>
+    </tr>`).join("");
+    el.innerHTML = `<div class="card overflow-x-auto"><table class="w-full text-sm">
+      <thead class="text-gray-500 text-xs uppercase"><tr>
+        <th class="text-left py-3 px-3">Status</th><th class="text-left py-3 pr-3">Started</th>
+        <th class="text-left py-3 pr-3">Duration</th><th class="text-left py-3 pr-3">Tokens</th>
+        <th class="text-left py-3 pr-3">Target</th><th class="text-left py-3 pr-3">Session</th></tr></thead>
+      <tbody>${rows}</tbody></table></div>`;
+    el.querySelectorAll(".row").forEach((tr) =>
+      tr.addEventListener("click", () => openDrawer(tr.dataset.id)));
+    el.querySelectorAll(".jump-session").forEach((b) =>
+      b.addEventListener("click", (e) => { e.stopPropagation(); openSessionFromRun(b.dataset.session); }));
+  } catch (e) { el.innerHTML = errBox(e); }
+}
+
+// Jump from a run (row / drawer) straight into its session's chat — the runs→sessions bridge.
+function openSessionFromRun(sessionId) {
+  if (!sessionId) return;
+  closeDrawer();
+  activeTab = "sessions";
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === "sessions"));
+  ["overview", "runs", "sessions", "activity", "mentions"].forEach((t) =>
+    $("#view-" + t).classList.toggle("hidden", t !== "sessions"));
+  rememberSession(sessionId, "");
+  renderChat(sessionId);
+}
+
+async function openDrawer(id) {
+  $("#drawer-bg").classList.remove("hidden");
+  const d = $("#drawer"); d.classList.remove("hidden");
+  d.innerHTML = `<div class="text-gray-500">Loading…</div>`;
+  try {
+    const r = await api("/api/runs/" + encodeURIComponent(id));
+    const traceLink = r.trace_id
+      ? `<a class="text-indigo-400 underline" target="_blank" href="https://console.aws.amazon.com/cloudwatch/home#xray:traces/${esc(r.trace_id)}">View trace ↗</a>`
+      : "—";
+    const ghLink = r.github_target
+      ? `<a class="text-indigo-400 underline break-all" target="_blank" href="${esc(r.github_target)}">${esc(r.github_target)}</a>`
+      : "—";
+    const sessionLink = r.session_id
+      ? `<button id="drawer-session" class="text-indigo-400 underline break-all text-right" title="Open this run's session (transcript + chat)">${esc(r.session_id)} →</button>`
+      : "—";
+    const kv = (k, v) => `<div class="flex justify-between gap-4 py-2 border-b border-[#1f1f24]">
+      <span class="text-gray-500">${k}</span><span class="text-gray-200 text-right">${v}</span></div>`;
+    d.innerHTML = `
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-lg font-bold text-white truncate">Run ${esc(id)}</h2>
+        <button id="drawer-close" class="text-gray-400 hover:text-white text-xl">✕</button>
+      </div>
+      ${badge(r.status)}
+      <div class="mt-4 text-sm">
+        ${kv("Started", fmtTime(r.started_at))}
+        ${kv("Ended", fmtTime(r.ended_at))}
+        ${kv("Duration", fmtDur(r.duration_ms))}
+        ${kv("Tokens in / out", fmtTokens(r.tokens_in) + " / " + fmtTokens(r.tokens_out))}
+        ${kv("Tokens total", fmtTokens(r.tokens_total))}
+        ${kv("Session", sessionLink)}
+        ${kv("Target", ghLink)}
+        ${kv("Trace", traceLink)}
+      </div>
+      ${r.prompt ? `<div class="mt-4"><div class="text-gray-500 text-xs uppercase mb-1">Prompt</div>
+        <pre class="card p-3 text-xs whitespace-pre-wrap text-gray-300 max-h-40 overflow-y-auto">${esc(r.prompt)}</pre></div>` : ""}
+      ${r.result_summary ? `<div class="mt-4"><div class="text-gray-500 text-xs uppercase mb-1">Result</div>
+        <pre class="card p-3 text-xs whitespace-pre-wrap text-gray-300">${esc(r.result_summary)}</pre></div>` : ""}
+      ${r.error ? `<div class="mt-4"><div class="text-gray-500 text-xs uppercase mb-1">Error</div>
+        <pre class="card p-3 text-xs whitespace-pre-wrap text-red-300">${esc(r.error)}</pre></div>` : ""}
+      <div class="mt-6">
+        <button id="open-logs" class="w-full flex items-center justify-center gap-2 border border-gray-700 hover:border-indigo-500 text-gray-300 hover:text-white rounded-lg py-2 text-sm transition">⛶ Open runtime logs</button>
+        <p class="text-gray-600 text-xs mt-1 text-center">Full-screen viewer with search</p>
+      </div>`;
+    $("#drawer-close").addEventListener("click", closeDrawer);
+    $("#open-logs").addEventListener("click", () => openLogsModal(id));
+    const sBtn = $("#drawer-session");
+    if (sBtn) sBtn.addEventListener("click", () => openSessionFromRun(r.session_id));
+  } catch (e) { d.innerHTML = errBox(e); }
+}
+function closeDrawer() { $("#drawer").classList.add("hidden"); $("#drawer-bg").classList.add("hidden"); }
+
+// ---------- full-screen runtime-logs viewer ----------
+// Replaces the old in-drawer text blob: full-screen, searchable (live filter + highlight),
+// line-oriented with timestamps and error/warning coloring, wrap toggle, reload.
+const logsState = { runId: null, events: [] };
+
+async function openLogsModal(runId) {
+  logsState.runId = runId;
+  $("#logs-run").textContent = "run " + runId;
+  $("#logs-search").value = "";
+  const m = $("#logs-modal");
+  m.classList.remove("hidden"); m.classList.add("flex");
+  document.body.style.overflow = "hidden";
+  await fetchLogs();
+  $("#logs-search").focus();
+}
+function closeLogsModal() {
+  const m = $("#logs-modal");
+  m.classList.add("hidden"); m.classList.remove("flex");
+  document.body.style.overflow = "";
+}
+
+async function fetchLogs() {
+  const body = $("#logs-body");
+  body.innerHTML = `<div class="text-gray-500 font-sans">Loading logs…</div>`;
+  $("#logs-count").textContent = "";
+  try {
+    const r = await api("/api/runs/" + encodeURIComponent(logsState.runId) + "/logs");
+    logsState.events = r.events || [];
+    if (!logsState.events.length) {
+      body.innerHTML = `<div class="text-gray-500 font-sans">${r.source === "cloudwatch"
+        ? "No log events in this run's window." : "Logs unavailable: " + esc(r.source)}</div>`;
+      return;
+    }
+    renderLogLines();
+  } catch (e) { body.innerHTML = `<div class="text-red-400 font-sans">${esc(e.message)}</div>`; }
+}
+
+function logLevelClass(msg) {
+  if (/\b(ERROR|CRITICAL|Traceback|Exception)\b/.test(msg)) return "log-error";
+  if (/\b(WARN|WARNING)\b/.test(msg)) return "log-warn";
+  return "";
+}
+
+function renderLogLines() {
+  const body = $("#logs-body");
+  const q = ($("#logs-search").value || "").toLowerCase();
+  const wrap = $("#logs-wrap").checked;
+  const frag = document.createDocumentFragment();
+  let shown = 0;
+  logsState.events.forEach((e) => {
+    const msg = String(e.message || "").replace(/\n+$/, "");
+    if (q && !msg.toLowerCase().includes(q)) return;
+    shown++;
+    const line = document.createElement("div");
+    line.className = "logline " + logLevelClass(msg);
+    const ts = document.createElement("span");
+    ts.className = "lts";
+    if (e.timestamp) {
+      const iso = new Date(e.timestamp).toISOString();
+      ts.textContent = iso.slice(11, 23);
+      ts.title = iso;
+    }
+    const m = document.createElement("span");
+    m.style.whiteSpace = wrap ? "pre-wrap" : "pre";
+    m.style.wordBreak = "break-word";
+    if (q) appendHighlighted(m, msg, q); else m.textContent = msg;
+    line.append(ts, m);
+    frag.appendChild(line);
+  });
+  body.innerHTML = "";
+  body.appendChild(frag);
+  $("#logs-count").textContent = q
+    ? shown + " / " + logsState.events.length + " lines"
+    : logsState.events.length + " lines";
+}
+
+// Case-insensitive <mark> highlighting, built via DOM nodes (no innerHTML — log text is untrusted).
+function appendHighlighted(el, text, q) {
+  const lower = text.toLowerCase();
+  let i = 0;
+  for (;;) {
+    const j = lower.indexOf(q, i);
+    if (j < 0) { el.appendChild(document.createTextNode(text.slice(i))); break; }
+    if (j > i) el.appendChild(document.createTextNode(text.slice(i, j)));
+    const mark = document.createElement("mark");
+    mark.textContent = text.slice(j, j + q.length);
+    el.appendChild(mark);
+    i = j + q.length;
+  }
+}
+
+async function renderActivity() {
+  const el = $("#view-activity");
+  el.innerHTML = `<div class="text-gray-500">Loading…</div>`;
+  try {
+    // GitHub activity for the agent across the org (public search; no token).
+    const data = await gh("search/issues?q=" + encodeURIComponent(`involves:${GH_HANDLE}`) + "&sort=updated&per_page=30");
+    const items = data.items || [];
+    if (!items.length) { el.innerHTML = `<div class="text-gray-500">No recent activity.</div>`; return; }
+    el.innerHTML = items.map((it) => {
+      const kind = it.pull_request ? "PR" : "Issue";
+      const repo = (it.repository_url || "").replace("https://api.github.com/repos/", "");
+      return `<a href="${esc(it.html_url)}" target="_blank" class="card p-4 mb-3 block hover:border-indigo-600 transition">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-gray-500">${esc(repo)} · ${kind} #${it.number}</span>
+          <span class="badge ${it.state === "open" ? "b-running" : "b-completed"}">${esc(it.state)}</span>
+        </div>
+        <div class="text-gray-200 mt-1">${esc(it.title)}</div>
+        <div class="text-xs text-gray-500 mt-1">updated ${fmtTime(it.updated_at)}</div>
+      </a>`;
+    }).join("");
+  } catch (e) { el.innerHTML = errBox(e); }
+}
+
+// ---------- mentions ----------
+// Every @mention of the agent the poller processed, from the mention-log table (written by the
+// mention poller, read via /api/mentions). Unlike Activity (GitHub public search), this shows the
+// poller's *decision* for each mention — most importantly whether the author was authorized.
+const MENTION_BADGE = { dispatched: "b-completed", "dispatch-error": "b-failed", unauthorized: "b-failed", stale: "b-unknown", duplicate: "b-unknown" };
+async function renderMentions() {
+  const el = $("#view-mentions");
+  el.innerHTML = `<div class="text-gray-500">Loading…</div>`;
+  try {
+    const data = await api("/api/mentions");
+    if (!data.enabled) {
+      el.innerHTML = `<div class="text-gray-500">Mention log not configured — redeploy the Data + Ingress stacks (the poller writes <span class="text-gray-300">STRANDLY_MENTION_LOG_TABLE</span>) and the Dashboard stack to enable this tab.</div>`;
+      return;
+    }
+    const items = data.mentions || [];
+    if (!items.length) { el.innerHTML = `<div class="text-gray-500">No mentions recorded yet — rows appear as the poller processes new @mentions.</div>`; return; }
+    el.innerHTML = items.map((m) => {
+      const kind = m.is_pull_request ? "PR" : "Issue";
+      const target = `${m.repo || "?"} · ${kind}${m.number != null ? " #" + m.number : ""}`;
+      const auth = m.authorized
+        ? `<span class="badge b-completed">authorized</span>`
+        : `<span class="badge b-failed">unauthorized</span>`;
+      const outcome = `<span class="badge ${MENTION_BADGE[m.outcome] || "b-unknown"}">${esc(m.outcome || "unknown")}</span>`;
+      const inner = `
+        <div class="flex items-center justify-between gap-2 flex-wrap">
+          <span class="text-xs text-gray-500">${esc(target)}</span>
+          <span class="flex gap-1.5">${auth}${outcome}</span>
+        </div>
+        <div class="text-gray-200 mt-1">@${esc(m.author || "unknown")}${m.body ? `: <span class="text-gray-400">${esc(m.body.slice(0, 200))}${m.body.length > 200 ? "…" : ""}</span>` : ""}</div>
+        <div class="text-xs text-gray-500 mt-1">mentioned ${fmtTime(m.mention_ts)} · seen ${fmtTime(m.seen_at)}${m.session_id ? ` · session <span class="text-gray-400">${esc(m.session_id)}</span>` : ""}</div>`;
+      return m.url
+        ? `<a href="${esc(m.url)}" target="_blank" class="card p-4 mb-3 block hover:border-indigo-600 transition">${inner}</a>`
+        : `<div class="card p-4 mb-3">${inner}</div>`;
+    }).join("");
+  } catch (e) { el.innerHTML = errBox(e); }
+}
+
+// ---------- sessions + chat ----------
+const chatState = { sending: false };
+
+// Recently-opened sessions are remembered client-side (localStorage) so you can jump straight back
+// into a conversation — even one that has scrolled out of the ledger's recent window. We store a
+// small MRU list of { id, desc, ts }; opening a session promotes it to the front.
+function getRecentSessions() {
+  try {
+    const v = JSON.parse(localStorage.getItem(LS.recent) || "[]");
+    return Array.isArray(v) ? v.filter((r) => r && r.id) : [];
+  } catch { return []; }
+}
+function rememberSession(id, desc) {
+  if (!id) return;
+  const prev = getRecentSessions();
+  const existing = prev.find((r) => r.id === id);
+  const list = prev.filter((r) => r.id !== id);
+  // Keep a previously-remembered description if the caller has none (e.g. runs→session jump).
+  list.unshift({ id, desc: desc || (existing && existing.desc) || "", ts: Date.now() });
+  localStorage.setItem(LS.recent, JSON.stringify(list.slice(0, RECENT_MAX)));
+}
+function forgetSession(id) {
+  localStorage.setItem(LS.recent, JSON.stringify(getRecentSessions().filter((r) => r.id !== id)));
+}
+
+async function renderSessions() {
+  const el = $("#view-sessions");
+  // The header (with "New session") renders first and stays put even if the list load fails, so
+  // you can always start a fresh conversation. The list/loading/error state lives in #sessions-body.
+  el.innerHTML = sessionsHeader() + `<div id="sessions-body"><div class="text-gray-500">Loading…</div></div>`;
+  wireNewSession(el);
+  const body = $("#sessions-body");
+  try {
+    const { sessions } = await api("/api/sessions");
+    const recentBar = recentSessionsBar();
+    if (!sessions.length) {
+      body.innerHTML = recentBar + `<div class="text-gray-500">No sessions yet — click <span class="text-gray-300">＋ New session</span> to start a conversation. (Agent runs with a session id also show up here.)</div>`;
+      wireRecentBar(body);
+      return;
+    }
+    body.innerHTML = recentBar + sessions.map(sessionCard).join("");
+    wireRecentBar(body);
+    body.querySelectorAll("[data-session]").forEach((c) =>
+      c.addEventListener("click", () => openSession(c.dataset.session, c.dataset.desc)));
+  } catch (e) { body.innerHTML = errBox(e); }
+}
+
+// Sessions tab header: title + a "New session" button. Minting a session is client-side — see
+// newSession() — so this is always available, mirroring strands-dashboard's "create an issue" bar.
+function sessionsHeader() {
+  return `<div class="flex items-center justify-between mb-5 gap-3">
+    <h2 class="text-lg font-semibold text-white">Sessions</h2>
+    <button id="new-session" class="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-semibold px-3 py-1.5 rounded-lg transition shrink-0">
+      <span class="text-base leading-none">＋</span> New session
+    </button>
+  </div>`;
+}
+
+function wireNewSession(el) {
+  const btn = el.querySelector("#new-session");
+  if (btn) btn.addEventListener("click", newSession);
+}
+
+// Create a brand-new session. We mint a fresh, slash-free session id and open an EMPTY chat panel —
+// no backend call yet. The session materializes when the first message launches a run: the runtime
+// writes a ledger row + AgentCore Memory under exactly this id (see agentcore.py: the ledger's
+// session_id IS payload.sessionId), after which it lists and resumes like any other session. This
+// is the Strandly analog of strands-dashboard's "create an issue" — here a session is a conversation.
+function newSessionId() {
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, ""); // YYYYMMDD
+  return `dash-${stamp}-${randString(4)}`; // randString(4) -> 8 hex chars; slash-free, unique enough
+}
+function newSession() { renderChat(newSessionId(), true); }
+
+// A horizontal row of "jump back in" chips for the sessions you most recently opened (from
+// localStorage). Each chip resumes the chat directly; the ✕ removes it from the shortcut list.
+function recentSessionsBar() {
+  const recents = getRecentSessions();
+  if (!recents.length) return "";
+  const chips = recents.map((r) => {
+    const label = (r.desc && r.desc.trim()) ? r.desc : r.id;
+    return `<div data-recent="${esc(r.id)}" data-desc="${esc(r.desc)}" title="${esc(r.id)}"
+        class="recent-chip group flex items-center gap-2 bg-[#111113] border border-[#2a2a30] hover:border-indigo-600 rounded-full pl-3 pr-2 py-1.5 cursor-pointer transition shrink-0 max-w-[16rem]">
+        <span class="text-sm text-gray-200 truncate">${esc(label)}</span>
+        <button data-forget="${esc(r.id)}" title="Remove shortcut"
+          class="text-gray-600 group-hover:text-gray-400 hover:!text-red-400 text-xs leading-none">✕</button>
+      </div>`;
+  }).join("");
+  return `<div class="mb-5">
+    <div class="text-gray-500 text-xs uppercase tracking-wide mb-2">↩ Jump back in</div>
+    <div class="flex gap-2 overflow-x-auto pb-1">${chips}</div>
+  </div>`;
+}
+
+function wireRecentBar(el) {
+  el.querySelectorAll("[data-recent]").forEach((c) =>
+    c.addEventListener("click", (e) => {
+      const forget = e.target.closest("[data-forget]");
+      if (forget) { e.stopPropagation(); forgetSession(forget.dataset.forget); renderSessions(); return; }
+      openSession(c.dataset.recent, c.dataset.desc);
+    }));
+}
+
+function sessionCard(s) {
+  const desc = s.description || s.latest_prompt || "(no description)";
+  const tgt = s.target ? `<span class="text-indigo-400 truncate">${esc(s.target.replace("https://github.com/", ""))}</span>` : "";
+  return `<div data-session="${esc(s.session_id)}" data-desc="${esc(desc)}" class="card p-4 mb-3 hover:border-indigo-600 transition cursor-pointer">
+    <div class="flex items-center justify-between gap-3">
+      <span class="text-xs text-gray-500 font-mono truncate">${esc(s.session_id)}</span>
+      ${badge(s.last_status)}
+    </div>
+    <div class="text-gray-200 mt-1 break-words">${esc(desc)}</div>
+    <div class="text-xs text-gray-500 mt-2 flex flex-wrap gap-x-4 gap-y-1">
+      <span>${s.runs} run${s.runs === 1 ? "" : "s"}</span>
+      <span>${fmtTokens(s.tokens_total)} tokens</span>
+      <span>last ${fmtTime(s.last_activity)}</span>
+      ${tgt}
+    </div>
+  </div>`;
+}
+
+function openSession(id, desc) { rememberSession(id, desc); renderChat(id); }
+
+async function renderChat(id, isNew = false) {
+  const el = $("#view-sessions");
+  el.innerHTML = `
+    <div class="flex items-center gap-3 mb-4">
+      <button id="chat-back" class="text-sm text-gray-300 hover:text-white border border-gray-700 rounded-lg px-3 py-1.5">← Sessions</button>
+      ${isNew ? `<span class="badge b-running">new</span>` : ""}
+      <span class="text-sm text-gray-400 font-mono truncate">${esc(id)}</span>
+    </div>
+    <div id="chat-log" class="space-y-3 mb-3 card p-4"><div class="text-gray-500">${isNew ? "" : "Loading transcript…"}</div></div>
+    <div id="chat-status" class="text-sm text-indigo-300 mb-2 hidden"></div>
+    <form id="chat-form" class="flex gap-2">
+      <input id="chat-input" autocomplete="off" placeholder="${isNew ? "Describe what you want the agent to do…" : "Continue the conversation…"}"
+        class="flex-1 bg-[#111113] border border-[#2a2a30] rounded-lg px-3 py-2 text-gray-200 focus:outline-none focus:border-indigo-500" />
+      <button id="chat-send" type="submit" class="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold px-4 rounded-lg">Send</button>
+    </form>
+    <p class="text-gray-600 text-xs mt-2">Replies run on the deployed agent and can take a minute. New turns also show up in the Runs tab.</p>`;
+  $("#chat-back").addEventListener("click", () => renderSessions());
+  // Only the FIRST submit of a brand-new session counts as "new" (so we remember it once, keyed on
+  // its originating message); subsequent turns in the same panel are ordinary continuations.
+  let fresh = isNew;
+  $("#chat-form").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const wasNew = fresh; fresh = false;
+    sendChat(id, wasNew);
+  });
+  if (isNew) {
+    // Brand-new session: nothing to fetch — invite the first message. The session won't exist in the
+    // ledger/Memory until that message launches a run, so skip the transcript call entirely.
+    const log = $("#chat-log");
+    log.innerHTML = "";
+    log.appendChild(emptyNote("New session — send the first message to kick off the agent."));
+  } else {
+    await loadTranscript(id);
+  }
+  const input = $("#chat-input"); if (input) input.focus();
+}
+
+async function loadTranscript(id) {
+  const log = $("#chat-log");
+  try {
+    const d = await api("/api/sessions/" + encodeURIComponent(id));
+    log.innerHTML = "";
+    // Verbatim conversation from AgentCore Memory (when the API has a memory id wired): render each
+    // message as a bubble — user asks on the right, the agent's answers on the left, its mid-run
+    // narration in a muted style, and the tool activity (calls + results) as collapsible blocks.
+    if (d.messages && d.messages.length) {
+      log.appendChild(sourceNote("Verbatim transcript from AgentCore Memory"));
+      d.messages.forEach((m) => {
+        if (m.text && m.text.trim()) {
+          const role = m.role === "user" ? "user" : (m.tool_use ? "narration" : "agent");
+          log.appendChild(bubble(role, m.text));
+        }
+        if ((m.tools && m.tools.length) || (m.tool_results && m.tool_results.length)) {
+          log.appendChild(toolActivity(m));
+        }
+      });
+      scrollLog();
+      return;
+    }
+    // Fallback: the ledger-derived transcript (one row = one turn's prompt + result).
+    if (!d.turns || !d.turns.length) { log.appendChild(emptyNote("No messages yet — say hello below.")); return; }
+    d.turns.forEach((t) => {
+      if (t.prompt) log.appendChild(bubble("user", t.prompt));
+      if (t.result) log.appendChild(bubble("agent", t.result));
+      else if (t.error) log.appendChild(bubble("error", t.error));
+      else if (t.status === "running") log.appendChild(bubble("agent", "…(running)", true));
+    });
+    scrollLog();
+  } catch (e) {
+    // A shortcut may point at a session that's rolled out of the ledger window (and Memory is off):
+    // don't scare with a red error — you can still send a message (chat keys off the session id).
+    if (e.status === 404) { log.innerHTML = ""; log.appendChild(emptyNote("No earlier messages found — send a message to continue this session.")); }
+    else { log.innerHTML = `<div class="text-red-400">${esc(e.message)}</div>`; }
+  }
+}
+
+// The tool activity of one transcript message: each tool call and each result as a collapsible
+// <details> block (collapsed by default so the conversation stays readable). Built with DOM nodes
+// + textContent — tool inputs/outputs are untrusted text.
+function toolActivity(m) {
+  const wrap = document.createElement("div");
+  wrap.className = "flex justify-start";
+  const box = document.createElement("div");
+  box.className = "max-w-[80%] w-full space-y-1";
+  (m.tools || []).forEach((t) => box.appendChild(toolDetails("⚙ " + (t.name || "tool"), t.input, false)));
+  (m.tool_results || []).forEach((r) => {
+    const failed = r.status === "error";
+    box.appendChild(toolDetails((failed ? "✗" : "✓") + " result · " + (r.status || "ok"), r.text, failed));
+  });
+  wrap.appendChild(box);
+  return wrap;
+}
+
+function toolDetails(label, content, failed) {
+  const d = document.createElement("details");
+  d.className = "tool-details";
+  const s = document.createElement("summary");
+  s.textContent = label;
+  if (failed) s.classList.add("text-red-400");
+  d.appendChild(s);
+  const pre = document.createElement("pre");
+  pre.textContent = content || "(empty)";
+  d.appendChild(pre);
+  return d;
+}
+
+function sourceNote(text) {
+  const d = document.createElement("div");
+  d.className = "text-gray-600 text-xs text-center pb-1";
+  d.textContent = text;
+  return d;
+}
+
+function emptyNote(text) {
+  const d = document.createElement("div");
+  d.className = "text-gray-500 text-sm";
+  d.textContent = text;
+  return d;
+}
+
+function bubble(role, text, pending) {
+  const wrap = document.createElement("div");
+  const isUser = role === "user";
+  wrap.className = "flex " + (isUser ? "justify-end" : "justify-start");
+  const tone = isUser ? "bg-indigo-600 text-white"
+    : role === "error" ? "bg-[#2a0f12] text-red-300 border border-red-900"
+    : role === "narration" ? "bg-transparent border border-dashed border-[#2a2a30] text-gray-500"
+    : "bg-[#111113] border border-[#1f1f24] text-gray-200";
+  const inner = document.createElement("div");
+  // The agent's answers (role "agent") render as Markdown so bold/links/lists/code show properly;
+  // user text, narration and errors stay verbatim. See renderMarkdown for the safety model.
+  const markdown = role === "agent";
+  inner.className = `max-w-[80%] ${tone} rounded-2xl px-4 py-2 text-sm break-words`
+    + (markdown ? " md-body" : " whitespace-pre-wrap") + (pending ? " opacity-60" : "");
+  if (markdown) renderMarkdown(text, inner);
+  else inner.textContent = text;
+  wrap.appendChild(inner);
+  return wrap;
+}
+
+// Render Markdown into `target`. Transcript text is UNTRUSTED (the agent echoes arbitrary tool
+// output), so we parse with marked then **sanitize with DOMPurify** before it touches the DOM —
+// DOMPurify strips <script>, event handlers, javascript:/data: URLs, etc. If either library failed
+// to load (offline / CDN blocked), fall back to plain textContent so we never inject raw HTML.
+function renderMarkdown(text, target) {
+  const src = String(text == null ? "" : text);
+  if (typeof marked === "undefined" || typeof DOMPurify === "undefined") {
+    target.textContent = src;
+    target.classList.add("whitespace-pre-wrap");
+    return;
+  }
+  const html = marked.parse(src, { breaks: true, gfm: true });
+  target.innerHTML = DOMPurify.sanitize(html, {
+    ALLOWED_TAGS: ["p","br","strong","em","del","code","pre","blockquote","ul","ol","li",
+                   "h1","h2","h3","h4","h5","h6","a","hr","table","thead","tbody","tr","th","td"],
+    ALLOWED_ATTR: ["href","title"],
+    // Only http/https/mailto links survive; javascript:/data: are stripped by DOMPurify's default
+    // URI policy, but be explicit.
+    ALLOWED_URI_REGEXP: /^(?:https?:|mailto:)/i,
+  });
+  // Open links in a new tab safely (DOMPurify dropped target/rel; re-add on the sanitized nodes).
+  target.querySelectorAll("a[href]").forEach((a) => {
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.className = "text-indigo-400 underline break-all";
+  });
+}
+
+
+function scrollLog() { const l = $("#chat-log"); if (l) l.scrollTop = l.scrollHeight; }
+function setChatStatus(t) { const s = $("#chat-status"); if (!s) return; s.textContent = t; s.classList.toggle("hidden", !t); }
+
+async function sendChat(id, isNew = false) {
+  if (chatState.sending) return;
+  const input = $("#chat-input");
+  const msg = (input.value || "").trim();
+  if (!msg) return;
+  const sendBtn = $("#chat-send");
+  chatState.sending = true;
+  input.value = ""; input.disabled = true; if (sendBtn) sendBtn.disabled = true;
+  const log = $("#chat-log");
+  const note = log.querySelector(".text-gray-500"); if (note) note.remove();
+  log.appendChild(bubble("user", msg));
+  const pending = bubble("agent", "Thinking…", true);
+  log.appendChild(pending); scrollLog();
+  const setReply = (text, failed) => {
+    const inner = pending.firstChild;
+    inner.classList.remove("opacity-60");
+    if (failed) {
+      // Error replies stay verbatim text: drop the Markdown styling (the pending bubble was
+      // created as an .md-body agent bubble) and restore pre-wrap so line breaks survive.
+      inner.classList.remove("md-body");
+      inner.classList.add("whitespace-pre-wrap", "text-red-300");
+      inner.textContent = text;
+    } else {
+      // Same sanitized path as the reloaded transcript (see renderMarkdown): the live reply and
+      // the stored one must render identically.
+      renderMarkdown(text, inner);
+    }
+  };
+  setChatStatus("Working… this can take a minute.");
+  try {
+    const launch = await api("/api/chat", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ session_id: id, message: msg }),
+    });
+    const taskId = launch.taskId || launch.task_id;
+    if (!taskId) throw new Error(launch.error || "launch failed (no taskId returned)");
+    if (isNew) rememberSession(id, msg); // a freshly-created session is now real — make it resumable
+    const reply = await pollChat(id, taskId);
+    setReply(reply.text, reply.failed);
+  } catch (e) {
+    setReply(e.status === 503
+      ? "Chat isn't enabled on this deployment (no runtime configured)."
+      : "Error: " + e.message, true);
+  } finally {
+    chatState.sending = false; input.disabled = false; if (sendBtn) sendBtn.disabled = false;
+    setChatStatus(""); input.focus(); scrollLog();
+  }
+}
+
+async function pollChat(id, taskId) {
+  const MAX_ATTEMPTS = 60, DELAY = 3000; // ~3 minutes of polling
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    await sleep(i === 0 ? 1500 : DELAY);
+    let p;
+    try {
+      p = await api(`/api/chat?task_id=${encodeURIComponent(taskId)}&session_id=${encodeURIComponent(id)}`);
+    } catch (e) {
+      if (e.status === 401) throw e;
+      continue; // transient poll error — keep trying
+    }
+    const st = p.status;
+    if (st === "completed") return { text: p.result || "(completed — no text returned)", failed: false };
+    if (st === "failed") return { text: "Run failed: " + (p.error || "unknown error"), failed: true };
+    setChatStatus(`Working… (${st || "running"}, attempt ${i + 1})`);
+  }
+  return { text: "Still working — check the Runs tab shortly for the result.", failed: false };
+}
+
+const RENDER = { overview: renderOverview, runs: renderRuns, sessions: renderSessions, activity: renderActivity, mentions: renderMentions };
+let activeTab = "overview";
+function showTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll(".tab").forEach((b) => b.classList.toggle("active", b.dataset.tab === tab));
+  ["overview", "runs", "sessions", "activity", "mentions"].forEach((t) =>
+    $("#view-" + t).classList.toggle("hidden", t !== tab));
+  RENDER[tab]();
+}
+
+function showLogin() { $("#app").classList.add("hidden"); $("#login").classList.remove("hidden"); }
+function showApp() {
+  $("#login").classList.add("hidden"); $("#app").classList.remove("hidden");
+  const t = getTokens();
+  if (t && t.id_token) {
+    try { $("#who").textContent = JSON.parse(atob(t.id_token.split(".")[1])).email || ""; } catch {}
+  }
+  refreshIcons();
+  showTab(activeTab);
+}
+
+// ---------- boot ----------
+async function boot() {
+  // PWA: register the service worker (best-effort — the app is fully functional without it).
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  }
+  try { CONFIG = await loadConfig(); }
+  catch (e) {
+    $("#login").classList.remove("hidden");
+    $("#login-err").textContent = e.message; $("#login-err").classList.remove("hidden");
+    return;
+  }
+  $("#signin").addEventListener("click", () => login().catch((e) => {
+    $("#login-err").textContent = e.message; $("#login-err").classList.remove("hidden");
+  }));
+  $("#signout").addEventListener("click", logout);
+  $("#refresh").addEventListener("click", () => RENDER[activeTab]());
+  $("#drawer-bg").addEventListener("click", closeDrawer);
+  document.querySelectorAll(".tab").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  // Full-screen logs viewer chrome.
+  $("#logs-close").addEventListener("click", closeLogsModal);
+  $("#logs-reload").addEventListener("click", fetchLogs);
+  $("#logs-wrap").addEventListener("change", renderLogLines);
+  let searchDebounce = null;
+  $("#logs-search").addEventListener("input", () => {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(renderLogLines, 120);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    if (!$("#logs-modal").classList.contains("hidden")) closeLogsModal();
+    else closeDrawer();
+  });
+
+  // OAuth callback?
+  const params = new URLSearchParams(window.location.search);
+  if (params.get("code")) {
+    try {
+      await exchangeCode(params.get("code"));
+      window.history.replaceState({}, "", redirectUri()); // strip ?code from the URL
+    } catch (e) {
+      $("#login").classList.remove("hidden");
+      $("#login-err").textContent = e.message; $("#login-err").classList.remove("hidden");
+      return;
+    }
+  }
+
+  (await validAccessToken()) ? showApp() : showLogin();
+  refreshIcons();
+}
+boot();
+</script>
+</body>
+</html>
