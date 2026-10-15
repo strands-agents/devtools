@@ -168,7 +168,6 @@ jobs:
   finalize:
     if: always()
     needs: [setup-and-process, execute-readonly-agent]
-    if: always()
     permissions:
       contents: write
       issues: write
