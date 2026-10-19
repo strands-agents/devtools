@@ -79,19 +79,9 @@ async function determineBranch(github, context, issueId, mode, isPullRequest, in
 }
 
 function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue, headSha) {
-  const isPullRequestReview = mode === 'reviewer' && isPullRequest;
-  if (isPullRequestReview && !/^[0-9a-f]{40}$/.test(headSha || '')) {
-    throw new Error(`Invalid head_sha for pull request review: ${JSON.stringify(headSha)}`);
-  }
-
-  let defaultSessionId = mode === 'implementer' 
+  const sessionId = inputs.session_id || (mode === 'implementer' 
     ? `${mode}-${branchName}`.replace(/[\/\\]/g, '-')
-    : `${mode}-${issueId}`;
-  if (isPullRequestReview) {
-    // Key on the head commit so a new push gets a fresh review instead of resuming the last one.
-    defaultSessionId += `-${headSha}`;
-  }
-  const sessionId = inputs.session_id || defaultSessionId;
+    : `${mode}-${issueId}`);
 
   const scriptFiles = {
     'implementer': 'devtools/strands-command/agent-sops/task-implementer.sop.md',
@@ -112,8 +102,8 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs,
     ? 'The pull request id is:'
     : 'The issue id is:';
   prompt += `${issueId}\n${command}\nreview and continue`;
-  if (isPullRequestReview) {
-    prompt += `\nThe pull request head commit is ${headSha}; it is checked out. Review the code at this commit.`;
+  if (mode === 'reviewer' && isPullRequest) {
+    prompt += `\nThe head commit is ${headSha}, and it is checked out. Earlier turns may have reviewed an older commit, so compare against what you reviewed before deciding nothing changed.`;
   }
 
   // For the bug verifier, snapshot the issue title/body into the prompt at
