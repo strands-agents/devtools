@@ -78,10 +78,20 @@ async function determineBranch(github, context, issueId, mode, isPullRequest, in
   return { branchName, headRepo, headSha };
 }
 
-function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue) {
-  const sessionId = inputs.session_id || (mode === 'implementer' 
+function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue, headSha) {
+  const isPullRequestReview = mode === 'reviewer' && isPullRequest;
+  if (isPullRequestReview && !/^[0-9a-f]{40}$/.test(headSha || '')) {
+    throw new Error(`Invalid head_sha for pull request review: ${JSON.stringify(headSha)}`);
+  }
+
+  let defaultSessionId = mode === 'implementer' 
     ? `${mode}-${branchName}`.replace(/[\/\\]/g, '-')
-    : `${mode}-${issueId}`);
+    : `${mode}-${issueId}`;
+  if (isPullRequestReview) {
+    // Key on the head commit so a new push gets a fresh review instead of resuming the last one.
+    defaultSessionId += `-${headSha}`;
+  }
+  const sessionId = inputs.session_id || defaultSessionId;
 
   const scriptFiles = {
     'implementer': 'devtools/strands-command/agent-sops/task-implementer.sop.md',
@@ -102,6 +112,9 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs,
     ? 'The pull request id is:'
     : 'The issue id is:';
   prompt += `${issueId}\n${command}\nreview and continue`;
+  if (isPullRequestReview) {
+    prompt += `\nThe pull request head commit is ${headSha}; it is checked out. Review the code at this commit.`;
+  }
 
   // For the bug verifier, snapshot the issue title/body into the prompt at
   // command time. The agent executes reproduction code derived from this
@@ -145,7 +158,7 @@ module.exports = async (context, github, core, inputs) => {
     const { branchName, headRepo, headSha } = await determineBranch(github, context, issueId, mode, isPullRequest, inputs);
     console.log(`Building prompts - mode: ${mode}, issue: ${issueId}, is PR: ${isPullRequest}`);
 
-    const { sessionId, systemPrompt, prompt } = buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue);
+    const { sessionId, systemPrompt, prompt } = buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue, headSha);
     
     console.log(`Session ID: ${sessionId}`);
     console.log(`Task prompt: "${prompt}"`);
