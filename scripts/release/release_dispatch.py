@@ -13,12 +13,14 @@ gates on the in-run `release-gate` approval before publishing.
 for the older template-based release flow.)
 
 Deterministic plumbing only — the interactive repo selection and version
-prompts live in the CLAUDE.md driver that calls this. Two subcommands:
+prompts live in the CLAUDE.md driver that calls this. Three subcommands:
 
   release_dispatch.py status [target ...] [--json]
       For each target: latest published version, whether there are new commits
-      on main since that release, and the commit subjects. `--json` emits a
-      machine-readable array for the driver to render.
+      on main since that release (monorepo targets: only commits touching the
+      package dir), the commit subjects, and the bump conventional commits
+      imply (informational — the releaser still types the version). `--json`
+      emits a machine-readable array for the driver to render.
 
   release_dispatch.py dispatch <target> <version> [--preview] [--sha SHA]
       Validate the version (bare semver, greater than published), dispatch the
@@ -26,10 +28,16 @@ prompts live in the CLAUDE.md driver that calls this. Two subcommands:
       (dry_run=false → runs the suite, then waits for release-gate approval);
       --preview sets dry_run=true (build + inspect only, no approval/publish).
 
+  release_dispatch.py pending <run-url-or-id> ...
+      For each dispatched run: published (with release URL), waiting at
+      release-gate, in progress, or failed.
+
 OWNER defaults to the upstream org `strands-agents`; override with --owner or
 the OWNER env var for fork testing. Requires `gh` authenticated with the
 `workflow` scope.
 """
+
+from __future__ import annotations
 
 import argparse
 import json
@@ -42,49 +50,98 @@ import urllib.request
 
 # ── Target registry ──────────────────────────────────────────────────────
 # Identify a target by its logical name. `repo` is the name under $OWNER;
-# `workflow` is the dispatch file (sdk-python has two, so never key on repo).
-# `version` sources the latest published version: "pypi:<name>" or "npm:<name>"
-# — the registry is authoritative and avoids malformed-tag surprises. The tag
-# for the commits-since compare is derived as `prefix + version`.
+# `workflow` is the dispatch file (harness-sdk has several, so never key on
+# repo). `version` sources the latest published version: "pypi:<name>" or
+# "npm:<name>" — the registry is authoritative and avoids malformed-tag
+# surprises. The tag for the commits-since compare is `prefix + version`.
+# `path` (monorepo targets only) scopes commits-since to the package dir.
+# `inputs` are extra workflow_dispatch inputs beyond version/sha/dry_run —
+# per-target differences live here as data, not as branches in dispatch().
+# `dep_check` (optional) reports a dependency range in a file on main against
+# another target's published version.
 SEMVER_RE = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+$")
+
+NO_INTEG = {"run_integ_tests": "false"}
 
 TARGETS = {
     "harness-python": {
-        "repo": "sdk-python",
+        "repo": "harness-sdk",
         "workflow": "release-python.yml",
         "prefix": "python/v",
         "version": "pypi:strands-agents",
-        "has_integ": True,
+        "path": "strands-py/",
+        "inputs": NO_INTEG,
     },
     "harness-typescript": {
-        "repo": "sdk-python",
+        "repo": "harness-sdk",
         "workflow": "release-typescript.yml",
         "prefix": "typescript/v",
         "version": "npm:@strands-agents/sdk",
-        "has_integ": True,
+        "path": "strands-ts/",
+        "inputs": NO_INTEG,
+    },
+    "harness-py": {
+        "repo": "harness-sdk",
+        "workflow": "release-harness-py.yml",
+        "prefix": "harness-python/v",
+        "version": "pypi:strands-harness",
+        "path": "harness-py/",
+        "inputs": NO_INTEG,
+    },
+    "harness-ts": {
+        "repo": "harness-sdk",
+        "workflow": "release-harness-ts.yml",
+        "prefix": "harness-typescript/v",
+        "version": "npm:@strands-agents/harness",
+        "path": "harness-ts/",
+        "inputs": NO_INTEG,
+    },
+    "harness-cli": {
+        "repo": "harness-sdk",
+        "workflow": "release-harness-cli.yml",
+        "prefix": "harness-cli/v",
+        "version": "npm:@strands-agents/cli",
+        "path": "strands-cli/",
+        "inputs": NO_INTEG,
+        "dep_check": {
+            "file": "strands-cli/package.json",
+            "dep": "@strands-agents/harness",
+            "target": "harness-ts",
+        },
+    },
+    "mcp": {
+        "repo": "harness-sdk",
+        "workflow": "release-mcp.yml",
+        "prefix": "mcp/v",
+        "version": "pypi:strands-agents-mcp-server",
+        "path": "strands-mcp/",
+        "inputs": {},  # release-mcp.yml has no run_integ_tests input
     },
     "shell": {
         "repo": "shell",
         "workflow": "release.yml",
         "prefix": "v",
         "version": "pypi:strands-shell",
-        "has_integ": False,
+        "inputs": {},
     },
     "tools": {
         "repo": "tools",
         "workflow": "release.yml",
         "prefix": "v",
         "version": "pypi:strands-agents-tools",
-        "has_integ": True,
+        "inputs": NO_INTEG,
     },
     "evals": {
         "repo": "evals",
         "workflow": "release.yml",
         "prefix": "v",
         "version": "pypi:strands-agents-evals",
-        "has_integ": True,
+        "inputs": NO_INTEG,
     },
 }
+
+# Default repo for `pending` when given a bare run id instead of a URL.
+DEFAULT_RUN_REPO = "harness-sdk"
 
 
 def owner() -> str:
@@ -125,26 +182,104 @@ def gh(args: list[str]) -> tuple[int, str, str]:
     return proc.returncode, proc.stdout, proc.stderr
 
 
-def commits_since(repo: str, tag: str) -> dict:
-    """Compare `tag`..main via the GitHub API.
+def gh_json(args: list[str]):
+    """Run a gh command expected to print JSON. Returns (data, error)."""
+    code, out, err = gh(args)
+    if code != 0:
+        return None, (err.strip() or "gh failed").splitlines()[-1]
+    try:
+        return json.loads(out), ""
+    except ValueError:
+        return None, "could not parse gh output"
+
+
+def path_shas(repo: str, path: str, since: str) -> set[str]:
+    """SHAs of main commits touching `path` committed at/after `since`.
+
+    The compare API can't filter by path, so the commits API (which can) is
+    bounded by the tag commit's date and intersected with the compare range.
+    """
+    code, out, _ = gh(
+        ["api", "--paginate",
+         f"repos/{owner()}/{repo}/commits?sha=main&path={path}&since={since}&per_page=100",
+         "--jq", ".[].sha"]
+    )
+    return set(out.split()) if code == 0 else set()
+
+
+def commits_since(repo: str, tag: str, path: str = "") -> dict:
+    """Compare `tag`..main via the GitHub API, optionally scoped to `path`.
 
     Returns {ahead: int, subjects: [str]} on success, or {error: str} if the
     tag is missing (never released at that version) or the compare fails.
     """
-    code, out, err = gh(
+    data, err = gh_json(
         ["api", f"repos/{owner()}/{repo}/compare/{tag}...main",
-         "--jq", "{ahead: .ahead_by, subjects: [.commits[].commit.message | split(\"\\n\")[0]]}"]
+         "--jq", "{ahead: .ahead_by, since: .base_commit.commit.committer.date,"
+                 " commits: [.commits[] | {sha, subject: (.commit.message | split(\"\\n\")[0])}]}"]
     )
-    if code != 0:
+    if data is None:
         # 404 → tag not found on this owner (common on forks / first release).
-        return {"error": (err.strip() or "compare failed").splitlines()[-1]}
-    try:
-        data = json.loads(out)
-    except ValueError:
-        return {"error": "could not parse compare output"}
-    # Newest-first from the API; reverse to chronological for display.
-    data["subjects"] = list(reversed(data.get("subjects") or []))
-    return data
+        return {"error": err}
+    commits = data.get("commits") or []
+    if path:
+        # The compare list caps at 250 commits; past that the path count is a
+        # lower bound, which still answers "is there anything to release".
+        touched = path_shas(repo, path, data["since"])
+        commits = [c for c in commits if c["sha"] in touched]
+        data["ahead"] = len(commits)
+    # Reverse the compare order so the newest commits display first.
+    return {"ahead": data["ahead"], "subjects": [c["subject"] for c in reversed(commits)]}
+
+
+CC_RE = re.compile(r"^(?P<type>\w+)(\([^)]*\))?(?P<bang>!)?:")
+BUMP_RANK = {"feat": ("minor", 2), "fix": ("patch", 1)}
+
+
+def implied_bump(subjects: list[str]) -> dict:
+    """The bump conventional commits imply: feat → minor, fix → patch.
+
+    `!` is flagged as breaking rather than mapped to major — whether it needs
+    a major is a judgment call (harness-sdk team/FEATURE_LIFECYCLE.md).
+    """
+    matches = [m for m in map(CC_RE.match, subjects) if m]
+    ranked = [BUMP_RANK.get(m["type"], ("none", 0)) for m in matches]
+    bump = max(ranked, key=lambda r: r[1], default=("none", 0))[0]
+    return {"bump": bump, "breaking": any(m["bang"] for m in matches)}
+
+
+def range_admits(spec: str, version: str) -> bool | None:
+    """Whether an npm range (exact, ~x.y.z, ^x.y.z) admits `version`.
+
+    None if the range isn't one of those simple forms.
+    """
+    m = re.match(r"^([~^]?)(\d+)\.(\d+)\.(\d+)$", spec.strip())
+    if not m or not SEMVER_RE.match(version):
+        return None
+    op, base = m[1], tuple(int(x) for x in m.groups()[1:])
+    v = tuple(int(x) for x in version.split("."))
+    # Leading components that must match: exact=3, tilde=2, caret=first
+    # non-zero component (^0.3.1 → 0.3.x, ^1.2.3 → 1.x).
+    fixed = {"": 3, "~": 2}.get(op) or next((i + 1 for i, x in enumerate(base) if x), 3)
+    return v[:fixed] == base[:fixed] and v >= base
+
+
+def dep_status(t: dict) -> dict | None:
+    """Range of `dep_check.dep` in `dep_check.file` on main vs. its published version."""
+    check = t.get("dep_check")
+    if not check:
+        return None
+    pkg, err = gh_json(
+        ["api", f"repos/{owner()}/{t['repo']}/contents/{check['file']}?ref=main",
+         "-H", "Accept: application/vnd.github.raw+json"]
+    )
+    deps = {**(pkg or {}).get("devDependencies", {}), **(pkg or {}).get("dependencies", {})}
+    published = latest_published_version(TARGETS[check["target"]]["version"])
+    spec = deps.get(check["dep"], "")
+    return {
+        "dep": check["dep"], "range": spec or f"? ({err or 'not found'})",
+        "published": published, "admits": range_admits(spec, published) if spec else None,
+    }
 
 
 def status(target_names: list[str]) -> list[dict]:
@@ -162,7 +297,7 @@ def status(target_names: list[str]) -> list[dict]:
         if version:
             tag = f"{t['prefix']}{version}"
             row["tag"] = tag
-            cmp = commits_since(t["repo"], tag)
+            cmp = commits_since(t["repo"], tag, t.get("path", ""))
             if "error" in cmp:
                 row["has_changes"] = None
                 row["note"] = cmp["error"]
@@ -170,22 +305,38 @@ def status(target_names: list[str]) -> list[dict]:
                 row["ahead"] = cmp["ahead"]
                 row["has_changes"] = cmp["ahead"] > 0
                 row["subjects"] = cmp["subjects"]
+                row["implied"] = implied_bump(cmp["subjects"])
         else:
             row["has_changes"] = None
             row["note"] = "no published version found"
+        dep = dep_status(t)
+        if dep:
+            row["dep_check"] = dep
         rows.append(row)
     return rows
 
 
+def status_tail(r: dict) -> str:
+    if r["has_changes"] is None:
+        return f"  ({r.get('note', 'unknown')})"
+    scope = f" in {TARGETS[r['target']]['path']}" if TARGETS[r["target"]].get("path") else ""
+    if not r["has_changes"]:
+        return f"  no new commits{scope} since {r['tag']}"
+    imp = r["implied"]
+    breaking = ", BREAKING (!) — check FEATURE_LIFECYCLE.md" if imp["breaking"] else ""
+    return f"  {r['ahead']} new commit(s){scope} since {r['tag']}  [implied: {imp['bump']}{breaking}]"
+
+
+def dep_line(d: dict) -> str:
+    verdict = {True: "ok", False: "DOES NOT ADMIT latest", None: "can't evaluate"}[d["admits"]]
+    return f"    dep {d['dep']} {d['range']} on main; published {d['published'] or 'n/a'} → {verdict}"
+
+
 def print_status_human(rows: list[dict]) -> None:
     for r in rows:
-        if r["has_changes"] is None:
-            tail = f"  ({r.get('note', 'unknown')})"
-        elif r["has_changes"]:
-            tail = f"  {r['ahead']} new commit(s) since {r['tag']}"
-        else:
-            tail = f"  no new commits since {r['tag']}"
-        print(f"{r['target']:<20} latest: {r['version'] or 'n/a':<10}{tail}")
+        print(f"{r['target']:<20} latest: {r['version'] or 'n/a':<10}{status_tail(r)}")
+        if "dep_check" in r:
+            print(dep_line(r["dep_check"]))
         for s in r.get("subjects", [])[:20]:
             print(f"    - {s}")
 
@@ -226,8 +377,8 @@ def dispatch(name: str, version: str, preview: bool, sha: str) -> int:
     ]
     if sha:
         args += ["-f", f"sha={sha}"]
-    if t["has_integ"]:
-        args += ["-f", "run_integ_tests=false"]
+    for key, value in t["inputs"].items():
+        args += ["-f", f"{key}={value}"]
 
     mode = "PREVIEW (dry run)" if preview else "REAL RELEASE (waits for release-gate approval)"
     print(f"Dispatching {name} v{version} → {owner()}/{t['repo']} / {t['workflow']}  [{mode}]")
@@ -246,6 +397,51 @@ def dispatch(name: str, version: str, preview: bool, sha: str) -> int:
     return 0
 
 
+RUN_URL_RE = re.compile(r"github\.com/([^/]+/[^/]+)/actions/runs/(\d+)")
+
+
+def release_url(repo: str, workflow_path: str, head_sha: str) -> str:
+    """URL of the release whose tag (target's prefix) points at `head_sha`."""
+    t = next((t for t in TARGETS.values() if workflow_path.endswith("/" + t["workflow"])
+              and repo.endswith("/" + t["repo"])), None)
+    if not t:
+        return ""
+    code, out, _ = gh(
+        ["api", f"repos/{repo}/git/matching-refs/tags/{t['prefix']}",
+         "--jq", f'.[] | select(.object.sha == "{head_sha}") | .ref']
+    )
+    tag = out.split()[-1].removeprefix("refs/tags/") if code == 0 and out.split() else ""
+    return f"https://github.com/{repo}/releases/tag/{tag}" if tag else ""
+
+
+def run_state(run: dict, repo: str) -> str:
+    if run["status"] == "waiting":
+        # Name the environment rather than assume release-gate.
+        envs, _ = gh_json(["api", f"repos/{repo}/actions/runs/{run['id']}/pending_deployments",
+                           "--jq", "[.[].environment.name]"])
+        return f"waiting at {', '.join(envs or ['an environment'])} (approve on the run page)"
+    if run["status"] != "completed":
+        return f"in progress ({run['status']})"
+    if run["conclusion"] != "success":
+        return f"failed ({run['conclusion']})"
+    url = release_url(repo, run["path"], run["head_sha"])
+    return f"published → {url}" if url else "succeeded, no release tag found (preview?)"
+
+
+def pending(runs: list[str]) -> int:
+    rc = 0
+    for ref in runs:
+        m = RUN_URL_RE.search(ref)
+        repo, run_id = (m[1], m[2]) if m else (f"{owner()}/{DEFAULT_RUN_REPO}", ref)
+        run, err = gh_json(["api", f"repos/{repo}/actions/runs/{run_id}"])
+        if run is None:
+            print(f"{ref}: error: {err}")
+            rc = 1
+            continue
+        print(f"{run['name']:<28} {run['html_url']}\n    {run_state(run, repo)}")
+    return rc
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="Dispatch strands release workflows.")
     p.add_argument("--owner", help="GitHub org/user owning the repos (default: $OWNER or strands-agents).")
@@ -262,6 +458,9 @@ def main() -> int:
     d.add_argument("version", help="Bare semver to release, e.g. 0.3.0.")
     d.add_argument("--preview", action="store_true", help="Dry run: build + inspect only, no approval/publish.")
     d.add_argument("--sha", default="", help="Optional commit SHA (must be an ancestor of main).")
+
+    pd = sub.add_parser("pending", help="Show where dispatched release runs are (gate / published / failed).")
+    pd.add_argument("runs", nargs="+", help=f"Run URLs or ids (bare ids default to {DEFAULT_RUN_REPO}).")
 
     args = p.parse_args()
     if args.owner:
@@ -283,6 +482,9 @@ def main() -> int:
 
     if args.cmd == "dispatch":
         return dispatch(args.target, args.version, args.preview, args.sha)
+
+    if args.cmd == "pending":
+        return pending(args.runs)
 
     return 0
 
