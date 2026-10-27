@@ -31,6 +31,14 @@ inputs:
     description: 'SQS queue ARN for eval triggers (optional, can be fetched from Secrets Manager)'
     required: false
     default: ''
+  model_id:
+    description: 'Bedrock model or inference profile ID for the agent. The role in aws_role_arn must be allowed to invoke it.'
+    required: false
+    default: 'global.anthropic.claude-opus-4-8'
+  reasoning_effort:
+    description: 'Reasoning effort for the agent: low, medium, high, or max.'
+    required: false
+    default: 'high'
 
 runs:
   using: 'composite'
@@ -244,6 +252,10 @@ runs:
 
         # Evals Configuration (input overrides Secrets Manager)
         EVALS_SQS_QUEUE_ARN: ${{ inputs.evals_sqs_queue_arn || steps.secrets.outputs.evals_sqs_queue_arn }}
+
+        # Model Configuration (an empty value uses the runner default)
+        STRANDS_MODEL_ID: ${{ inputs.model_id }}
+        STRANDS_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       run: |
         INPUT_TASK="$(jq -r .prompt ${{ runner.temp }}/strands-parsed-input.json)"
         INPUT_SYSTEM_PROMPT="$(jq -r .system_prompt ${{ runner.temp }}/strands-parsed-input.json)"

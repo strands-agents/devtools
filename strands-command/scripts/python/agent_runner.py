@@ -46,7 +46,11 @@ from notebook import notebook
 from str_replace_based_edit_tool import str_replace_based_edit_tool
 
 # Strands configuration constants
+# STRANDS_MODEL_ID and STRANDS_REASONING_EFFORT are the defaults. The env vars of the
+# same names override them; an empty value means the default.
 STRANDS_MODEL_ID = "global.anthropic.claude-opus-4-8"
+STRANDS_REASONING_EFFORT = "high"
+STRANDS_REASONING_EFFORTS = ("low", "medium", "high", "max")
 STRANDS_MAX_TOKENS = 64000
 STRANDS_REGION = "us-west-2"
 
@@ -193,6 +197,25 @@ _MODE_TOOL_DENYLIST: dict[str, list[Any]] = {
 }
 
 
+def _resolve_model_config() -> tuple[str, str]:
+    """Return the Bedrock model id and reasoning effort for this run.
+
+    STRANDS_MODEL_ID and STRANDS_REASONING_EFFORT override the defaults. An unset or
+    empty value means the default.
+
+    Raises:
+        ValueError: If STRANDS_REASONING_EFFORT is not a known effort.
+    """
+    model_id = os.environ.get("STRANDS_MODEL_ID", "").strip() or STRANDS_MODEL_ID
+    effort = os.environ.get("STRANDS_REASONING_EFFORT", "").strip() or STRANDS_REASONING_EFFORT
+    if effort not in STRANDS_REASONING_EFFORTS:
+        raise ValueError(
+            f"Unknown STRANDS_REASONING_EFFORT '{effort}'. "
+            f"Use one of: {', '.join(STRANDS_REASONING_EFFORTS)}"
+        )
+    return model_id, effort
+
+
 def _get_tools_for_mode(mode: str | None) -> list[Any]:
     """Return the tool set filtered by agent mode.
 
@@ -206,8 +229,8 @@ def _get_tools_for_mode(mode: str | None) -> list[Any]:
     return [t for t in all_tools if t not in denied]
 
 
-def run_agent(query: str):
-    """Run the agent with the provided query."""
+def run_agent(query: str, model_id: str, effort: str):
+    """Run the agent with the provided query, Bedrock model id, and reasoning effort."""
     try:
         # Set up Langfuse telemetry (optional - gracefully degrades if not configured)
         telemetry_enabled = _setup_langfuse_telemetry()
@@ -220,10 +243,10 @@ def run_agent(query: str):
         # Create Bedrock model with inlined configuration
         additional_request_fields = {}
         additional_request_fields["thinking"] = {"type": "adaptive"}
-        additional_request_fields["output_config"] = {"effort": "high"}
+        additional_request_fields["output_config"] = {"effort": effort}
         
         model = BedrockModel(
-            model_id=STRANDS_MODEL_ID,
+            model_id=model_id,
             max_tokens=STRANDS_MAX_TOKENS,
             region_name=STRANDS_REGION,
             boto_client_config=Config(
@@ -301,9 +324,12 @@ def main() -> None:
         task = " ".join(sys.argv[1:])
         if not task.strip():
             raise ValueError("Task cannot be empty")
+
+        model_id, effort = _resolve_model_config()
+        print(f"🤖 Using model={model_id} effort={effort}")
         print(f"🤖 Running agent with task: {task}")
 
-        run_agent(task)
+        run_agent(task, model_id, effort)
 
     except Exception as e:
         error_msg = f"Fatal error: {e}"

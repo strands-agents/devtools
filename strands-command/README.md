@@ -325,6 +325,23 @@ Executes AI agents with AWS integration and controlled permissions.
 - `aws_secrets_manager_secret_id` (required): AWS Secrets Manager secret ID containing agent configuration (fetches `sessions_bucket`, `langfuse_*`, and `evals_sqs_queue_arn`)
 - `sessions_bucket` (optional): S3 bucket for session storage. Overrides value from Secrets Manager if provided
 - `write_permission` (required): Permission level flag for Read-only Sandbox mode (`true`/`false`)
+- `model_id` (optional, default `global.anthropic.claude-opus-4-8`): Bedrock model or inference profile ID for the agent. The role in `aws_role_arn` must be allowed to invoke the model
+- `reasoning_effort` (optional, default `high`): Reasoning effort for the agent: `low`, `medium`, `high`, or `max`. Any other value stops the run before the agent starts
+
+To pick the model and effort, set the two inputs. Repository variables let a maintainer change them without a commit. An unset variable passes an empty value, and an empty value also gives the default:
+
+```yaml
+      - name: Run Strands Agent
+        uses: strands-agents/devtools/strands-command/actions/strands-agent-runner@main
+        with:
+          aws_role_arn: ${{ secrets.AWS_ROLE_ARN }}
+          sessions_bucket: ${{ secrets.AGENT_SESSIONS_BUCKET }}
+          write_permission: 'false'
+          model_id: ${{ vars.STRANDS_MODEL_ID }}
+          reasoning_effort: ${{ vars.STRANDS_REASONING_EFFORT }}
+```
+
+The run log shows the model and effort that the agent uses, for example `🤖 Using model=global.anthropic.claude-opus-4-8 effort=medium`.
 
 **Outputs:**
 - Artifact: `repository-state` containing modified repository files (if changes exist)
@@ -347,6 +364,8 @@ Executes AI agents with AWS integration and controlled permissions.
 - `S3_SESSION_BUCKET`: Session storage location
 - `STRANDS_TOOL_CONSOLE_MODE`: Tool execution mode
 - `BYPASS_TOOL_CONSENT`: Automated tool approval
+- `STRANDS_MODEL_ID`: Bedrock model ID, from the `model_id` input
+- `STRANDS_REASONING_EFFORT`: Reasoning effort, from the `reasoning_effort` input
 
 ### strands-finalize
 
@@ -466,6 +485,8 @@ The actions use these environment variables during execution:
 | `S3_SESSION_BUCKET` | Session storage location | Input |
 | `STRANDS_TOOL_CONSOLE_MODE` | Tool execution mode | Action |
 | `BYPASS_TOOL_CONSENT` | Automated tool approval | Action |
+| `STRANDS_MODEL_ID` | Bedrock model ID (empty uses the default) | Input |
+| `STRANDS_REASONING_EFFORT` | Reasoning effort (empty uses the default) | Input |
 
 ## Usage Examples
 
