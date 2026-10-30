@@ -149,13 +149,10 @@ runs:
     
     - name: Checkout devtools repo
       if: steps.check-write-ops.outputs.exists == 'true'
-      uses: actions/checkout@v5
-      with:
-        repository: strands-agents/devtools
-        ref: main
-        sparse-checkout: |
-          strands-command/scripts
-        path: devtools
+      shell: bash
+      run: |
+        mkdir -p devtools/strands-command
+        cp -r "$GITHUB_ACTION_PATH/../../scripts" devtools/strands-command/
       
     - name: Set up Python
       if: steps.check-write-ops.outputs.exists == 'true'

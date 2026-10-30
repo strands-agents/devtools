@@ -34,15 +34,6 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Checkout action
-      uses: actions/checkout@v6
-      with:
-        repository: strands-agents/devtools
-        ref: main
-        path: _authorization-check
-        sparse-checkout: |
-          authorization-check/scripts
-
     - name: Collaborator Check
       if: inputs.skip-check != 'true'
       uses: actions/github-script@v8
@@ -50,7 +41,7 @@ runs:
       with:
         result-encoding: string
         script: |
-          const checkAuthorization = require('./_authorization-check/authorization-check/scripts/check-authorization.cjs');
+          const checkAuthorization = require('${{ github.action_path }}/scripts/check-authorization.cjs');
           return await checkAuthorization(context, github, {
             username: '${{ inputs.username }}',
             allowedRoles: '${{ inputs.allowed-roles }}'
@@ -73,7 +64,7 @@ runs:
       uses: actions/github-script@v8
       with:
         script: |
-          const pinAndVerify = require('./_authorization-check/authorization-check/scripts/pin-and-verify.cjs');
+          const pinAndVerify = require('${{ github.action_path }}/scripts/pin-and-verify.cjs');
           const result = await pinAndVerify(context, github, { issueId: '${{ inputs.issue-id }}' });
           if (result) {
             core.setOutput('head-sha', result.headSha);
