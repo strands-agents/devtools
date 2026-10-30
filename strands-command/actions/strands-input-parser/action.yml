@@ -30,14 +30,10 @@ runs:
   using: 'composite'
   steps:
     - name: Checkout devtools
-      uses: actions/checkout@v6
-      with:
-        repository: strands-agents/devtools
-        ref: main
-        sparse-checkout: |
-          strands-command/scripts
-          strands-command/agent-sops
-        path: devtools
+      shell: bash
+      run: |
+        mkdir -p devtools/strands-command
+        cp -r "$GITHUB_ACTION_PATH/../../scripts" "$GITHUB_ACTION_PATH/../../agent-sops" devtools/strands-command/
 
     - name: Add strands-running label
       uses: actions/github-script@v8

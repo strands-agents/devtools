@@ -292,6 +292,8 @@ Permission Policy:
 
 ## Actions
 
+Each action runs the scripts and SOPs from the devtools copy its `uses:` line names. To test a devtools change, point all four `uses:` lines (`authorization-check` included) at your repo and ref, e.g. `my-org/devtools/strands-command/actions/strands-agent-runner@my-branch`.
+
 ### strands-input-parser
 
 Parses `/strands` command input and prepares execution parameters for the agent runner.

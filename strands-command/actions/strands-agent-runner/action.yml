@@ -63,14 +63,10 @@ runs:
 
     # Checkout devtools repo for scripts
     - name: Checkout devtools
-      uses: actions/checkout@v5
-      with:
-        repository: strands-agents/devtools
-        ref: main
-        sparse-checkout: |
-          strands-command/scripts
-          strands-command/agent-sops
-        path: devtools
+      shell: bash
+      run: |
+        mkdir -p devtools/strands-command
+        cp -r "$GITHUB_ACTION_PATH/../../scripts" "$GITHUB_ACTION_PATH/../../agent-sops" devtools/strands-command/
 
     # Copy the devtools directory to the runner temp directory so the branch content cant overwrite the scripts executed here
     - name: Copy devtools to safe directory
