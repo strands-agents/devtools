@@ -48,7 +48,7 @@ from str_replace_based_edit_tool import str_replace_based_edit_tool
 # Strands configuration constants
 # STRANDS_MODEL_ID and STRANDS_REASONING_EFFORT are the defaults. The env vars of the
 # same names override them; an empty value means the default.
-STRANDS_MODEL_ID = "global.anthropic.claude-opus-4-8"
+STRANDS_MODEL_ID = "global.anthropic.claude-opus-5-5"
 STRANDS_REASONING_EFFORT = "high"
 STRANDS_REASONING_EFFORTS = ("low", "medium", "high", "max")
 STRANDS_MAX_TOKENS = 64000
