@@ -34,7 +34,7 @@ inputs:
   model_id:
     description: 'Bedrock model or inference profile ID for the agent. The role in aws_role_arn must be allowed to invoke it.'
     required: false
-    default: 'global.anthropic.claude-opus-4-8'
+    default: 'global.anthropic.claude-opus-5-5'
   reasoning_effort:
     description: 'Reasoning effort for the agent: low, medium, high, or max.'
     required: false

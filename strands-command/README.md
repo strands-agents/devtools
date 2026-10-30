@@ -325,7 +325,7 @@ Executes AI agents with AWS integration and controlled permissions.
 - `aws_secrets_manager_secret_id` (required): AWS Secrets Manager secret ID containing agent configuration (fetches `sessions_bucket`, `langfuse_*`, and `evals_sqs_queue_arn`)
 - `sessions_bucket` (optional): S3 bucket for session storage. Overrides value from Secrets Manager if provided
 - `write_permission` (required): Permission level flag for Read-only Sandbox mode (`true`/`false`)
-- `model_id` (optional, default `global.anthropic.claude-opus-4-8`): Bedrock model or inference profile ID for the agent. The role in `aws_role_arn` must be allowed to invoke the model
+- `model_id` (optional, default `global.anthropic.claude-opus-5-5`): Bedrock model or inference profile ID for the agent. The role in `aws_role_arn` must be allowed to invoke the model
 - `reasoning_effort` (optional, default `high`): Reasoning effort for the agent: `low`, `medium`, `high`, or `max`. Any other value stops the run before the agent starts
 
 To pick the model and effort, set the two inputs. Repository variables let a maintainer change them without a commit. An unset variable passes an empty value, and an empty value also gives the default:
@@ -341,7 +341,7 @@ To pick the model and effort, set the two inputs. Repository variables let a mai
           reasoning_effort: ${{ vars.STRANDS_REASONING_EFFORT }}
 ```
 
-The run log shows the model and effort that the agent uses, for example `🤖 Using model=global.anthropic.claude-opus-4-8 effort=medium`.
+The run log shows the model and effort that the agent uses, for example `🤖 Using model=global.anthropic.claude-opus-5-5 effort=medium`.
 
 **Outputs:**
 - Artifact: `repository-state` containing modified repository files (if changes exist)
