@@ -4,7 +4,8 @@ version = "0.1.0"
 description = "Strands Agents devtools - GitHub Actions agent runner and tools"
 requires-python = ">=3.13"
 dependencies = [
-    "strands-agents>=1.56.0,<2.0.0",
+    "strands-agents>=1.57.2,<2.0.0",
+    "strands-harness>=0.3.2,<1.0.0",
     "colorama",
     "rich",
     "requests>=2.28.0",

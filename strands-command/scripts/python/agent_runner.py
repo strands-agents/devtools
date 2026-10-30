@@ -14,11 +14,11 @@ from typing import Any
 import boto3
 from strands import Agent
 from strands.telemetry import StrandsTelemetry
-from strands.agent.conversation_manager import SlidingWindowConversationManager
-from strands.session import S3SessionManager
+from strands.session import SnapshotSessionManager
 from strands.models import BedrockModel, CacheConfig
-from strands.vended_plugins.context_offloader import ContextOffloader, S3Storage
-from strands.vended_tools import http_request, shell
+from strands.storage import S3Storage
+from strands.vended_tools import http_request
+from strands_harness import create_harness
 from botocore.config import Config
 
 # Import local GitHub tools we need
@@ -43,7 +43,6 @@ from github_tools import (
 # Import local tools we need
 from handoff_to_user import handoff_to_user
 from notebook import notebook
-from str_replace_based_edit_tool import str_replace_based_edit_tool
 
 # Strands configuration constants
 # STRANDS_MODEL_ID and STRANDS_REASONING_EFFORT are the defaults. The env vars of the
@@ -53,6 +52,18 @@ STRANDS_REASONING_EFFORT = "high"
 STRANDS_REASONING_EFFORTS = ("low", "medium", "high", "max")
 STRANDS_MAX_TOKENS = 64000
 STRANDS_REGION = "us-west-2"
+# Harness built-ins. web_fetch (needs a second summarizer model the consuming repo's role may not
+# allow), programmatic_tool_caller and subagent stay off.
+STRANDS_BUILTIN_TOOLS = ["shell", "read", "write", "edit"]
+# Appended to the SOP: the harness contract says to confirm before outward actions, but there is
+# nobody to ask here. The harness environment plugin is off (it would inject the untrusted
+# checkout's AGENTS.md as trusted context), so name the working directory ourselves.
+UNATTENDED_RUN_NOTE = (
+    "This is an unattended CI run: no one is watching it live, so a question only reaches a human "
+    "if you post it to GitHub first. handoff_to_user ends the run; a later /strands command resumes "
+    "this same session with the answer. The GitHub actions your instructions prescribe are "
+    "pre-authorized. Working directory: {cwd} (file tools take absolute paths)."
+)
 
 # Default values for environment variables used only in this file
 DEFAULT_SYSTEM_PROMPT = "You are an autonomous GitHub agent powered by Strands Agents SDK."
@@ -154,11 +165,7 @@ def _get_trace_attributes() -> dict:
 
 def _get_all_tools() -> list[Any]:
     return [
-        # File editing
-        str_replace_based_edit_tool,
-
-        # System tools
-        shell,
+        # System tools (shell and file read/write/edit come from the harness)
         http_request,
 
         # GitHub issue tools
@@ -229,6 +236,41 @@ def _get_tools_for_mode(mode: str | None) -> list[Any]:
     return [t for t in all_tools if t not in denied]
 
 
+def _create_agent(
+    model: BedrockModel,
+    system_prompt: str,
+    tools: list[Any],
+    session_id: str,
+    s3_bucket: str,
+    s3_prefix: str,
+    trace_attributes: dict | None = None,
+) -> Agent:
+    """Build the harness agent, persisted to S3 under ``{s3_prefix}/``.
+
+    One S3 storage backs both the session snapshots (``session/``) and the context manager's
+    stash of offloaded tool results (``context/``), so a resumed run can still resolve the
+    references left in its conversation. The old per-message S3SessionManager cannot do this:
+    it persists each message once, so a restore reloads the unreduced history and the
+    context manager's work is undone (newer SDKs reject the pairing outright).
+    """
+    storage = S3Storage(bucket=s3_bucket, prefix=s3_prefix)
+    return create_harness(
+        model=model,
+        caching=False,  # reasoning and caching are configured on the model instance
+        instructions=f"{system_prompt}\n\n{UNATTENDED_RUN_NOTE.format(cwd=os.getcwd())}",
+        tools=tools,
+        builtin_tools=STRANDS_BUILTIN_TOOLS,
+        session=SnapshotSessionManager(session_id, storage=storage, save_latest_on="message"),
+        storage=storage,
+        # The checkout is untrusted and throwaway: no skills, memory, or environment context
+        # from it, and no todo_write competing with the notebook the SOPs mandate.
+        builtin_plugins=[],
+        skills=False,
+        memory=False,
+        **({"trace_attributes": trace_attributes} if trace_attributes else {}),
+    )
+
+
 def run_agent(query: str, model_id: str, effort: str):
     """Run the agent with the provided query, Bedrock model id, and reasoning effort."""
     try:
@@ -264,40 +306,11 @@ def run_agent(query: str, model_id: str, effort: str):
         s3_bucket = os.getenv("S3_SESSION_BUCKET")
         s3_prefix = os.getenv("GITHUB_REPOSITORY", "")
 
-        if s3_bucket and session_id:
-            print(f"🤖 Using session manager with session ID: {session_id}")
-            session_manager = S3SessionManager(
-                session_id=session_id,
-                bucket=s3_bucket,
-                prefix=s3_prefix,
-            )
-        else:
+        if not (s3_bucket and session_id):
             raise ValueError("Both SESSION_ID and S3_SESSION_BUCKET must be set")
+        print(f"🤖 Using session manager with session ID: {session_id}")
 
-        # Offload oversized tool results (large PR diffs, file reads, shell output)
-        # to storage instead of letting them crowd out the context window. The
-        # plugin registers a retrieval tool so the agent can fetch the full content
-        # on demand. Use S3 storage rather than in-memory: the offloaded result is
-        # replaced in the conversation with a storage reference that the session
-        # manager persists, so a resumed session must still be able to resolve that
-        # reference in a later process — which in-memory storage could not.
-        context_offloader = ContextOffloader(
-            storage=S3Storage(bucket=s3_bucket, prefix=f"{s3_prefix}/offload"),
-        )
-
-        # Create agent with optional trace attributes for Langfuse
-        agent_kwargs = {
-            "model": model,
-            "system_prompt": system_prompt,
-            "tools": tools,
-            "session_manager": session_manager,
-            "plugins": [context_offloader],
-        }
-
-        if trace_attributes:
-            agent_kwargs["trace_attributes"] = trace_attributes
-
-        agent = Agent(**agent_kwargs)
+        agent = _create_agent(model, system_prompt, tools, session_id, s3_bucket, s3_prefix, trace_attributes)
 
         print("Processing user query...")
         result = agent(query)
