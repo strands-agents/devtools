@@ -245,3 +245,10 @@ If you disagree with the approach:
 - Reference project guidelines and standards
 - Suggest alternative approaches
 - Be open to discussion and learning
+
+## Learned Constraints
+
+These constraints are appended over time from lessons learned on merged PRs. Each is a durable, generalizable review rule.
+
+- You MUST, when reviewing a fix to a locking/concurrency bug, verify the fix enforces the real ownership / acquire-release pairing invariant rather than a proxy: a lock must be released only by the code path that proved it acquired it (mirror the acquire result, as `tools/_caller.py` does with `if acquired_lock: release_lock()`), never based on a re-derived `mode`/config flag. Flag any `release()` conditioned on configuration instead of proven acquisition, and flag any field named like `lock_acquired`/`owns_lock` whose value does not actually track acquisition in every mode. (from strands-agents/harness-sdk#2954)
+- You MUST, when a PR fixes a bug that links to an issue documenting a deeper root cause, check whether the change resolves that root cause or only the immediate symptom; if it is a narrower symptom fix, confirm a tracking issue exists for the remaining root cause and flag its absence rather than treating the bug as fully closed. (from strands-agents/harness-sdk#2954)
