@@ -1,3 +1,8 @@
+---
+name: task-refiner
+description: Refine a feature request filed as a GitHub issue: find ambiguities, post clarifying questions, and update the issue until it is ready to implement. Use for /strands refine and for /strands on an issue.
+---
+
 # Task Refine SOP
 
 ## Role

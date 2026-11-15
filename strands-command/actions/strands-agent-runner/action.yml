@@ -32,13 +32,13 @@ inputs:
     required: false
     default: ''
   model_id:
-    description: 'Bedrock model or inference profile ID for the agent. The role in aws_role_arn must be allowed to invoke it.'
+    description: 'Bedrock model or inference profile ID for the agent; empty uses the Strands harness default. The role in aws_role_arn must be allowed to invoke it.'
     required: false
-    default: 'global.anthropic.claude-opus-5-5'
+    default: ''
   reasoning_effort:
-    description: 'Reasoning effort for the agent: low, medium, high, or max.'
+    description: 'Reasoning effort for the agent (e.g. low, medium, high, max); empty uses the Strands harness default for the model.'
     required: false
-    default: 'high'
+    default: ''
 
 runs:
   using: 'composite'
@@ -66,7 +66,7 @@ runs:
       shell: bash
       run: |
         mkdir -p devtools/strands-command
-        cp -r "$GITHUB_ACTION_PATH/../../scripts" "$GITHUB_ACTION_PATH/../../agent-sops" devtools/strands-command/
+        cp -r "$GITHUB_ACTION_PATH/../../scripts" "$GITHUB_ACTION_PATH/../../skills" devtools/strands-command/
 
     # Copy the devtools directory to the runner temp directory so the branch content cant overwrite the scripts executed here
     - name: Copy devtools to safe directory
@@ -249,13 +249,14 @@ runs:
         # Evals Configuration (input overrides Secrets Manager)
         EVALS_SQS_QUEUE_ARN: ${{ inputs.evals_sqs_queue_arn || steps.secrets.outputs.evals_sqs_queue_arn }}
 
-        # Model Configuration (an empty value uses the runner default)
+        # Model Configuration (an empty value uses the Strands harness default)
         STRANDS_MODEL_ID: ${{ inputs.model_id }}
         STRANDS_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       run: |
         INPUT_TASK="$(jq -r .prompt ${{ runner.temp }}/strands-parsed-input.json)"
-        INPUT_SYSTEM_PROMPT="$(jq -r .system_prompt ${{ runner.temp }}/strands-parsed-input.json)"
-        export INPUT_SYSTEM_PROMPT
+        INPUT_SKILL="$(jq -r .skill ${{ runner.temp }}/strands-parsed-input.json)"
+        INPUT_INSTRUCTIONS="$(jq -r .instructions ${{ runner.temp }}/strands-parsed-input.json)"
+        export INPUT_SKILL INPUT_INSTRUCTIONS
         uv run --no-project ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/agent_runner.py "$INPUT_TASK"
 
     - name: Capture repository state

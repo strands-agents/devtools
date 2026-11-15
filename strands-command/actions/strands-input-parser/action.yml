@@ -33,7 +33,7 @@ runs:
       shell: bash
       run: |
         mkdir -p devtools/strands-command
-        cp -r "$GITHUB_ACTION_PATH/../../scripts" "$GITHUB_ACTION_PATH/../../agent-sops" devtools/strands-command/
+        cp -r "$GITHUB_ACTION_PATH/../../scripts" devtools/strands-command/
 
     - name: Add strands-running label
       uses: actions/github-script@v8

@@ -83,21 +83,10 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs,
     ? `${mode}-${branchName}`.replace(/[\/\\]/g, '-')
     : `${mode}-${issueId}`);
 
-  const scriptFiles = {
-    'implementer': 'devtools/strands-command/agent-sops/task-implementer.sop.md',
-    'refiner': 'devtools/strands-command/agent-sops/task-refiner.sop.md',
-    'release-notes': 'devtools/strands-command/agent-sops/task-release-notes.sop.md',
-    'reviewer': 'devtools/strands-command/agent-sops/task-reviewer.sop.md',
-    'bug-verifier': 'devtools/strands-command/agent-sops/task-bug-verifier.sop.md'
-  };
-  
-  const scriptFile = scriptFiles[mode] || scriptFiles['refiner'];
-  let systemPrompt = fs.readFileSync(scriptFile, 'utf8');
+  // Each mode's instructions live in the skills/task-<mode> skill, which the runner loads.
+  const skill = `task-${mode}`;
+  const instructions = inputs.system_prompt_suffix || '';
 
-  if (inputs.system_prompt_suffix) {
-    systemPrompt += '\n\n' + inputs.system_prompt_suffix;
-  }
-  
   let prompt = (isPullRequest) 
     ? 'The pull request id is:'
     : 'The issue id is:';
@@ -118,7 +107,7 @@ function buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs,
     prompt += `--- END ISSUE SNAPSHOT ---`;
   }
 
-  return { sessionId, systemPrompt, prompt };
+  return { sessionId, skill, instructions, prompt };
 }
 
 module.exports = async (context, github, core, inputs) => {
@@ -148,7 +137,7 @@ module.exports = async (context, github, core, inputs) => {
     const { branchName, headRepo, headSha } = await determineBranch(github, context, issueId, mode, isPullRequest, inputs);
     console.log(`Building prompts - mode: ${mode}, issue: ${issueId}, is PR: ${isPullRequest}`);
 
-    const { sessionId, systemPrompt, prompt } = buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue, headSha);
+    const { sessionId, skill, instructions, prompt } = buildPrompts(mode, issueId, isPullRequest, command, branchName, inputs, issue, headSha);
     
     console.log(`Session ID: ${sessionId}`);
     console.log(`Task prompt: "${prompt}"`);
@@ -157,7 +146,8 @@ module.exports = async (context, github, core, inputs) => {
       branch_name: branchName,
       head_sha: headSha,
       session_id: sessionId,
-      system_prompt: systemPrompt,
+      skill: skill,
+      instructions: instructions,
       prompt: prompt,
       issue_id: issueId,
       head_repo: headRepo,

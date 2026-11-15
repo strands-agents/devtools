@@ -1,3 +1,8 @@
+---
+name: task-reviewer
+description: Review the code changes in a pull request and leave targeted, constructive review comments on quality, maintainability, and adherence to project standards. Use for /strands review.
+---
+
 # Task Reviewer SOP
 
 ## Role

@@ -67,7 +67,7 @@ export class EvalPipelineStack extends cdk.Stack {
     });
 
     // Lambda Function for running evaluations
-    const agentSopsDir = path.join(__dirname, "../../strands-command/agent-sops");
+    const agentSkillsDir = path.join(__dirname, "../../strands-command/skills");
 
     this.evalFunction = new PythonFunction(this, "EvalRunnerFunction", {
       functionName: "strands-evals-runner",
@@ -86,15 +86,16 @@ export class EvalPipelineStack extends cdk.Stack {
         assetExcludes: ['.venv'],
         volumes: [
           {
-            hostPath: agentSopsDir,
-            containerPath: "/tmp/agent-sops",
+            hostPath: agentSkillsDir,
+            containerPath: "/tmp/agent-skills",
           },
         ],
         commandHooks: {
           beforeBundling(_inputDir: string, outputDir: string): string[] {
             return [
               `mkdir -p ${outputDir}/sops`,
-              `cp /tmp/agent-sops/*.sop.md ${outputDir}/sops/ 2>/dev/null || true`,
+              // Each skill's SKILL.md is bundled under its old SOP file name (eval_configs.py sop_file).
+              `for d in /tmp/agent-skills/task-*/; do cp "$d/SKILL.md" "${outputDir}/sops/$(basename "$d").sop.md"; done 2>/dev/null || true`,
             ];
           },
           afterBundling(_inputDir: string, _outputDir: string): string[] {
