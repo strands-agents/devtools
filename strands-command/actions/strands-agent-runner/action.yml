@@ -32,7 +32,7 @@ inputs:
     required: false
     default: ''
   model_id:
-    description: 'Bedrock model or inference profile ID for the agent; empty uses the Strands harness default. The role in aws_role_arn must be allowed to invoke it.'
+    description: 'Model for the agent, as a harness model string (e.g. bedrock/global.anthropic.claude-opus-5-5) or a bare Bedrock model or inference profile ID; empty uses bedrock/global.anthropic.claude-opus-5-5. The role in aws_role_arn must be allowed to invoke it.'
     required: false
     default: ''
   reasoning_effort:
@@ -249,7 +249,7 @@ runs:
         # Evals Configuration (input overrides Secrets Manager)
         EVALS_SQS_QUEUE_ARN: ${{ inputs.evals_sqs_queue_arn || steps.secrets.outputs.evals_sqs_queue_arn }}
 
-        # Model Configuration (an empty value uses the Strands harness default)
+        # Model Configuration (an empty value uses the runner default)
         STRANDS_MODEL_ID: ${{ inputs.model_id }}
         STRANDS_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       run: |

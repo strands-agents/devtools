@@ -13,7 +13,6 @@ from strands.models import BedrockModel, Model
 from strands.session import SnapshotSessionManager
 from strands.storage import S3Storage
 from strands.vended_plugins.skills import AgentSkills, Skill
-from strands_harness import defaults
 from strands_harness.prompt import HARNESS_CONTRACT
 
 from .. import agent_runner
@@ -78,12 +77,14 @@ def test_create_agent_wires_harness_for_ci(s3):
     tools = agent_runner._get_tools_for_mode("reviewer")
 
     agent = agent_runner._create_agent(
-        None, "auto", "task-reviewer", "REPO EXTRA", tools, "reviewer-1", BUCKET, PREFIX, {"session.id": "x"}
+        agent_runner.STRANDS_MODEL_ID, "auto", "task-reviewer", "REPO EXTRA", tools, "reviewer-1", BUCKET, PREFIX,
+        {"session.id": "x"},
     )
 
-    # No model given: the harness default model and its recommended effort.
+    # The harness resolves the default model string; "auto" effort is high for Claude.
     assert isinstance(agent.model, BedrockModel)
-    assert agent.model.config["model_id"] == defaults.DEFAULT_MODEL.removeprefix("bedrock/")
+    assert agent.model.config["model_id"] == "global.anthropic.claude-opus-5-5"
+    assert agent.model.config["additional_request_fields"]["output_config"] == {"effort": "high"}
     assert agent.system_prompt.startswith(HARNESS_CONTRACT)
     assert "`task-reviewer` skill" in agent.system_prompt
     assert agent.system_prompt.endswith("\n\nREPO EXTRA")
@@ -125,10 +126,10 @@ def test_every_mode_has_a_valid_skill(mode):
     assert skill.instructions.lstrip().startswith("# ")
 
 
-def test_resolve_model_config_defaults_to_harness(monkeypatch):
+def test_resolve_model_config_defaults_to_opus_5_5(monkeypatch):
     monkeypatch.setenv("STRANDS_MODEL_ID", " ")
     monkeypatch.delenv("STRANDS_REASONING_EFFORT", raising=False)
-    assert agent_runner._resolve_model_config() == (None, "auto")
+    assert agent_runner._resolve_model_config() == ("bedrock/global.anthropic.claude-opus-5-5", "auto")
     monkeypatch.setenv("STRANDS_MODEL_ID", "m")
     monkeypatch.setenv("STRANDS_REASONING_EFFORT", "max")
     assert agent_runner._resolve_model_config() == ("m", "max")

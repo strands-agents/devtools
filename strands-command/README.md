@@ -328,7 +328,7 @@ Executes AI agents with AWS integration and controlled permissions.
 - `aws_secrets_manager_secret_id` (required): AWS Secrets Manager secret ID containing agent configuration (fetches `sessions_bucket`, `langfuse_*`, and `evals_sqs_queue_arn`)
 - `sessions_bucket` (optional): S3 bucket for session storage. Overrides value from Secrets Manager if provided
 - `write_permission` (required): Permission level flag for Read-only Sandbox mode (`true`/`false`)
-- `model_id` (optional, default: the [Strands harness](https://github.com/strands-agents/harness-sdk/tree/main/harness-py) default model): Bedrock model or inference profile ID for the agent. The role in `aws_role_arn` must be allowed to invoke the model
+- `model_id` (optional, default `bedrock/global.anthropic.claude-opus-5-5`): Model for the agent, as a [Strands harness](https://github.com/strands-agents/harness-sdk/tree/main/harness-py) model string (`bedrock/<id>`) or a bare Bedrock model or inference profile ID. The role in `aws_role_arn` must be allowed to invoke the model
 - `reasoning_effort` (optional, default: the harness's recommended effort for the model): Reasoning effort for the agent, e.g. `low`, `medium`, `high`, or `max`. A level the model doesn't support stops the run before the agent starts
 
 To pick the model and effort, set the two inputs. Repository variables let a maintainer change them without a commit. An unset variable passes an empty value, and an empty value also gives the default:
@@ -344,7 +344,7 @@ To pick the model and effort, set the two inputs. Repository variables let a mai
           reasoning_effort: ${{ vars.STRANDS_REASONING_EFFORT }}
 ```
 
-The run log shows the model and effort that the agent uses, for example `🤖 Using model=harness default effort=auto` or `🤖 Using model=global.anthropic.claude-opus-5-5 effort=medium`.
+The run log shows the model and effort that the agent uses, for example `🤖 Using model=bedrock/global.anthropic.claude-opus-5-5 effort=auto`.
 
 **Outputs:**
 - Artifact: `repository-state` containing modified repository files (if changes exist)
@@ -367,7 +367,7 @@ The run log shows the model and effort that the agent uses, for example `🤖 Us
 - `S3_SESSION_BUCKET`: Session storage location
 - `STRANDS_TOOL_CONSOLE_MODE`: Tool execution mode
 - `BYPASS_TOOL_CONSENT`: Automated tool approval
-- `STRANDS_MODEL_ID`: Bedrock model ID, from the `model_id` input
+- `STRANDS_MODEL_ID`: Model string or Bedrock model ID, from the `model_id` input
 - `STRANDS_REASONING_EFFORT`: Reasoning effort, from the `reasoning_effort` input
 
 ### strands-finalize
@@ -490,7 +490,7 @@ The actions use these environment variables during execution:
 | `S3_SESSION_BUCKET` | Session storage location | Input |
 | `STRANDS_TOOL_CONSOLE_MODE` | Tool execution mode | Action |
 | `BYPASS_TOOL_CONSENT` | Automated tool approval | Action |
-| `STRANDS_MODEL_ID` | Bedrock model ID (empty uses the default) | Input |
+| `STRANDS_MODEL_ID` | Model string or Bedrock model ID (empty uses `bedrock/global.anthropic.claude-opus-5-5`) | Input |
 | `STRANDS_REASONING_EFFORT` | Reasoning effort (empty uses the default) | Input |
 
 ## Usage Examples

@@ -47,6 +47,8 @@ from github_tools import (
 from handoff_to_user import handoff_to_user
 from notebook import notebook
 
+# Default model, resolved by the harness. STRANDS_MODEL_ID overrides it; empty means this default.
+STRANDS_MODEL_ID = "bedrock/global.anthropic.claude-opus-5-5"
 # One skill per mode (skills/task-<mode>/SKILL.md), read from this devtools copy, never the checkout.
 SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
 # The harness contract says to confirm before outward actions, but there is nobody to ask here.
@@ -196,14 +198,14 @@ _MODE_TOOL_DENYLIST: dict[str, list[Any]] = {
 }
 
 
-def _resolve_model_config() -> tuple[str | None, str]:
+def _resolve_model_config() -> tuple[str, str]:
     """Return the Bedrock model id and reasoning effort for this run.
 
-    STRANDS_MODEL_ID and STRANDS_REASONING_EFFORT override the harness defaults (its default
-    model and ``"auto"`` effort). An unset or empty value means the default; the harness
-    validates the effort against the model.
+    STRANDS_MODEL_ID overrides the default model and STRANDS_REASONING_EFFORT the harness's
+    ``"auto"`` effort. An unset or empty value means the default; the harness resolves the model
+    string and validates the effort against it.
     """
-    model_id = os.environ.get("STRANDS_MODEL_ID", "").strip() or None
+    model_id = os.environ.get("STRANDS_MODEL_ID", "").strip() or STRANDS_MODEL_ID
     effort = os.environ.get("STRANDS_REASONING_EFFORT", "").strip() or "auto"
     return model_id, effort
 
@@ -278,8 +280,8 @@ def _pin_skill_results(event: MessageAddedEvent) -> None:
         pin_message(messages, len(messages) - 1)
 
 
-def run_agent(query: str, model_id: str | None, effort: str):
-    """Run the agent with the provided query, Bedrock model id (None for the harness default), and effort."""
+def run_agent(query: str, model_id: str, effort: str):
+    """Run the agent with the provided query, model string, and reasoning effort."""
     try:
         # Set up Langfuse telemetry (optional - gracefully degrades if not configured)
         telemetry_enabled = _setup_langfuse_telemetry()
@@ -336,7 +338,7 @@ def main() -> None:
             raise ValueError("Task cannot be empty")
 
         model_id, effort = _resolve_model_config()
-        print(f"🤖 Using model={model_id or 'harness default'} effort={effort}")
+        print(f"🤖 Using model={model_id} effort={effort}")
         print(f"🤖 Running agent with task: {task}")
 
         run_agent(task, model_id, effort)
