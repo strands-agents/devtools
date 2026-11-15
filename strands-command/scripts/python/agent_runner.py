@@ -49,9 +49,7 @@ from notebook import notebook
 
 # One skill per mode (skills/task-<mode>/SKILL.md), read from this devtools copy, never the checkout.
 SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
-# The harness contract says to confirm before outward actions, but there is nobody to ask here. The
-# harness environment plugin is off (it would inject the untrusted checkout's AGENTS.md as trusted
-# context), so name the working directory ourselves.
+# The harness contract says to confirm before outward actions, but there is nobody to ask here.
 INSTRUCTIONS = (
     "You are an autonomous GitHub agent powered by Strands Agents SDK.\n\n"
     "Your task is defined by the `{skill}` skill. Activate it with the skills tool before doing "
@@ -59,7 +57,7 @@ INSTRUCTIONS = (
     "This is an unattended CI run: no one is watching it live, so a question only reaches a human "
     "if you post it to GitHub first. handoff_to_user ends the run; a later /strands command resumes "
     "this same session with the answer. The GitHub actions your instructions prescribe are "
-    "pre-authorized. Working directory: {cwd} (file tools take absolute paths)."
+    "pre-authorized."
 )
 
 
@@ -243,7 +241,7 @@ def _create_agent(
     skill_dir = SKILLS_DIR / skill
     if not (skill_dir / "SKILL.md").is_file():
         raise ValueError(f"Unknown skill '{skill}': no {skill_dir}/SKILL.md")
-    instructions = INSTRUCTIONS.format(skill=skill, cwd=os.getcwd())
+    instructions = INSTRUCTIONS.format(skill=skill)
     if extra_instructions:
         instructions += f"\n\n{extra_instructions}"
     storage = S3Storage(bucket=s3_bucket, prefix=s3_prefix)
@@ -255,9 +253,7 @@ def _create_agent(
         session=SnapshotSessionManager(session_id, storage=storage, save_latest_on="message"),
         storage=storage,
         skills=AgentSkills(skills=[str(skill_dir)], strict=True),
-        # The checkout is untrusted and throwaway: no memory or environment context from it, and
-        # no todo_write competing with the notebook the skills mandate.
-        builtin_plugins=[],
+        # Runs are throwaway CI jobs; durable state lives in the S3 session, not harness memory.
         memory=False,
         # Agent hooks register before plugins, so the pin lands before the context manager truncates.
         hooks=[_pin_skill_results],

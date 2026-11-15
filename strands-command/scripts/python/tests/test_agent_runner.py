@@ -87,7 +87,6 @@ def test_create_agent_wires_harness_for_ci(s3):
     assert agent.system_prompt.startswith(HARNESS_CONTRACT)
     assert "`task-reviewer` skill" in agent.system_prompt
     assert agent.system_prompt.endswith("\n\nREPO EXTRA")
-    assert f"Working directory: {os.getcwd()}" in agent.system_prompt
     assert agent.trace_attributes == {"session.id": "x"}
     # Only the mode's skill is offered, read from the devtools copy rather than the checkout.
     skills = next(p for p in agent._plugin_registry._plugins.values() if isinstance(p, AgentSkills))
@@ -98,7 +97,8 @@ def test_create_agent_wires_harness_for_ci(s3):
         "skills", "retrieve_context", "http_request", "get_pr_files",
     } <= set(agent.tool_names)
     assert {"create_issue", "create_pull_request", "todo_write"}.isdisjoint(agent.tool_names)
-    assert not any(name.startswith("strands:environment") for name in agent._plugin_registry._plugins)
+    # The harness environment plugin is on: it injects the platform, cwd, date and the checkout's AGENTS.md.
+    assert any(name.startswith("strands:environment") for name in agent._plugin_registry._plugins)
     assert isinstance(agent._session_manager, SnapshotSessionManager)
     assert isinstance(agent.storage, S3Storage)
     assert agent.context_manager.stash_is_durable
