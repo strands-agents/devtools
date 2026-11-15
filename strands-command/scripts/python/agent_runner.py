@@ -47,9 +47,6 @@ from github_tools import (
 from handoff_to_user import handoff_to_user
 from notebook import notebook
 
-# Harness built-ins. web_fetch (needs a second summarizer model the consuming repo's role may not
-# allow), programmatic_tool_caller and subagent stay off.
-STRANDS_BUILTIN_TOOLS = ["shell", "read", "write", "edit"]
 # One skill per mode (skills/task-<mode>/SKILL.md), read from this devtools copy, never the checkout.
 SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
 # The harness contract says to confirm before outward actions, but there is nobody to ask here. The
@@ -255,7 +252,6 @@ def _create_agent(
         effort=effort,
         instructions=instructions,
         tools=tools,
-        builtin_tools=STRANDS_BUILTIN_TOOLS,
         session=SnapshotSessionManager(session_id, storage=storage, save_latest_on="message"),
         storage=storage,
         skills=AgentSkills(skills=[str(skill_dir)], strict=True),

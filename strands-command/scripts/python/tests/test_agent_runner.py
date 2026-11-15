@@ -92,10 +92,12 @@ def test_create_agent_wires_harness_for_ci(s3):
     # Only the mode's skill is offered, read from the devtools copy rather than the checkout.
     skills = next(p for p in agent._plugin_registry._plugins.values() if isinstance(p, AgentSkills))
     assert [s.name for s in skills.get_available_skills(agent)] == ["task-reviewer"]
-    assert {"shell", "read", "write", "edit", "skills", "retrieve_context", "http_request", "get_pr_files"} <= set(
-        agent.tool_names
-    )
-    assert {"create_issue", "create_pull_request", "web_fetch", "subagent", "todo_write"}.isdisjoint(agent.tool_names)
+    # The harness's default built-in tools, plus the GitHub tools minus the mode's denylist.
+    assert {
+        "shell", "read", "write", "edit", "web_fetch", "programmatic_tool_caller", "subagent",
+        "skills", "retrieve_context", "http_request", "get_pr_files",
+    } <= set(agent.tool_names)
+    assert {"create_issue", "create_pull_request", "todo_write"}.isdisjoint(agent.tool_names)
     assert not any(name.startswith("strands:environment") for name in agent._plugin_registry._plugins)
     assert isinstance(agent._session_manager, SnapshotSessionManager)
     assert isinstance(agent.storage, S3Storage)
