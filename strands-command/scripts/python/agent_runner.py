@@ -14,13 +14,15 @@ from typing import Any
 
 import boto3
 from strands import Agent
+from strands.agent.conversation_manager.compression.pin_message import pin_message
+from strands.hooks import MessageAddedEvent
 from strands.models import Model
 from strands.telemetry import StrandsTelemetry
 from strands.session import SnapshotSessionManager
 from strands.storage import S3Storage
 from strands.vended_plugins.skills import AgentSkills
 from strands.vended_tools import http_request
-from strands_harness import create_harness
+from strands_harness import build_system_prompt, create_harness
 
 # Import local GitHub tools we need
 from github_tools import (
@@ -248,7 +250,7 @@ def _create_agent(
     if extra_instructions:
         instructions += f"\n\n{extra_instructions}"
     storage = S3Storage(bucket=s3_bucket, prefix=s3_prefix)
-    return create_harness(
+    agent = create_harness(
         model=model,
         effort=effort,
         instructions=instructions,
@@ -261,8 +263,27 @@ def _create_agent(
         # no todo_write competing with the notebook the skills mandate.
         builtin_plugins=[],
         memory=False,
+        # Agent hooks register before plugins, so the pin lands before the context manager truncates.
+        hooks=[_pin_skill_results],
         **({"trace_attributes": trace_attributes} if trace_attributes else {}),
     )
+    # A resumed session restores the snapshot's system prompt; use this run's instructions instead.
+    agent.system_prompt = build_system_prompt(instructions)
+    return agent
+
+
+def _pin_skill_results(event: MessageAddedEvent) -> None:
+    """Pin the activated skill's tool result so the context manager never truncates or summarizes it."""
+    messages = event.agent.messages
+    if len(messages) < 2:
+        return
+    skill_use_ids = {
+        block["toolUse"]["toolUseId"]
+        for block in messages[-2].get("content", [])
+        if "toolUse" in block and block["toolUse"]["name"] == "skills"
+    }
+    if any(block.get("toolResult", {}).get("toolUseId") in skill_use_ids for block in event.message.get("content", [])):
+        pin_message(messages, len(messages) - 1)
 
 
 def run_agent(query: str, model_id: str | None, effort: str):

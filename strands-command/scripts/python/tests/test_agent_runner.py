@@ -157,3 +157,33 @@ def test_offloaded_tool_results_survive_a_resumed_session(s3):
     assert resumed.messages == agent.messages
     retrieved = resumed.tool.retrieve_context(reference=reference, pattern="line 1000 of", record_direct_tool_call=False)
     assert "line 1000 of" in json.dumps(retrieved["content"])
+
+
+def test_activated_skill_reaches_the_model_whole_across_turns(s3):
+    """The SOP arrives as the skills tool result; the context manager must not cut it to a preview."""
+    sop_lines = [l for l in (agent_runner.SKILLS_DIR / "task-implementer" / "SKILL.md").read_text().splitlines() if l.strip()]
+    sop_middle = sop_lines[len(sop_lines) // 2]  # a head-and-tail preview drops the middle
+    model = ScriptedModel([
+        {"role": "assistant", "content": [{"toolUse": {"toolUseId": "s1", "name": "skills", "input": {"skill_name": "task-implementer"}}}]},
+        {"role": "assistant", "content": [{"toolUse": {"toolUseId": "t1", "name": "big_diff", "input": {}}}]},
+        {"role": "assistant", "content": [{"text": "done"}]},
+    ])
+    agent = agent_runner._create_agent(model, "auto", "task-implementer", "", [big_diff], "implementer-1", BUCKET, PREFIX)
+    agent("implement issue 1")
+
+    assert json.dumps(sop_middle)[1:-1] in json.dumps(agent.messages[2]), "the skill result was truncated"
+    assert "line 1000 of" not in json.dumps(agent.messages[4]), "other large results are still offloaded"
+
+
+def test_resumed_session_uses_this_runs_instructions(s3):
+    first = agent_runner._create_agent(
+        ScriptedModel([{"role": "assistant", "content": [{"text": "ok"}]}]),
+        "auto", "task-reviewer", "SUFFIX-OLD", [], "reviewer-9", BUCKET, PREFIX,
+    )
+    first("review PR 9")
+
+    resumed = agent_runner._create_agent(ScriptedModel([]), "auto", "task-reviewer", "SUFFIX-NEW", [], "reviewer-9", BUCKET, PREFIX)
+
+    assert resumed.messages == first.messages
+    assert resumed.system_prompt.endswith("\n\nSUFFIX-NEW")
+    assert "SUFFIX-OLD" not in resumed.system_prompt

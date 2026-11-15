@@ -254,8 +254,8 @@ runs:
         STRANDS_REASONING_EFFORT: ${{ inputs.reasoning_effort }}
       run: |
         INPUT_TASK="$(jq -r .prompt ${{ runner.temp }}/strands-parsed-input.json)"
-        INPUT_SKILL="$(jq -r .skill ${{ runner.temp }}/strands-parsed-input.json)"
-        INPUT_INSTRUCTIONS="$(jq -r .instructions ${{ runner.temp }}/strands-parsed-input.json)"
+        INPUT_SKILL="$(jq -r '.skill // ""' ${{ runner.temp }}/strands-parsed-input.json)"
+        INPUT_INSTRUCTIONS="$(jq -r '.instructions // ""' ${{ runner.temp }}/strands-parsed-input.json)"
         export INPUT_SKILL INPUT_INSTRUCTIONS
         uv run --no-project ${{ runner.temp }}/strands-agent-runner/strands-command/scripts/python/agent_runner.py "$INPUT_TASK"
 
