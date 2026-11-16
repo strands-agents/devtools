@@ -292,7 +292,7 @@ Permission Policy:
 
 ## Actions
 
-Each action runs the scripts and SOPs from the devtools copy its `uses:` line names. To test a devtools change, point all four `uses:` lines (`authorization-check` included) at your repo and ref, e.g. `my-org/devtools/strands-command/actions/strands-agent-runner@my-branch`.
+Each action runs the scripts and skills from the devtools copy its `uses:` line names. To test a devtools change, point all four `uses:` lines (`authorization-check` included) at your repo and ref, e.g. `my-org/devtools/strands-command/actions/strands-agent-runner@my-branch`.
 
 ### strands-input-parser
 
@@ -307,7 +307,8 @@ Parses `/strands` command input and prepares execution parameters for the agent 
 - Artifact: `strands-parsed-input` containing:
   - `branch_name`: Target branch for execution
   - `session_id`: Generated or provided session identifier
-  - `system_prompt`: System instructions for the agent
+  - `skill`: The skill the agent runs (`task-<mode>`, from `skills/`)
+  - `instructions`: Extra instructions from `system_prompt_suffix`, appended to the agent's system prompt
   - `prompt`: Task description for the agent
   - `issue_id`: Associated issue number
 
@@ -315,7 +316,7 @@ Parses `/strands` command input and prepares execution parameters for the agent 
 - Adds `strands-running` label to the issue/PR
 - Parses command syntax and determines execution mode (implement, refine, etc.)
 - Generates unique session IDs for tracking
-- Prepares appropriate system prompts based on command type
+- Picks the skill for the command type
 - Creates structured input artifact for downstream actions
 
 ### strands-agent-runner
@@ -327,8 +328,8 @@ Executes AI agents with AWS integration and controlled permissions.
 - `aws_secrets_manager_secret_id` (required): AWS Secrets Manager secret ID containing agent configuration (fetches `sessions_bucket`, `langfuse_*`, and `evals_sqs_queue_arn`)
 - `sessions_bucket` (optional): S3 bucket for session storage. Overrides value from Secrets Manager if provided
 - `write_permission` (required): Permission level flag for Read-only Sandbox mode (`true`/`false`)
-- `model_id` (optional, default `global.anthropic.claude-opus-5-5`): Bedrock model or inference profile ID for the agent. The role in `aws_role_arn` must be allowed to invoke the model
-- `reasoning_effort` (optional, default `high`): Reasoning effort for the agent: `low`, `medium`, `high`, or `max`. Any other value stops the run before the agent starts
+- `model_id` (optional, default `bedrock/global.anthropic.claude-opus-5-5`): Model for the agent, as a [Strands harness](https://github.com/strands-agents/harness-sdk/tree/main/harness-py) model string (`bedrock/<id>`) or a bare Bedrock model or inference profile ID. The role in `aws_role_arn` must be allowed to invoke the model
+- `reasoning_effort` (optional, default: the harness's recommended effort for the model): Reasoning effort for the agent, e.g. `low`, `medium`, `high`, or `max`. A level the model doesn't support stops the run before the agent starts
 
 To pick the model and effort, set the two inputs. Repository variables let a maintainer change them without a commit. An unset variable passes an empty value, and an empty value also gives the default:
 
@@ -343,7 +344,7 @@ To pick the model and effort, set the two inputs. Repository variables let a mai
           reasoning_effort: ${{ vars.STRANDS_REASONING_EFFORT }}
 ```
 
-The run log shows the model and effort that the agent uses, for example `🤖 Using model=global.anthropic.claude-opus-5-5 effort=medium`.
+The run log shows the model and effort that the agent uses, for example `🤖 Using model=bedrock/global.anthropic.claude-opus-5-5 effort=auto`.
 
 **Outputs:**
 - Artifact: `repository-state` containing modified repository files (if changes exist)
@@ -355,7 +356,7 @@ The run log shows the model and effort that the agent uses, for example `🤖 Us
 - Python 3.13 and Node.js 20 environment setup
 - Installs dependencies from requirements.txt using uv
 - Configures AWS credentials with inline session policy
-- Executes Strands agent with appropriate system and task prompts
+- Runs the agent, built with the Strands harness (`create_harness`), on the mode's skill and the task prompt
 - Captures repository state changes as tarball artifact
 - Defers write operations to artifact when running in read-only mode
 - Configures Git with Strands Agent identity
@@ -366,7 +367,7 @@ The run log shows the model and effort that the agent uses, for example `🤖 Us
 - `S3_SESSION_BUCKET`: Session storage location
 - `STRANDS_TOOL_CONSOLE_MODE`: Tool execution mode
 - `BYPASS_TOOL_CONSENT`: Automated tool approval
-- `STRANDS_MODEL_ID`: Bedrock model ID, from the `model_id` input
+- `STRANDS_MODEL_ID`: Model string or Bedrock model ID, from the `model_id` input
 - `STRANDS_REASONING_EFFORT`: Reasoning effort, from the `reasoning_effort` input
 
 ### strands-finalize
@@ -392,9 +393,11 @@ Executes write operations and cleanup after agent execution completes.
 - Executes write operations using Python write_executor.py script
 - Passes issue_id context to write executor when available
 
-## Agent SOPs
+## Agent Skills
 
-### Task Implementer (`task-implementer.sop.md`)
+Each mode's instructions are an [Agent Skill](https://strandsagents.com/docs/user-guide/sdk/plugins/skills/) in `skills/task-<mode>/SKILL.md`. The runner loads only that mode's skill, from the devtools copy (never from the checked-out repository), and tells the agent to activate it first.
+
+### Task Implementer (`skills/task-implementer`)
 
 Implements features using test-driven development principles.
 
@@ -410,7 +413,7 @@ Implements features using test-driven development principles.
 - Default when `/strands` is commented on a Pull Request
 - `/strands implement` on an Issue
 
-### Task Refiner (`task-refiner.sop.md`)
+### Task Refiner (`skills/task-refiner`)
 
 Refines and clarifies task requirements before implementation.
 
@@ -425,7 +428,7 @@ Refines and clarifies task requirements before implementation.
 **Trigger**:
 - Default when `/strands` is commented on an Issue
 
-### Release Notes Generator (`task-release-notes.sop.md`)
+### Release Notes Generator (`skills/task-release-notes`)
 
 Creates high-quality release notes highlighting major features and bug fixes.
 
@@ -487,7 +490,7 @@ The actions use these environment variables during execution:
 | `S3_SESSION_BUCKET` | Session storage location | Input |
 | `STRANDS_TOOL_CONSOLE_MODE` | Tool execution mode | Action |
 | `BYPASS_TOOL_CONSENT` | Automated tool approval | Action |
-| `STRANDS_MODEL_ID` | Bedrock model ID (empty uses the default) | Input |
+| `STRANDS_MODEL_ID` | Model string or Bedrock model ID (empty uses `bedrock/global.anthropic.claude-opus-5-5`) | Input |
 | `STRANDS_REASONING_EFFORT` | Reasoning effort (empty uses the default) | Input |
 
 ## Usage Examples

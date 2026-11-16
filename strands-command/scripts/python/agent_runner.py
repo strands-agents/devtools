@@ -9,17 +9,20 @@ import json
 import os
 import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 import boto3
 from strands import Agent
+from strands.agent.conversation_manager.compression.pin_message import pin_message
+from strands.hooks import MessageAddedEvent
+from strands.models import Model
 from strands.telemetry import StrandsTelemetry
-from strands.agent.conversation_manager import SlidingWindowConversationManager
-from strands.session import S3SessionManager
-from strands.models import BedrockModel, CacheConfig
-from strands.vended_plugins.context_offloader import ContextOffloader, S3Storage
-from strands.vended_tools import http_request, shell
-from botocore.config import Config
+from strands.session import SnapshotSessionManager
+from strands.storage import S3Storage
+from strands.vended_plugins.skills import AgentSkills
+from strands.vended_tools import http_request
+from strands_harness import build_system_prompt, create_harness
 
 # Import local GitHub tools we need
 from github_tools import (
@@ -43,19 +46,21 @@ from github_tools import (
 # Import local tools we need
 from handoff_to_user import handoff_to_user
 from notebook import notebook
-from str_replace_based_edit_tool import str_replace_based_edit_tool
 
-# Strands configuration constants
-# STRANDS_MODEL_ID and STRANDS_REASONING_EFFORT are the defaults. The env vars of the
-# same names override them; an empty value means the default.
-STRANDS_MODEL_ID = "global.anthropic.claude-opus-5-5"
-STRANDS_REASONING_EFFORT = "high"
-STRANDS_REASONING_EFFORTS = ("low", "medium", "high", "max")
-STRANDS_MAX_TOKENS = 64000
-STRANDS_REGION = "us-west-2"
-
-# Default values for environment variables used only in this file
-DEFAULT_SYSTEM_PROMPT = "You are an autonomous GitHub agent powered by Strands Agents SDK."
+# Default model, resolved by the harness. STRANDS_MODEL_ID overrides it; empty means this default.
+STRANDS_MODEL_ID = "bedrock/global.anthropic.claude-opus-5-5"
+# One skill per mode (skills/task-<mode>/SKILL.md), read from this devtools copy, never the checkout.
+SKILLS_DIR = Path(__file__).resolve().parents[2] / "skills"
+# The harness contract says to confirm before outward actions, but there is nobody to ask here.
+INSTRUCTIONS = (
+    "You are an autonomous GitHub agent powered by Strands Agents SDK.\n\n"
+    "Your task is defined by the `{skill}` skill. Activate it with the skills tool before doing "
+    "anything else, then follow its instructions.\n\n"
+    "This is an unattended CI run: no one is watching it live, so a question only reaches a human "
+    "if you post it to GitHub first. handoff_to_user ends the run; a later /strands command resumes "
+    "this same session with the answer. The GitHub actions your instructions prescribe are "
+    "pre-authorized."
+)
 
 
 def _send_eval_trigger(session_id: str, eval_type: str) -> None:
@@ -154,11 +159,7 @@ def _get_trace_attributes() -> dict:
 
 def _get_all_tools() -> list[Any]:
     return [
-        # File editing
-        str_replace_based_edit_tool,
-
-        # System tools
-        shell,
+        # System tools (shell and file tools come from the harness)
         http_request,
 
         # GitHub issue tools
@@ -200,19 +201,12 @@ _MODE_TOOL_DENYLIST: dict[str, list[Any]] = {
 def _resolve_model_config() -> tuple[str, str]:
     """Return the Bedrock model id and reasoning effort for this run.
 
-    STRANDS_MODEL_ID and STRANDS_REASONING_EFFORT override the defaults. An unset or
-    empty value means the default.
-
-    Raises:
-        ValueError: If STRANDS_REASONING_EFFORT is not a known effort.
+    STRANDS_MODEL_ID overrides the default model and STRANDS_REASONING_EFFORT the harness's
+    ``"auto"`` effort. An unset or empty value means the default; the harness resolves the model
+    string and validates the effort against it.
     """
     model_id = os.environ.get("STRANDS_MODEL_ID", "").strip() or STRANDS_MODEL_ID
-    effort = os.environ.get("STRANDS_REASONING_EFFORT", "").strip() or STRANDS_REASONING_EFFORT
-    if effort not in STRANDS_REASONING_EFFORTS:
-        raise ValueError(
-            f"Unknown STRANDS_REASONING_EFFORT '{effort}'. "
-            f"Use one of: {', '.join(STRANDS_REASONING_EFFORTS)}"
-        )
+    effort = os.environ.get("STRANDS_REASONING_EFFORT", "").strip() or "auto"
     return model_id, effort
 
 
@@ -229,75 +223,93 @@ def _get_tools_for_mode(mode: str | None) -> list[Any]:
     return [t for t in all_tools if t not in denied]
 
 
+def _create_agent(
+    model: Model | str | None,
+    effort: str,
+    skill: str,
+    extra_instructions: str,
+    tools: list[Any],
+    session_id: str,
+    s3_bucket: str,
+    s3_prefix: str,
+    trace_attributes: dict | None = None,
+) -> Agent:
+    """Build the harness agent for one mode's skill, persisted to S3 under ``{s3_prefix}/``.
+
+    One S3 storage backs both the session snapshots (``session/``) and the context manager's
+    stash of offloaded tool results (``context/``), so a resumed run can still resolve the
+    references left in its conversation.
+    """
+    skill_dir = SKILLS_DIR / skill
+    if not (skill_dir / "SKILL.md").is_file():
+        raise ValueError(f"Unknown skill '{skill}': no {skill_dir}/SKILL.md")
+    instructions = INSTRUCTIONS.format(skill=skill)
+    if extra_instructions:
+        instructions += f"\n\n{extra_instructions}"
+    storage = S3Storage(bucket=s3_bucket, prefix=s3_prefix)
+    agent = create_harness(
+        model=model,
+        effort=effort,
+        instructions=instructions,
+        tools=tools,
+        session=SnapshotSessionManager(session_id, storage=storage, save_latest_on="message"),
+        storage=storage,
+        skills=AgentSkills(skills=[str(skill_dir)], strict=True),
+        # Runs are throwaway CI jobs; durable state lives in the S3 session, not harness memory.
+        memory=False,
+        # Agent hooks register before plugins, so the pin lands before the context manager truncates.
+        hooks=[_pin_skill_results],
+        **({"trace_attributes": trace_attributes} if trace_attributes else {}),
+    )
+    # A resumed session restores the snapshot's system prompt; use this run's instructions instead.
+    agent.system_prompt = build_system_prompt(instructions)
+    return agent
+
+
+def _pin_skill_results(event: MessageAddedEvent) -> None:
+    """Pin the activated skill's tool result so the context manager never truncates or summarizes it."""
+    messages = event.agent.messages
+    if len(messages) < 2:
+        return
+    skill_use_ids = {
+        block["toolUse"]["toolUseId"]
+        for block in messages[-2].get("content", [])
+        if "toolUse" in block and block["toolUse"]["name"] == "skills"
+    }
+    if any(block.get("toolResult", {}).get("toolUseId") in skill_use_ids for block in event.message.get("content", [])):
+        pin_message(messages, len(messages) - 1)
+
+
 def run_agent(query: str, model_id: str, effort: str):
-    """Run the agent with the provided query, Bedrock model id, and reasoning effort."""
+    """Run the agent with the provided query, model string, and reasoning effort."""
     try:
         # Set up Langfuse telemetry (optional - gracefully degrades if not configured)
         telemetry_enabled = _setup_langfuse_telemetry()
         trace_attributes = _get_trace_attributes() if telemetry_enabled else {}
-        
+
         # Get tools filtered by agent mode (e.g. reviewer can't create issues)
         agent_mode = os.getenv("AGENT_MODE")
         tools = _get_tools_for_mode(agent_mode)
-        
-        # Create Bedrock model with inlined configuration
-        additional_request_fields = {}
-        additional_request_fields["thinking"] = {"type": "adaptive"}
-        additional_request_fields["output_config"] = {"effort": effort}
-        
-        model = BedrockModel(
-            model_id=model_id,
-            max_tokens=STRANDS_MAX_TOKENS,
-            region_name=STRANDS_REGION,
-            boto_client_config=Config(
-                read_timeout=900,
-                connect_timeout=900,
-                retries={"max_attempts": 3, "mode": "adaptive"},
-            ),
-            cache_config=CacheConfig(strategy="auto"),
-            additional_request_fields=additional_request_fields,
-            cache_prompt="default",
-            cache_tools="default",
-        )
-        system_prompt = os.getenv("INPUT_SYSTEM_PROMPT", DEFAULT_SYSTEM_PROMPT)
+
+        skill = os.getenv("INPUT_SKILL") or f"task-{agent_mode}"
         session_id = os.getenv("SESSION_ID")
         s3_bucket = os.getenv("S3_SESSION_BUCKET")
         s3_prefix = os.getenv("GITHUB_REPOSITORY", "")
-
-        if s3_bucket and session_id:
-            print(f"🤖 Using session manager with session ID: {session_id}")
-            session_manager = S3SessionManager(
-                session_id=session_id,
-                bucket=s3_bucket,
-                prefix=s3_prefix,
-            )
-        else:
+        if not (s3_bucket and session_id):
             raise ValueError("Both SESSION_ID and S3_SESSION_BUCKET must be set")
 
-        # Offload oversized tool results (large PR diffs, file reads, shell output)
-        # to storage instead of letting them crowd out the context window. The
-        # plugin registers a retrieval tool so the agent can fetch the full content
-        # on demand. Use S3 storage rather than in-memory: the offloaded result is
-        # replaced in the conversation with a storage reference that the session
-        # manager persists, so a resumed session must still be able to resolve that
-        # reference in a later process — which in-memory storage could not.
-        context_offloader = ContextOffloader(
-            storage=S3Storage(bucket=s3_bucket, prefix=f"{s3_prefix}/offload"),
+        print(f"🤖 Using skill {skill} and session ID: {session_id}")
+        agent = _create_agent(
+            model_id,
+            effort,
+            skill,
+            os.getenv("INPUT_INSTRUCTIONS", ""),
+            tools,
+            session_id,
+            s3_bucket,
+            s3_prefix,
+            trace_attributes,
         )
-
-        # Create agent with optional trace attributes for Langfuse
-        agent_kwargs = {
-            "model": model,
-            "system_prompt": system_prompt,
-            "tools": tools,
-            "session_manager": session_manager,
-            "plugins": [context_offloader],
-        }
-
-        if trace_attributes:
-            agent_kwargs["trace_attributes"] = trace_attributes
-
-        agent = Agent(**agent_kwargs)
 
         print("Processing user query...")
         result = agent(query)

@@ -1,3 +1,8 @@
+---
+name: task-implementer
+description: Implement a task defined in a GitHub issue with test-driven development (Explore, Plan, Code, Commit), pushing to the task branch and opening or updating a pull request. Use for /strands implement and for /strands on a pull request.
+---
+
 # Task Implementer SOP
 
 ## Role

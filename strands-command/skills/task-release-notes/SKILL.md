@@ -1,3 +1,8 @@
+---
+name: task-release-notes
+description: Write release notes highlighting the major features and bug fixes merged between two git references, with validated code examples, posted as a GitHub comment. Use for /strands release-notes.
+---
+
 # Release Notes Generator SOP
 
 ## Role

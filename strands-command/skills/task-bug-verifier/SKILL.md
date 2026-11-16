@@ -1,3 +1,8 @@
+---
+name: task-bug-verifier
+description: Triage a bug report filed as a GitHub issue: inspect the source, reproduce it in a code executor, and label the issue with a structured verification report. Use for /strands bug-verify.
+---
+
 # Task Bug Verifier SOP
 
 ## Role
