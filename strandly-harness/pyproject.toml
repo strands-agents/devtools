@@ -1,0 +1,89 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "strandly-harness"
+version = "0.1.0"
+description = "One opinionated Strands agent that runs locally or on Bedrock AgentCore (with local fallbacks), exposed as a CLI, AgentCore runtime, or MCP server."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+authors = [{ name = "Murat Kaan Meral" }]
+keywords = ["strands", "agent", "bedrock", "agentcore", "llm", "ai"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
+dependencies = [
+    "strands-agents",
+    "strands-agents-tools",
+    "pydantic>=2",
+    "tomli; python_version < '3.11'",
+]
+
+[project.urls]
+Repository = "https://github.com/strands-agents/devtools"
+Issues = "https://github.com/strands-agents/devtools/issues"
+
+[project.optional-dependencies]
+http = ["starlette", "uvicorn", "sse-starlette"]
+# AgentCore: managed Code Interpreter sandbox + AgentCore Memory session manager (remote mode).
+agentcore = ["bedrock-agentcore[strands-agents]"]
+# `uv` ships the `uvx` binary used to launch the strands-agents docs MCP server
+# (`uvx strands-agents-mcp-server`); without it on PATH the docs MCP is silently skipped.
+mcp = ["mcp", "uv"]
+s3 = ["boto3"]
+# aws-opentelemetry-distro pulls the OTLP exporter + auto-instrumentation and is what the AgentCore
+# starter toolkit looks for to run the entrypoint under `opentelemetry-instrument` (emits traces).
+observability = ["aws-opentelemetry-distro"]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff",
+    "mypy>=1.8",
+    "starlette",
+    "httpx",
+]
+# Everything: every runtime capability + dev/test deps. `pip install -e ".[all]"` and forget it.
+all = [
+    "strandly-harness[http,agentcore,mcp,s3,observability,dev]",
+]
+
+[project.scripts]
+strandly = "strandly_harness.serve.cli.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/strandly_harness"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests"]
+# CDK synth output (infra/cdk.out) + the staged poller Lambda wheels (infra/build) are generated /
+# vendored Python we don't own.
+extend-exclude = ["cdk.out", "infra/build"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_unused_ignores = false
+follow_imports = "silent"
+exclude = ["tests"]

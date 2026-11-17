@@ -1,0 +1,76 @@
+# CI for strandly-harness/ — lint + tests, path-filtered to the package.
+#
+# Also actionlints the strandly-* workflows (YAML syntax + shellcheck on every `run:` block).
+# tests/test_workflows.py adds the security invariants actionlint can't see (deploy/invoke role
+# split + prompt-injection + session derivation).
+name: Strandly CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "strandly-harness/**"
+      - ".github/workflows/strandly-*.yml"
+  pull_request:
+    paths:
+      - "strandly-harness/**"
+      - ".github/workflows/strandly-*.yml"
+
+# Cancel superseded runs on the same ref (e.g. rapid pushes to a PR branch).
+concurrency:
+  group: strandly-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: strandly-harness
+
+jobs:
+  test:
+    name: lint + test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # requires-python >=3.10; test the floor and a current version.
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6.3.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      # `uv` provides `uvx`, which the strands-agents docs MCP is launched with. Installing it lets
+      # CI exercise the real MCP path; the harness also degrades gracefully when it's absent.
+      - name: Set up uv
+        uses: astral-sh/setup-uv@f98e06938123ccabd21905ea5d0069192241f9f1 # v8.3.1
+
+      # Locked install: uv sync --locked installs EXACTLY the committed uv.lock and hard-fails
+      # if the lock is stale vs pyproject.toml, so the supply-chain gate is exercised on every
+      # PR (same gate as strandly-deploy.yml). Never hand-edit uv.lock; run uv lock after a dep
+      # change.
+      - name: Install (locked from uv.lock)
+        run: uv sync --locked --all-extras --python ${{ matrix.python-version }}
+
+      # Validate the GitHub Actions workflows themselves (YAML syntax + shellcheck on every
+      # `run:` block). This is the real workflow guard; tests/test_workflows.py only adds the
+      # security invariants actionlint can't see (role split + prompt-injection + session
+      # derivation).
+      - name: Actionlint (workflow lint)
+        uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
+
+      - name: Ruff (lint — the gate)
+        run: uv run --no-sync ruff check .
+
+      - name: Pytest
+        # Tests are AWS/network-free via FakeModel; OTEL is sanitized in-package on import.
+        run: uv run --no-sync pytest -q
+
+      - name: Mypy (advisory — not a merge gate yet)
+        continue-on-error: true
+        run: uv run --no-sync mypy src/strandly_harness
