@@ -1,0 +1,440 @@
+/* AgentChat — presentation only. Tone (surface tiers), spacing and radii do the separating; no borders. */
+
+.root {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-height: 0;
+  position: relative;
+}
+/* `layout="fill"`: take the parent's full height (the immersive chat column). */
+.fill {
+  flex: 1 1 auto;
+  height: 100%;
+}
+/* `layout="panel"`: a fixed-height embed (issue/PR pages) on a raised surface. */
+.panel {
+  background: var(--portal-surface);
+  border-radius: var(--mantine-radius-lg);
+  overflow: hidden;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 14px 4px;
+  min-width: 0;
+}
+
+/* --- Transcript ----------------------------------------------------------------------------- */
+.transcript {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  /* The layout effect owns scroll position across a prepend (chatView anchoredScrollTop); keep the
+     browser's own scroll anchoring from adjusting it a second time. */
+  overflow-anchor: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 12px 12px 8px;
+  scroll-padding-bottom: 16px;
+}
+.fill .transcript {
+  padding: 12px max(12px, env(safe-area-inset-right, 0px)) 8px max(12px, env(safe-area-inset-left, 0px));
+}
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.empty {
+  padding: 24px 8px;
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.5;
+  text-align: center;
+}
+
+/* --- History edge (load older / beginning caption) ------------------------------------------ */
+.historyEdge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 40px;
+  padding: 0 4px;
+}
+.loadOlder {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  background: var(--portal-surface-2, var(--portal-surface));
+  color: var(--mantine-color-text);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+.loadOlder:hover {
+  background: var(--portal-surface-3, var(--portal-surface-2));
+}
+.loadOlder:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+.historyCaption {
+  font-size: var(--mantine-font-size-sm);
+  color: var(--mantine-color-dimmed);
+  text-align: center;
+  line-height: 1.4;
+}
+
+/* --- Messages ------------------------------------------------------------------------------- */
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.user {
+  align-items: flex-end;
+}
+.agent {
+  align-items: flex-start;
+}
+.user .content {
+  max-width: min(86%, 640px);
+}
+.agent .content {
+  max-width: 100%;
+  width: 100%;
+}
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.bubble {
+  padding: 9px 13px;
+  border-radius: var(--mantine-radius-lg);
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  min-width: 0;
+}
+.bubbleUser {
+  background: var(--portal-surface-2);
+  color: var(--mantine-color-text);
+  white-space: pre-wrap;
+  border-bottom-right-radius: 6px;
+}
+.bubbleAgent {
+  padding: 2px 2px;
+  color: var(--mantine-color-text);
+}
+.bubbleFailed {
+  background: var(--mantine-color-red-light);
+  color: var(--mantine-color-red-light-color);
+  white-space: pre-wrap;
+  border-bottom-left-radius: 6px;
+}
+
+.caption {
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  padding: 0 4px;
+  line-height: 1.35;
+}
+.captionFailed {
+  color: var(--mantine-color-red-6);
+}
+
+/* --- Streaming dots ------------------------------------------------------------------------- */
+.dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 20px;
+  padding: 0 4px;
+}
+.dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mantine-color-dimmed);
+  opacity: 0.35;
+  animation: dot 1.2s infinite ease-in-out;
+}
+.dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.25;
+    transform: translateY(0);
+  }
+  40% {
+    opacity: 1;
+    transform: translateY(-2px);
+  }
+}
+
+/* --- Tool activity -------------------------------------------------------------------------- */
+.activity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 0;
+  min-width: 0;
+}
+.toolRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 6px;
+  border-radius: var(--mantine-radius-md);
+  color: var(--mantine-color-dimmed);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: var(--mantine-font-size-xs);
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.toolRow:hover {
+  background: var(--portal-surface-2);
+}
+.toolChevron {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  opacity: 0.6;
+}
+.toolName {
+  flex: 0 1 auto;
+  /* a long MCP tool name must not push the row past 360px — the preview yields first, then this */
+  max-width: 60%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--mantine-color-text);
+  opacity: 0.85;
+}
+.toolInput {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.toolStatus {
+  flex: 0 0 auto;
+  font-weight: 600;
+}
+.ok {
+  color: var(--mantine-color-frog-7);
+}
+.err {
+  color: var(--mantine-color-red-6);
+}
+.noResult {
+  color: var(--mantine-color-dimmed);
+  opacity: 0.6;
+  font-weight: 400;
+}
+
+/* A context chip sits under the bubble it belongs to. */
+.user .activity {
+  align-items: flex-end;
+}
+.contextChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 2px 8px 2px 4px;
+  border-radius: var(--mantine-radius-xl);
+  background: var(--portal-surface-2);
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-xs);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.contextChip .toolChevron {
+  margin-top: 0;
+}
+.contextSource {
+  opacity: 0.75;
+}
+
+.detail {
+  margin: 2px 0 6px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.detailLabel {
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.pre {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 280px;
+  overflow: auto;
+  border-radius: var(--mantine-radius-md);
+  background: var(--portal-surface-2);
+  font-family: var(--mantine-font-family-monospace);
+  font-size: var(--mantine-font-size-xs);
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--mantine-color-text);
+}
+.sub {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-left: 24px;
+  padding-left: 10px;
+  /* a tone, not a line: the nested block sits on a faint surface */
+  background: color-mix(in srgb, var(--portal-surface-2) 55%, transparent);
+  border-radius: var(--mantine-radius-sm);
+  padding-top: 3px;
+  padding-bottom: 3px;
+}
+.subLine {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.subText {
+  font-style: italic;
+}
+
+/* --- Jump-to-latest pill -------------------------------------------------------------------- */
+.pillWrap {
+  position: relative;
+  height: 0;
+  display: flex;
+  justify-content: center;
+  z-index: 2;
+}
+.pill {
+  position: absolute;
+  bottom: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  min-height: 34px;
+  border-radius: 999px;
+  background: var(--mantine-primary-color-filled);
+  color: var(--mantine-primary-color-contrast, #0c0c0e);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 600;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+
+/* --- Composer ------------------------------------------------------------------------------- */
+.composer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  background: var(--portal-page);
+}
+.panel .composer {
+  background: var(--portal-surface);
+}
+.fill .composer {
+  padding-left: max(12px, env(safe-area-inset-left, 0px));
+  padding-right: max(12px, env(safe-area-inset-right, 0px));
+}
+@media (max-width: 48em) {
+  .fill .composer {
+    /* clear the fixed bottom tab bar + the home indicator */
+    padding-bottom: calc(var(--portal-bottom-nav-h) + var(--safe-bottom) + 8px);
+  }
+}
+.composerInner {
+  width: 100%;
+  max-width: 820px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.inputRow {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 4px 4px 4px 12px;
+  border-radius: 24px;
+  background: var(--portal-surface);
+}
+.panel .inputRow {
+  background: var(--portal-surface-2);
+}
+.textarea {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* Under the input: the model picker, and the model the newest run used. */
+.modelRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 6px;
+  min-width: 0;
+}
+.textarea textarea {
+  background: transparent;
+  border: none;
+  padding: 7px 0;
+  font-size: var(--mantine-font-size-sm);
+  line-height: 1.45;
+}
+.textarea textarea:focus {
+  outline: none;
+}
+.status {
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  padding: 0 6px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

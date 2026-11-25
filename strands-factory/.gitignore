@@ -1,0 +1,31 @@
+# This tree is copied unchanged to strands-agents/devtools/strands-factory/. That repository's root
+# .gitignore ignores *.js, *.d.ts and package-lock.json for its TypeScript tools; this tree
+# tracks a lockfile and a type declaration, so re-include them here.
+!package-lock.json
+!*.d.ts
+!*.js
+
+# Local environments and caches
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+node_modules/
+.env
+.strandly/
+sessions/
+
+# Generated build outputs (python build.py web writes dashboard/web-next/dist/ and dist.json)
+dist/
+dashboard/web-next/dist.json
+package-files.txt
+build/
+cdk.out/
+.cdk.staging/
+infra/build/
+infra/cdk.context.json
+infra/cdk.*-outputs.json
+cli/strandly-mcp/src/strandly_mcp/_session_primitives.py

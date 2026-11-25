@@ -1,0 +1,37 @@
+/* GitHub label pills (see LabelPill.tsx). Text ≥ 13px per the mobile rule. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  font-size: 13px;
+  line-height: 1.4;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--portal-surface-2);
+  color: var(--mantine-color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pillFilled {
+  font-weight: 550;
+  padding: 2px 9px;
+}
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.more {
+  font-size: 13px;
+  color: var(--mantine-color-dimmed);
+}

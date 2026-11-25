@@ -1,0 +1,264 @@
+name: strands-factory
+
+# Checks for the strands-factory/ folder. Path-filtered so the rest of this repo is unaffected.
+on:
+  pull_request:
+    paths:
+      - "strands-factory/**"
+      - ".github/workflows/strands-factory.yml"
+  push:
+    branches: [main]
+    paths:
+      - "strands-factory/**"
+      - ".github/workflows/strands-factory.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: strands-factory-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+    working-directory: strands-factory
+
+jobs:
+  test:
+    name: lint + types + test (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    # The suite alone is ~11-13 min locally and is wait-heavy; leave room on a slow runner.
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # requires-python >=3.10; test the floor and a current version.
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.4"
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      # Installs exactly the committed uv.lock; fails if the lock is stale against pyproject.toml.
+      - name: Install (locked from uv.lock)
+        run: uv sync --locked --all-extras --python ${{ matrix.python-version }}
+      - name: Build packaged dashboard assets
+        run: python build.py web
+      - name: Ruff
+        run: uv run --no-sync ruff check .
+      - name: Mypy
+        run: uv run --no-sync mypy harness/src/strandly cli/src/strandly_cli build.py
+      # No AWS: tests run on a fake model. Some tests fetch the Strands docs MCP server from PyPI.
+      - name: Pytest
+        env:
+          AWS_CONFIG_FILE: /dev/null
+          AWS_SHARED_CREDENTIALS_FILE: /dev/null
+        run: uv run --no-sync pytest -q -p no:cacheprovider
+
+  # strands-agents allows mcp>=1.23,<2.2: uv.lock resolves 1.x, so prove the harness on 2.x too.
+  mcp-v2:
+    name: mcp 2.x compatibility (py3.12)
+    runs-on: ubuntu-latest
+    # The suite alone is ~11-13 min locally and is wait-heavy; leave room on a slow runner.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.4"
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Install (locked), then move only mcp to 2.x
+        run: |
+          set -euo pipefail
+          uv sync --locked --all-extras --python 3.12
+          uv pip install --python .venv/bin/python 'mcp>=2,<2.2'
+          .venv/bin/python -c 'import importlib.metadata as m; v = m.version("mcp"); assert v.startswith("2."), v; print("mcp", v)'
+      - name: Build packaged dashboard assets
+        run: python build.py web
+      - name: Pytest on mcp 2.x
+        env:
+          AWS_CONFIG_FILE: /dev/null
+          AWS_SHARED_CREDENTIALS_FILE: /dev/null
+        run: uv run --no-sync pytest -q -p no:cacheprovider
+
+  # The CDK app has its own requirements; prove the whole app still synthesizes. No Docker needed:
+  # CDK stages the sandbox build context and hashes it in-process.
+  infra:
+    name: infra synth (CDK)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      # aws-cdk-lib runs on a jsii Node process; pin it rather than use the runner image's Node.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Install the CDK app's deps
+        run: |
+          pip install -r infra/requirements-dev.txt
+          pip install --no-deps -e .
+      # A new deployment needs explicit profile coordinates (docs/deploy.md: "New deployment requires
+      # explicit profile inputs"). Pass placeholder ones as CDK context, as
+      # tests/infra/test_deployment_profiles.py does; synth contacts no account.
+      - name: Synthesize the app
+        working-directory: strands-factory/infra
+        env:
+          AWS_CONFIG_FILE: /dev/null
+          AWS_SHARED_CREDENTIALS_FILE: /dev/null
+          AWS_EC2_METADATA_DISABLED: "true"
+          CDK_CONTEXT_JSON: >-
+            {"name": "example-agent", "env": "ci", "account": "111111111111", "region": "us-west-2",
+            "secret_arn": "arn:aws:secretsmanager:us-west-2:111111111111:secret:example/config-AbCdEf"}
+        run: CDK_OUTDIR="$RUNNER_TEMP/cdk.out" python app.py
+
+  portal:
+    name: portal build + test (web-next)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: strands-factory/dashboard/web-next/package-lock.json
+      - name: Build + test
+        working-directory: strands-factory/dashboard/web-next
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run build
+          npm test
+
+  # The thin strandly-mcp distribution must install and run without the harness.
+  mcp-package:
+    name: strandly-mcp isolation proof (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.4"
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
+      - name: Build the wheel
+        run: uv build cli/strandly-mcp --out-dir "$RUNNER_TEMP/dist"
+      - name: Check licenses, rebuild the sdist, install the artifacts in isolation
+        run: |
+          python cli/strandly-mcp/scripts/verify_package.py --dist "$RUNNER_TEMP/dist" \
+            --canonical-license LICENSE --directory "$RUNNER_TEMP/mcp-license-proof"
+      - name: Install into a clean venv and prove it stands alone
+        run: |
+          set -euo pipefail
+          python -m venv "$RUNNER_TEMP/iso"
+          # shellcheck disable=SC1091
+          . "$RUNNER_TEMP/iso/bin/activate"
+          pip install --quiet "$RUNNER_TEMP"/dist/*.whl pytest pytest-asyncio
+          strandly-mcp --help > /dev/null
+          python - <<'PY'
+          import sys
+          import strandly_mcp, strandly_mcp.auth, strandly_mcp.cli, strandly_mcp.dashboard, strandly_mcp.server, strandly_mcp.sessions  # noqa: E401
+          leaked = sorted(m for m in sys.modules if m.split(".")[0] in {"strands", "strands_harness", "strands_tools", "strandly", "boto3"})
+          assert not leaked, f"the thin package imported: {leaked}"
+          print("isolation ok: strandly-mcp", strandly_mcp.__version__)
+          PY
+          python -m pytest -q -p no:cacheprovider cli/strandly-mcp/tests
+
+  acp-wheel:
+    name: ACP built-wheel stdio proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.10"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.4"
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "22"
+      - name: Build packaged dashboard assets
+        run: python build.py web
+      - name: Build wheels and exercise the installed ACP command
+        run: |
+          set -euo pipefail
+          uv build --wheel --out-dir "$RUNNER_TEMP/acp-dist"
+          uv build cli/strandly-mcp --wheel --out-dir "$RUNNER_TEMP/acp-dist"
+          uv venv "$RUNNER_TEMP/acp-iso"
+          wheels=("$RUNNER_TEMP/acp-dist"/strands_factory-*.whl)
+          uv pip install --python "$RUNNER_TEMP/acp-iso/bin/python" "${wheels[0]}[acp]" "$RUNNER_TEMP/acp-dist"/strandly_mcp-*.whl
+          export PATH="$RUNNER_TEMP/acp-iso/bin:$PATH"
+          python cli/scripts/acp_wheel_smoke.py
+
+  # A CLI generated by `strands-factory cli build` must install from its wheel alone and speak MCP
+  # and ACP over real stdio.
+  generated-cli:
+    name: generated client CLI stdio proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.4"
+          cache-local-path: ${{ runner.temp }}/setup-uv-cache
+      - name: Install (locked from uv.lock)
+        run: uv sync --locked --all-extras
+      - name: Build a CLI from the example profile, install it alone, drive it over stdio
+        env:
+          AWS_CONFIG_FILE: /dev/null
+          AWS_SHARED_CREDENTIALS_FILE: /dev/null
+        run: |
+          set -euo pipefail
+          uv run --no-sync strands-factory cli build --profile infra/example-profile.json --out "$RUNNER_TEMP/cli-dist"
+          uv venv "$RUNNER_TEMP/cli-iso"
+          uv pip install --python "$RUNNER_TEMP/cli-iso/bin/python" "$RUNNER_TEMP"/cli-dist/*.whl
+          uv run --no-sync python cli/scripts/smoke_generated_cli.py "$RUNNER_TEMP/cli-iso/bin/strandly-example"
+          STRANDLY_TEST_ACP_COMMAND="$RUNNER_TEMP/cli-iso/bin/strandly-example" \
+          STRANDLY_TEST_ACP_AUTH=.strandly/clients/strandly-example/auth.json \
+            uv run --no-sync pytest -q -p no:cacheprovider tests/cli/test_acp_stdio.py

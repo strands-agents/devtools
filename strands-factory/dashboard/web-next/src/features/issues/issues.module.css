@@ -1,0 +1,50 @@
+/* Issues list + detail. Tone, not lines. Everything fluid for 360px. */
+
+/* A list row as a borderless, full-width card button. */
+.row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--portal-surface);
+  border-radius: var(--mantine-radius-lg);
+  padding: 12px 14px;
+  min-height: 44px;
+  color: inherit;
+  transition: background 120ms ease;
+}
+.row:hover,
+.row:focus-visible {
+  background: var(--portal-surface-2);
+  outline: none;
+}
+
+/* Detail: compact sticky bar under the app header. Back + ref + state + (scrolled) title + Refresh
+   must fit 360px with a long `owner/repo#n`: the ref shrinks (repo part truncates, the number stays)
+   and the title only takes what is left over. */
+.sticky {
+  position: sticky;
+  top: var(--portal-header-h);
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: calc(-1 * var(--mantine-spacing-md)) 0 0;
+  padding: 6px 0;
+  background: var(--portal-page);
+}
+.stickyTitle {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  font-size: var(--mantine-font-size-sm);
+}
+
+/* Body / comment card: never wider than the column (Markdown.module.css handles pre/table scroll). */
+.body {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

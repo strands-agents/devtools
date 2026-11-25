@@ -1,0 +1,54 @@
+name: Strands Factory
+description: Run a Strands Factory agent from a workflow, authenticated with the job's GitHub OIDC token.
+inputs:
+  url:
+    description: The deployment's API endpoint (the Dashboard stack's ApiURL output).
+    required: true
+  prompt:
+    description: What to ask the agent, as free-form text. Name the skills to use and any instructions here.
+    required: true
+  session:
+    description: >-
+      issue:<n>, pr:<n> or discussion:<n> joins that item's session in this repository; another key
+      (letters, digits, - and _) names a session of this repository; empty uses the triggering
+      issue, pull request or discussion, else a session for this run.
+    required: false
+    default: ""
+  wait:
+    description: Poll until the run ends and set the result output.
+    required: false
+    default: "false"
+  timeout:
+    description: Seconds to wait for the launch and, with wait, for the run to end.
+    required: false
+    default: "1800"
+  audience:
+    description: The OIDC audience the deployment accepts.
+    required: false
+    default: strandly
+outputs:
+  status:
+    description: accepted without wait; completed, failed, cancelled or the last status with wait; error on a failed call.
+    value: ${{ steps.invoke.outputs.status }}
+  session_id:
+    description: The session the run belongs to.
+    value: ${{ steps.invoke.outputs.session_id }}
+  task_id:
+    description: The run's task id.
+    value: ${{ steps.invoke.outputs.task_id }}
+  result:
+    description: The agent's final answer (with wait).
+    value: ${{ steps.invoke.outputs.result }}
+runs:
+  using: composite
+  steps:
+    - id: invoke
+      shell: bash
+      env:
+        STRANDLY_URL: ${{ inputs.url }}
+        STRANDLY_PROMPT: ${{ inputs.prompt }}
+        STRANDLY_SESSION: ${{ inputs.session }}
+        STRANDLY_WAIT: ${{ inputs.wait }}
+        STRANDLY_TIMEOUT: ${{ inputs.timeout }}
+        STRANDLY_AUDIENCE: ${{ inputs.audience }}
+      run: python3 "$GITHUB_ACTION_PATH/invoke.py"

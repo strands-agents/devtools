@@ -1,0 +1,134 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="request-flow" viewBox="0 0 720 676" width="720" height="676" role="img" aria-labelledby="request-flow-title request-flow-desc">
+  <title id="request-flow-title">A Strands Factory request, end to end</title>
+  <desc id="request-flow-desc">A request from the portal, CLI, Slack, or a GitHub mention reaches its ingress, which checks the caller and invokes the agent runtime with a session id. The agent loads the session and sends shell and file operations to the sandbox runtime, which clones and pushes with git and returns output. The agent then comments or opens a pull request on GitHub, replies in the Slack thread for Slack runs, and portal and CLI clients poll the API for the final answer.</desc>
+  <!-- Type: sequence with phase bands. Story: the ingress authorizes, the agent decides, the sandbox executes, and the result lands where the request came from. -->
+  <!-- Standalone styles scoped to this diagram's class: light by default, dark under prefers-color-scheme. Plain selectors (not :where) so non-browser renderers such as librsvg and resvg apply them too. -->
+  <style>
+    .request-flow { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    .request-flow .dg-bg { fill: #ffffff; }
+    .request-flow .dg-zone { fill: #f7f7f7; stroke: rgba(0, 0, 0, 0.16); stroke-width: 1; }
+    .request-flow .dg-zone.is-boundary { fill: none; stroke: #666464; stroke-dasharray: 4 4; }
+    .request-flow .dg-node { fill: #ffffff; stroke: #3d3c3c; stroke-width: 1; }
+    .request-flow .dg-node.is-focal { fill: #e8f3ee; stroke: #007a3d; }
+    .request-flow .dg-node.is-input { fill: #f2f2f2; stroke: #666464; }
+    .request-flow .dg-node.is-optional { stroke-dasharray: 4 3; }
+    .request-flow .dg-mask { fill: #ffffff; }
+    .request-flow .dg-mask.is-on-zone { fill: #f7f7f7; }
+    .request-flow .dg-edge { fill: none; stroke: #666464; stroke-width: 1.25; }
+    .request-flow .dg-edge.is-accent { stroke: #007a3d; stroke-width: 1.5; }
+    .request-flow .dg-edge.is-dashed { stroke-width: 1; stroke-dasharray: 4 3; }
+    .request-flow .dg-lifeline { fill: none; stroke: rgba(0, 0, 0, 0.28); stroke-width: 1; stroke-dasharray: 3 3; }
+    .request-flow .dg-head { fill: #666464; }
+    .request-flow .dg-head.is-accent { fill: #007a3d; }
+    .request-flow .dg-name { fill: #000000; font-size: 14px; font-weight: 600; }
+    .request-flow .dg-sub { fill: #666464; font-size: 12px; }
+    .request-flow .dg-code { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+    .request-flow .dg-msg { fill: #3d3c3c; font-size: 12px; }
+    .request-flow .dg-msg.is-accent { fill: #007a3d; font-weight: 500; }
+    .request-flow .dg-label { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; }
+    .request-flow .dg-label.is-accent { fill: #007a3d; }
+    .request-flow .dg-eyebrow { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; }
+    .request-flow .dg-note { fill: #666464; font-size: 12px; font-style: italic; }
+    .request-flow .is-focal-text { fill: #007a3d; }
+    @media (prefers-color-scheme: dark) {
+    .request-flow .dg-bg { fill: #000000; }
+    .request-flow .dg-zone { fill: #080808; stroke: rgba(255, 255, 255, 0.16); stroke-width: 1; }
+    .request-flow .dg-zone.is-boundary { fill: none; stroke: #999696; stroke-dasharray: 4 4; }
+    .request-flow .dg-node { fill: #000000; stroke: #b6b6b6; stroke-width: 1; }
+    .request-flow .dg-node.is-focal { fill: #00120a; stroke: #00cc60; }
+    .request-flow .dg-node.is-input { fill: #0d0d0d; stroke: #999696; }
+    .request-flow .dg-node.is-optional { stroke-dasharray: 4 3; }
+    .request-flow .dg-mask { fill: #000000; }
+    .request-flow .dg-mask.is-on-zone { fill: #080808; }
+    .request-flow .dg-edge { fill: none; stroke: #999696; stroke-width: 1.25; }
+    .request-flow .dg-edge.is-accent { stroke: #00cc60; stroke-width: 1.5; }
+    .request-flow .dg-edge.is-dashed { stroke-width: 1; stroke-dasharray: 4 3; }
+    .request-flow .dg-lifeline { fill: none; stroke: rgba(255, 255, 255, 0.28); stroke-width: 1; stroke-dasharray: 3 3; }
+    .request-flow .dg-head { fill: #999696; }
+    .request-flow .dg-head.is-accent { fill: #00cc60; }
+    .request-flow .dg-name { fill: #ffffff; font-size: 14px; font-weight: 600; }
+    .request-flow .dg-sub { fill: #999696; font-size: 12px; }
+    .request-flow .dg-code { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+    .request-flow .dg-msg { fill: #b6b6b6; font-size: 12px; }
+    .request-flow .dg-msg.is-accent { fill: #00cc60; font-weight: 500; }
+    .request-flow .dg-label { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; }
+    .request-flow .dg-label.is-accent { fill: #00cc60; }
+    .request-flow .dg-eyebrow { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; }
+    .request-flow .dg-note { fill: #999696; font-size: 12px; font-style: italic; }
+    .request-flow .is-focal-text { fill: #00cc60; }
+    }
+  </style>
+  <defs>
+    <marker id="request-flow-arrow" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path class="dg-head" d="M0,0 L8,3 L0,6 Z"/>
+    </marker>
+    <marker id="request-flow-arrow-accent" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path class="dg-head is-accent" d="M0,0 L8,3 L0,6 Z"/>
+    </marker>
+  </defs>
+  <rect class="dg-bg" width="720" height="676"/>
+
+  <!-- Zones -->
+  <rect class="dg-zone" x="8" y="80" width="704" height="120" rx="8"/>
+  <rect class="dg-zone" x="8" y="208" width="704" height="120" rx="8"/>
+  <rect class="dg-zone" x="8" y="336" width="704" height="136" rx="8"/>
+  <rect class="dg-zone" x="8" y="480" width="704" height="172" rx="8"/>
+  <rect class="dg-mask is-on-zone" x="20" y="89" width="108" height="14" rx="2"/>
+  <text class="dg-eyebrow" x="24" y="100">1 · AUTHORIZE</text>
+  <rect class="dg-mask is-on-zone" x="20" y="217" width="84" height="14" rx="2"/>
+  <text class="dg-eyebrow" x="24" y="228">2 · INVOKE</text>
+  <rect class="dg-mask is-on-zone" x="20" y="345" width="180" height="14" rx="2"/>
+  <text class="dg-eyebrow" x="24" y="356">3 · WORK IN THE SANDBOX</text>
+  <rect class="dg-mask is-on-zone" x="20" y="489" width="84" height="14" rx="2"/>
+  <text class="dg-eyebrow" x="24" y="500">4 · RESULT</text>
+
+  <!-- Edges (drawn before nodes) -->
+  <line class="dg-lifeline" x1="80" y1="64" x2="80" y2="660"/>
+  <line class="dg-lifeline" x1="220" y1="64" x2="220" y2="660"/>
+  <line class="dg-lifeline" x1="360" y1="64" x2="360" y2="660"/>
+  <line class="dg-lifeline" x1="500" y1="64" x2="500" y2="660"/>
+  <line class="dg-lifeline" x1="640" y1="64" x2="640" y2="660"/>
+  <path class="dg-edge" d="M80,128 H218" marker-end="url(#request-flow-arrow)"/>
+  <path class="dg-edge" d="M220,156 H244 Q252,156 252,164 V168 Q252,176 244,176 H222" marker-end="url(#request-flow-arrow)"/>
+  <path class="dg-edge is-accent" d="M220,256 H358" marker-end="url(#request-flow-arrow-accent)"/>
+  <path class="dg-edge" d="M360,284 H384 Q392,284 392,292 V296 Q392,304 384,304 H362" marker-end="url(#request-flow-arrow)"/>
+  <path class="dg-edge" d="M360,384 H498" marker-end="url(#request-flow-arrow)"/>
+  <path class="dg-edge" d="M500,420 H638" marker-end="url(#request-flow-arrow)"/>
+  <path class="dg-edge is-dashed" d="M500,456 H362" marker-end="url(#request-flow-arrow)"/>
+  <path class="dg-edge" d="M360,528 H638" marker-end="url(#request-flow-arrow)"/>
+  <path class="dg-edge is-dashed" d="M360,564 H82" marker-end="url(#request-flow-arrow)"/>
+  <path class="dg-edge" d="M80,600 H218" marker-end="url(#request-flow-arrow)"/>
+  <path class="dg-edge is-dashed" d="M220,636 H82" marker-end="url(#request-flow-arrow)"/>
+
+  <!-- Edge labels -->
+  <text class="dg-msg" x="150.0" y="117" text-anchor="middle">Message or @mention</text>
+  <text class="dg-msg" x="264" y="170">Check caller</text>
+  <text class="dg-msg is-accent" x="290.0" y="245" text-anchor="middle">Invoke (session id)</text>
+  <text class="dg-msg" x="404" y="298">Load session</text>
+  <text class="dg-msg" x="430.0" y="373" text-anchor="middle">Shell and file ops</text>
+  <text class="dg-msg" x="570.0" y="409" text-anchor="middle">git clone, push</text>
+  <text class="dg-msg" x="430.0" y="445" text-anchor="middle">Output</text>
+  <rect class="dg-mask is-on-zone" x="424" y="506" width="152" height="14" rx="2"/>
+  <text class="dg-msg" x="500.0" y="517" text-anchor="middle">Comment or open a PR</text>
+  <rect class="dg-mask is-on-zone" x="136" y="542" width="168" height="14" rx="2"/>
+  <text class="dg-msg" x="220.0" y="553" text-anchor="middle">Slack: reply in thread</text>
+  <text class="dg-msg" x="150.0" y="589" text-anchor="middle">Portal, CLI: poll</text>
+  <text class="dg-msg" x="150.0" y="625" text-anchor="middle">Final answer</text>
+
+  <!-- Nodes -->
+
+  <rect class="dg-node is-input" x="20" y="16" width="120" height="48" rx="6"/>
+  <text class="dg-name" x="80" y="45" text-anchor="middle">Surface</text>
+
+  <rect class="dg-node" x="160" y="16" width="120" height="48" rx="6"/>
+  <text class="dg-name" x="220" y="45" text-anchor="middle">Ingress</text>
+
+  <rect class="dg-node is-focal" x="300" y="16" width="120" height="48" rx="6"/>
+  <text class="dg-name is-focal-text" x="360" y="45" text-anchor="middle">Agent runtime</text>
+
+  <rect class="dg-node" x="440" y="16" width="120" height="48" rx="6"/>
+  <text class="dg-name" x="500" y="45" text-anchor="middle">Sandbox</text>
+
+  <rect class="dg-node is-input" x="580" y="16" width="120" height="48" rx="6"/>
+  <text class="dg-name" x="640" y="45" text-anchor="middle">GitHub</text>
+</svg>

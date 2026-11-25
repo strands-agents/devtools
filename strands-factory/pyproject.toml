@@ -1,0 +1,149 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "strands-factory"
+version = "0.1.0"
+description = "Strands Factory: an open-source reference architecture for a software factory built on Strands Agents, running locally or on Bedrock AgentCore."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [{ name = "AWS", email = "opensource@amazon.com" }]
+keywords = ["strands", "agent", "bedrock", "agentcore", "llm", "ai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+    "Typing :: Typed",
+]
+dependencies = [
+    # >=1.65: SnapshotSessionManager over ``strands.storage`` with agent-level storage (the context
+    # stash is durable, memory/session.py), and injected context persists as ``injected`` blocks.
+    # >=1.66: offload conditions are ``block_threshold`` / ``context_utilization`` (core/agent.py).
+    # [openai] is what the harness needs for an ``openai/`` or ``bedrock-mantle/`` model string;
+    # [anthropic] runs the default model (the harness builds Bedrock Claude as AnthropicModel).
+    "strands-agents[openai,anthropic]>=1.66.0,<2",
+    # [bedrock] is AsyncAnthropicBedrock's SigV4 signing. 1.7.0 is the first release that raises a
+    # mid-stream Bedrock error (e.g. throttling) as an APIStatusError the SDK maps.
+    "anthropic[bedrock]>=1.7.0,<3",
+    # The base agent (build_agent wraps create_harness; docs/architecture.md). 0.5.0 builds a
+    # bedrock/ Claude string on Anthropic's Bedrock client and matches strands-agents 1.66; capped
+    # below the next minor because pre-1.0 minors break.
+    "strands-harness>=0.5.0,<0.6.0",
+    # Imported directly by strandly code; declared explicitly rather than relied on transitively.
+    "typing_extensions",
+    # GHSA-6q48-6c7w-9gw2: exclude the compromised emSign CA roots.
+    "certifi>=2026.10.19",
+    "pydantic>=2",
+    "tomli; python_version < '3.11'",
+    # Parses use_github GraphQL documents so the write guardrail classifies operations and finds
+    # mutation targets from the syntax tree (tools/github_graphql.py). Pure Python, no dependencies.
+    "graphql-core>=3.2.5,<3.3",
+    # The thin MCP client (`strands-factory login` / `strands-factory serve mcp` delegate to it).
+    # A uv workspace member built as its own wheel (cli/strandly-mcp). The pin names the workspace
+    # release version; the package is not on an index, so install the local wheel alongside.
+    "strandly-mcp==0.1.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/strands-agents/devtools/tree/main/strands-factory"
+Documentation = "https://github.com/strands-agents/devtools/tree/main/strands-factory/docs"
+Repository = "https://github.com/strands-agents/devtools"
+Issues = "https://github.com/strands-agents/devtools/issues"
+
+[project.optional-dependencies]
+deploy = ["aws-cdk-lib>=2.276.0,<3", "constructs>=10.8.1,<11"]
+acp = ["agent-client-protocol==1.0.0", "httpx>=0.27,<1"]
+http = ["starlette", "uvicorn", "sse-starlette"]
+# AgentCore: the runtime app (serve/agentcore_app.py, sandbox_main.py), the sandbox-runtime client
+# and the AgentCore Memory client (memory/long_term.py).
+agentcore = ["bedrock-agentcore>=1.25.3"]
+# `mcp` itself is a core dependency now (via strandly-mcp). strands-agents-mcp-server is the Strands
+# docs MCP, served in-process (mcp_clients.py); its exact pin is the release the runtime runs. `uv` is
+# the local-dev fallback launcher (`uv tool run`) when it is not installed.
+mcp = ["mcp", "strands-agents-mcp-server==0.4.0", "uv>=0.13.4"]
+s3 = ["boto3"]
+# aws-opentelemetry-distro pulls the OTLP exporter + auto-instrumentation and provides the
+# `opentelemetry-instrument` the deployed runtime's entrypoint runs under (emits traces).
+observability = ["aws-opentelemetry-distro"]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff",
+    "mypy>=2.3.0",
+    "starlette",
+    "httpx",
+    # Test the sandbox's WIF helper against supported SDKs; not new runtime dependencies.
+    "openai>=2.45.0",
+    "boto3>=1.43.101",
+    "google-genai>=1.67.0",
+    "google-auth>=2.29.0",
+]
+# Everything: every runtime capability + dev/test deps. `pip install -e ".[all]"` and forget it.
+all = [
+    "strands-factory[http,agentcore,mcp,acp,s3,observability,dev,deploy]",
+]
+
+[project.scripts]
+strands-factory = "strandly.serve.cli.main:main"
+strands-factory-package = "strandly.deployment:main"
+# Aliases kept for existing operators and scripts.
+strandly = "strandly.serve.cli.main:main"
+strandly-package = "strandly.deployment:main"
+
+[tool.uv.workspace]
+members = ["cli/strandly-mcp"]
+
+[tool.uv.sources]
+strandly-mcp = { workspace = true }
+
+[tool.hatch.build]
+dev-mode-dirs = ["harness/src", "cli/src"]
+
+[tool.hatch.build.hooks.custom]
+path = "build.py"
+
+# build.py force-includes every package file; Hatch's own selection adds nothing.
+[tool.hatch.build.targets.sdist]
+include = ["/pyproject.toml"]
+
+[tool.hatch.build.targets.wheel]
+bypass-selection = true
+
+[tool.pytest.ini_options]
+# The thin package's tests run here too (against the workspace install); a separate check installs
+# only the built wheel into a clean venv and runs them there.
+testpaths = ["tests", "cli/strandly-mcp/tests"]
+asyncio_mode = "auto"
+filterwarnings = ["ignore::DeprecationWarning"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["harness/src", "cli/src", "tests", "cli/strandly-mcp/src"]
+# CDK synth output (infra/cdk.out) + the staged poller Lambda wheels (infra/build) are generated
+# Python we don't own.
+extend-exclude = ["cdk.out", "infra/build"]
+
+[tool.ruff.lint]
+# BLE (blind except) + S110 (try/except/pass) enforce the logging rule: a broad `except Exception`
+# needs a `# noqa: BLE001 — <reason>` and must log (`logger.exception` when it swallows the error),
+# never silently `pass`.
+select = ["E", "F", "I", "B", "UP", "BLE", "S110"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+no_implicit_optional = true
+warn_unused_ignores = false
+follow_imports = "silent"
+exclude = ["tests"]

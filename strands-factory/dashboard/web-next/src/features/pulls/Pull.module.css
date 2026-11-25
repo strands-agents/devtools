@@ -1,0 +1,336 @@
+/* PRs feature styles. Diff tints are CSS vars (light defaults, dark overrides) so the renderer reads
+   the same names in both schemes. Mobile first: nothing here has a fixed width > 100%; the diff body
+   is the ONLY horizontally scrolling element, and only when wrap is off. */
+
+.root {
+  --diff-add-bg: rgba(0, 176, 77, 0.12);
+  --diff-del-bg: rgba(220, 38, 38, 0.1);
+  --diff-add-fg: #0a5d2a;
+  --diff-del-fg: #9f1d1d;
+  --diff-hunk-bg: var(--portal-surface-2);
+  --diff-hunk-fg: var(--mantine-color-dimmed);
+  --diff-lineno: var(--mantine-color-gray-6);
+  --diff-active-bg: rgba(0, 0, 0, 0.06);
+  --pull-sticky-h: 44px;
+  --pull-action-h: 56px;
+}
+[data-mantine-color-scheme="dark"] .root {
+  --diff-add-bg: rgba(19, 226, 113, 0.1);
+  --diff-del-bg: rgba(248, 81, 73, 0.12);
+  --diff-add-fg: #7ee787;
+  --diff-del-fg: #ffa198;
+  --diff-lineno: var(--mantine-color-dark-2);
+  --diff-active-bg: rgba(255, 255, 255, 0.06);
+}
+
+/* --- List rows --------------------------------------------------------------------------------- */
+.row {
+  display: block;
+  padding: 12px 14px;
+  border-radius: var(--mantine-radius-lg);
+  background: var(--portal-surface);
+  color: inherit;
+  text-decoration: none;
+  min-height: 44px;
+  transition: background 120ms ease;
+}
+.row:hover {
+  background: var(--portal-surface-2);
+  text-decoration: none;
+}
+.rowTitle {
+  font-weight: 600;
+  font-size: var(--mantine-font-size-md);
+  line-height: 1.3;
+}
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  font-size: var(--mantine-font-size-sm);
+  color: var(--mantine-color-dimmed);
+  min-width: 0;
+}
+.meta > * {
+  min-width: 0;
+}
+.repoRef {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.comments {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* --- CI dot ------------------------------------------------------------------------------------ */
+.dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--mantine-color-gray-5);
+}
+.dotSuccess {
+  background: var(--mantine-color-frog-6);
+}
+.dotFailure {
+  background: var(--mantine-color-red-6);
+}
+.dotPending {
+  background: var(--mantine-color-yellow-5);
+}
+
+/* --- Detail page ------------------------------------------------------------------------------- */
+.page {
+  /* room for the fixed bottom action bar on mobile (bottom nav spacing is handled by AppShell) */
+  padding-bottom: calc(var(--pull-action-h) + var(--mantine-spacing-md));
+}
+.sticky {
+  position: sticky;
+  top: var(--portal-header-h);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: var(--pull-sticky-h);
+  margin: calc(-1 * var(--mantine-spacing-md)) calc(-1 * var(--mantine-spacing-md)) 0;
+  padding: 0 var(--mantine-spacing-md);
+  background: color-mix(in srgb, var(--portal-page) 92%, transparent);
+  backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
+}
+.stickyRef {
+  font-weight: 600;
+  font-size: var(--mantine-font-size-sm);
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.title {
+  font-size: var(--mantine-font-size-lg);
+  font-weight: 650;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.ref {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: var(--mantine-font-size-xs);
+  background: var(--portal-surface-2);
+  padding: 1px 6px;
+  border-radius: var(--mantine-radius-sm);
+  overflow-wrap: anywhere;
+}
+
+/* Timeline entries: tone-separated cards, no borders. */
+.entry {
+  padding: 10px 12px;
+  border-radius: var(--mantine-radius-lg);
+  background: var(--portal-surface);
+}
+.entryHead {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  margin-bottom: 6px;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+}
+
+/* --- Bottom action bar ------------------------------------------------------------------------- */
+.actionBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--pull-action-h);
+  padding: 8px var(--mantine-spacing-md);
+  margin: var(--mantine-spacing-md) calc(-1 * var(--mantine-spacing-md)) calc(-1 * var(--mantine-spacing-md));
+  background: color-mix(in srgb, var(--portal-page) 92%, transparent);
+  backdrop-filter: saturate(160%) blur(10px);
+  -webkit-backdrop-filter: saturate(160%) blur(10px);
+}
+@media (max-width: 48em) {
+  .actionBar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: calc(var(--portal-bottom-nav-h) + var(--safe-bottom));
+    margin: 0;
+  }
+}
+.actionBar > * {
+  min-height: 40px;
+}
+
+/* --- Files ------------------------------------------------------------------------------------- */
+.fileCard {
+  border-radius: var(--mantine-radius-lg);
+  background: var(--portal-surface);
+  /* clip, not hidden: `hidden` makes the card the sticky header's scrollport, which pushed the
+     header `top` px DOWN into the diff once a file was expanded. `clip` still rounds the corners. */
+  overflow: clip;
+}
+.fileHead {
+  position: sticky;
+  top: calc(var(--portal-header-h) + var(--pull-sticky-h));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  background: var(--portal-surface);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  border: 0;
+  font: inherit;
+}
+.fileHead:hover {
+  background: var(--portal-surface-2);
+}
+.filePath {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  color: var(--mantine-color-dimmed);
+}
+.fileBase {
+  font-weight: 650;
+  color: var(--mantine-color-text);
+}
+.stat {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: var(--mantine-font-size-xs);
+}
+.statAdd {
+  color: var(--diff-add-fg);
+}
+.statDel {
+  color: var(--diff-del-fg);
+}
+
+/* --- DiffView ---------------------------------------------------------------------------------- */
+.diff {
+  font-family: var(--mantine-font-family-monospace);
+  font-size: 13px;
+  line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+.diffScroll {
+  overflow-x: auto; /* the one allowed horizontal scroller — only when wrap is off */
+  container-type: inline-size; /* so the inline composer can size to the VISIBLE width (100cqw) */
+}
+.lines {
+  display: block;
+  width: 100%;
+}
+.diffScroll .lines {
+  width: max-content;
+  min-width: 100%;
+}
+.line {
+  display: grid;
+  grid-template-columns: var(--ln-w, 3.2em) var(--ln-w, 3.2em) 1.1em minmax(0, 1fr);
+  align-items: start;
+  min-height: 1.5em;
+}
+.line.clickable {
+  cursor: pointer;
+}
+.line.clickable:hover {
+  box-shadow: inset 3px 0 0 var(--mantine-primary-color-filled);
+}
+.lineAdd {
+  background: var(--diff-add-bg);
+}
+.lineDel {
+  background: var(--diff-del-bg);
+}
+.lineHunk {
+  background: var(--diff-hunk-bg);
+  color: var(--diff-hunk-fg);
+}
+.lineActive {
+  box-shadow: inset 3px 0 0 var(--mantine-primary-color-filled);
+  background: var(--diff-active-bg);
+}
+.ln {
+  text-align: right;
+  padding: 0 6px 0 4px;
+  color: var(--diff-lineno);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  white-space: nowrap;
+}
+.marker {
+  text-align: center;
+  user-select: none;
+  color: var(--mantine-color-dimmed);
+}
+.lineAdd .marker {
+  color: var(--diff-add-fg);
+}
+.lineDel .marker {
+  color: var(--diff-del-fg);
+}
+.text {
+  white-space: pre;
+  padding-right: 10px;
+  tab-size: 4;
+}
+.wrap .text {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.lineHunk .text {
+  white-space: pre-wrap;
+  word-break: break-all;
+  grid-column: 1 / -1;
+  padding: 2px 8px;
+}
+.lineHunk .ln,
+.lineHunk .marker {
+  display: none;
+}
+/* Under ~420px with wrap on, the line numbers cost more than they give — hide them. */
+@media (max-width: 420px) {
+  .wrap .ln {
+    display: none;
+  }
+  .wrap .line {
+    grid-template-columns: 1.1em minmax(0, 1fr);
+  }
+}
+.noPatch {
+  padding: 12px;
+  font-size: var(--mantine-font-size-sm);
+  color: var(--mantine-color-dimmed);
+}
+.inlineComposer {
+  padding: 8px 10px 10px;
+  background: var(--portal-surface-2);
+  max-width: 100%;
+}
+/* In scroll mode the rows are max-content wide; pin the composer to the visible viewport instead. */
+.diffScroll .inlineComposer {
+  position: sticky;
+  left: 0;
+  width: 100cqw;
+}

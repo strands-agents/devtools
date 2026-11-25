@@ -27,6 +27,13 @@ This repo serves as a central location for:
 | [`issue-labeler`](issue-labeler/) | Classify issues using an LLM and apply labels from a configurable allowlist |
 | [`authorization-check`](authorization-check/) | Check user authorization for workflow triggers |
 | [`strands-command`](strands-command/) | Run a Strands agent in GitHub Actions |
+| [`strands-factory/action`](strands-factory/action/) | Run a Strands Factory agent from a workflow, authenticated with the job's GitHub OIDC token |
+
+## Tools
+
+| Tool | Description |
+|------|-------------|
+| [`strands-factory`](strands-factory/) | Reference architecture for a software factory on Strands Agents: an autonomous maintainer agent you deploy to your own AWS account |
 
 ## Documentation
 

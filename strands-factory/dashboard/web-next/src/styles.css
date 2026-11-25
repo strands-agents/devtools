@@ -1,0 +1,98 @@
+/* Global tokens + mobile plumbing. Component styling stays in Mantine props / CSS modules. */
+
+:root {
+  /* Surface tiers — tone, not lines. Light values; dark overrides below. */
+  --portal-page: #f6f6f7;
+  --portal-surface: #ffffff;
+  --portal-surface-2: #eeeef0;
+  --portal-nav: #ffffff;
+  --portal-bottom-nav-h: 60px;
+  --portal-header-h: 52px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+[data-mantine-color-scheme="dark"] {
+  --portal-page: var(--mantine-color-dark-7);
+  --portal-surface: var(--mantine-color-dark-6);
+  --portal-surface-2: var(--mantine-color-dark-5);
+  --portal-nav: var(--mantine-color-dark-8);
+  /* Mantine 9 paints <Code> with dark-6 — the card surface itself — so an inline chip vanished on
+     cards. Keep the Mantine 7 tint (dark-5 here, gray-1 in light) so it reads as a chip. */
+  --code-bg: var(--mantine-color-dark-5);
+}
+
+[data-mantine-color-scheme="light"] {
+  --code-bg: var(--mantine-color-gray-1);
+}
+
+html,
+body {
+  background: var(--portal-page);
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior-y: none; /* no rubber-band over the app shell on mobile */
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+}
+
+/* Mantine's AppShell paints its own background; make it the page tone. */
+.mantine-AppShell-main {
+  background: var(--portal-page);
+}
+
+/* Thin, unobtrusive scrollbars on desktop. */
+@media (pointer: fine) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--mantine-color-default-border) transparent;
+  }
+}
+
+/* Links without underline until hover — fewer lines. */
+a {
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* Small helpers used across features. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Syntax highlighting — highlight.js `hljs-*` scopes, GitHub's light/dark palette picked per Mantine
+   color scheme. Global on purpose: the classes are emitted by rehype-highlight (Markdown code blocks)
+   and by the PR diff tokenizer (features/pulls/highlight.ts), neither of which goes through a CSS
+   Module. Light comments use Primer's darker muted gray: GitHub's #6e7781 is tuned for a white
+   background and falls under 4.5:1 on gray-0. */
+.hljs-comment, .hljs-quote { color: light-dark(#59636e, #8b949e); }
+.hljs-keyword, .hljs-selector-tag, .hljs-doctag,
+.hljs-template-tag, .hljs-type, .hljs-operator {
+  color: light-dark(#cf222e, #ff7b72);
+}
+.hljs-string, .hljs-regexp, .hljs-char.escape_,
+.hljs-meta .hljs-string { color: light-dark(#0a3069, #a5d6ff); }
+.hljs-number, .hljs-literal, .hljs-variable,
+.hljs-template-variable, .hljs-attr, .hljs-attribute,
+.hljs-selector-attr, .hljs-selector-class, .hljs-selector-pseudo,
+.hljs-selector-id, .hljs-property, .hljs-bullet,
+.hljs-symbol, .hljs-meta, .hljs-link {
+  color: light-dark(#0550ae, #79c0ff);
+}
+.hljs-title, .hljs-title.class_, .hljs-title.function_,
+.hljs-section { color: light-dark(#8250df, #d2a8ff); }
+.hljs-built_in, .hljs-params { color: light-dark(#953800, #ffa657); }
+.hljs-name, .hljs-tag { color: light-dark(#116329, #7ee787); }
+.hljs-addition { color: light-dark(#116329, #aff5b4); background: light-dark(#dafbe1, #033a16); }
+.hljs-deletion { color: light-dark(#82071e, #ffdcd7); background: light-dark(#ffebe9, #67060c); }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 600; }

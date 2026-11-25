@@ -1,0 +1,117 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 100%;
+  padding: 0 var(--mantine-spacing-md);
+  padding-top: var(--safe-top);
+  background: var(--portal-nav);
+  border-bottom: none;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+}
+.brand:hover {
+  text-decoration: none;
+}
+.logo {
+  width: 28px;
+  height: 28px;
+  display: block;
+}
+.title {
+  font-weight: 650;
+  font-size: var(--mantine-font-size-md);
+  letter-spacing: -0.01em;
+}
+
+/* --- Desktop rail -------------------------------------------------------------------------- */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: var(--mantine-spacing-sm);
+  background: var(--portal-nav);
+  border-right: none;
+}
+.railItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--mantine-radius-md);
+  color: var(--mantine-color-dimmed);
+  font-size: var(--mantine-font-size-sm);
+  font-weight: 550;
+  text-decoration: none;
+  transition: background 120ms ease, color 120ms ease;
+}
+.railItem:hover {
+  background: var(--portal-surface);
+  color: var(--mantine-color-text);
+  text-decoration: none;
+}
+.railItemActive {
+  background: var(--portal-surface);
+  color: var(--mantine-color-text);
+}
+.railItemActive svg {
+  color: var(--mantine-primary-color-filled);
+}
+
+/* --- Mobile bottom tab bar ------------------------------------------------------------------ */
+.bottomNav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 200;
+  display: grid;
+  /* one column per tab: set inline from NAV.length */
+  height: calc(var(--portal-bottom-nav-h) + var(--safe-bottom));
+  padding-bottom: var(--safe-bottom);
+  background: color-mix(in srgb, var(--portal-nav) 92%, transparent);
+  backdrop-filter: saturate(160%) blur(12px);
+  -webkit-backdrop-filter: saturate(160%) blur(12px);
+}
+.tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: var(--mantine-color-dimmed);
+  font-size: 11px;
+  font-weight: 550;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.tab:hover {
+  text-decoration: none;
+}
+.tabActive {
+  color: var(--mantine-primary-color-filled);
+}
+
+/* Content column — comfortable reading width on desktop, edge-to-edge on mobile. */
+.main {
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+}
+@media (max-width: 48em) {
+  .main {
+    /* leave room for the fixed bottom nav */
+    padding-bottom: calc(var(--portal-bottom-nav-h) + var(--safe-bottom) + var(--mantine-spacing-md));
+  }
+}
+@media (min-width: 48em) {
+  .bottomNav {
+    display: none;
+  }
+}

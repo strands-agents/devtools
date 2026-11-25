@@ -1,0 +1,12 @@
+# Runtime deps of the SANDBOX AgentCore Runtime image (Dockerfile.sandbox).
+#
+# One runtime package: the sandbox serves the AgentCore Runtime HTTP contract
+# and nothing else. No strands, no boto3 client code, no MCP, no model provider — see
+# sandbox_main.py. Every dependency added here is code that runs in the same container as
+# model-authored shell commands, so the bar is "the runtime cannot start without it".
+bedrock-agentcore
+
+# Security floor for the runtime's transitive TLS trust store (GHSA-6q48-6c7w-9gw2).
+certifi>=2026.10.19
+
+# Optional provider WIF SDK dependencies belong in the target test venv; see docs/provider-federation.md.

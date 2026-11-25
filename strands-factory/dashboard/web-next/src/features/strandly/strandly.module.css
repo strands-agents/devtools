@@ -1,0 +1,164 @@
+/* Strandly — sessions list + the immersive chat page. Tone + spacing, no borders. */
+
+/* --- Sessions list -------------------------------------------------------------------------- */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.toolbar > :first-child {
+  flex: 0 0 auto;
+}
+.search {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border-radius: var(--mantine-radius-lg);
+  background: var(--portal-surface);
+  text-align: left;
+  color: inherit;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 120ms ease;
+}
+.row:hover,
+.row:focus-visible {
+  background: var(--portal-surface-2);
+  outline: none;
+}
+.rowBody {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.rowTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.rowTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  font-size: var(--mantine-font-size-sm);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rowSub {
+  font-size: var(--mantine-font-size-sm);
+  color: var(--mantine-color-dimmed);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rowMeta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: var(--mantine-font-size-xs);
+  color: var(--mantine-color-dimmed);
+  font-variant-numeric: tabular-nums;
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.dotRunning {
+  background: var(--mantine-color-blue-5);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--mantine-color-blue-5) 25%, transparent);
+  animation: pulse 1.6s infinite ease-in-out;
+}
+.dotFailed {
+  background: var(--mantine-color-red-6);
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+.chevron {
+  flex: 0 0 auto;
+  opacity: 0.4;
+}
+/* The "open this item's session" row grown from a pasted URL — accent-tinted so it reads as an action. */
+.jump {
+  background: color-mix(in srgb, var(--mantine-primary-color-filled) 12%, var(--portal-surface));
+}
+.jump:hover,
+.jump:focus-visible {
+  background: color-mix(in srgb, var(--mantine-primary-color-filled) 20%, var(--portal-surface));
+}
+.jump .chevron {
+  opacity: 0.8;
+  color: var(--mantine-primary-color-filled);
+}
+
+/* The list clears the FAB on mobile so the last row stays tappable (the shell only pads for the tab bar). */
+@media (max-width: 48em) {
+  .list {
+    padding-bottom: 72px;
+  }
+}
+
+/* Composer-first FAB — mobile only, floats above the fixed bottom tab bar. */
+.fab {
+  position: fixed;
+  right: calc(16px + env(safe-area-inset-right, 0px));
+  bottom: calc(var(--portal-bottom-nav-h) + var(--safe-bottom) + 16px);
+  z-index: 150;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+@media (min-width: 48em) {
+  .fab {
+    display: none;
+  }
+}
+.sheetBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: calc(var(--safe-bottom) + 8px);
+}
+
+/* --- Chat page ------------------------------------------------------------------------------ */
+.page {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--portal-header-h));
+  min-height: calc(100dvh - var(--portal-header-h));
+  min-width: 0;
+  overflow: hidden;
+}
+.chatHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 4px max(10px, env(safe-area-inset-right, 0px)) 4px max(6px, env(safe-area-inset-left, 0px));
+  background: var(--portal-page);
+}
+.chatTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
