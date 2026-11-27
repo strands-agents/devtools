@@ -1,0 +1,33 @@
+/* Shared quick-filter chips (see FilterChips.tsx). */
+.wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+/* Horizontally scrolling rail — no wrap, hidden scrollbar, momentum scrolling on touch. */
+.rail {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding: 2px 0;
+  min-width: 0;
+}
+.rail::-webkit-scrollbar {
+  display: none;
+}
+.rail > * {
+  flex: 0 0 auto;
+}
+/* Mantine Chip sized to a ≥ 40px tap target (mobile rule) while keeping sm text. */
+.chipLabel {
+  height: 40px;
+  line-height: 38px;
+  font-size: var(--mantine-font-size-sm);
+}
+.count {
+  margin-left: 6px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}

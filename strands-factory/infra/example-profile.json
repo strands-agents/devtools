@@ -1,0 +1,29 @@
+{
+  "identity": {
+    "display_name": "Example agent",
+    "github_login": "example-agent",
+    "mention_handle": "example-agent",
+    "managed_repositories": [],
+    "allowed_authors": [],
+    "allowed_orgs": []
+  },
+  "deployment": {
+    "name": "example-agent",
+    "environment": "preview",
+    "account": "111111111111",
+    "region": "us-west-2",
+    "secret_references": {
+      "config": "arn:aws:secretsmanager:us-west-2:111111111111:secret:example/preview/config-AbCdEf"
+    }
+  },
+  "context": {
+    "sandbox_bedrock_grants": "false"
+  },
+  "skill_packs": [],
+  "deployment_extensions": [],
+  "client": {
+    "command": "strandly-example",
+    "portal_url": "https://portal.example.com",
+    "default_org": "example-org"
+  }
+}

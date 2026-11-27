@@ -1,0 +1,5 @@
+# Unified Strandly infrastructure (AWS CDK v2, Python). Isolated from the harness package deps so
+# the harness test/lint gate never installs CDK. `cd infra && pip install -r requirements.txt`.
+aws-cdk-lib>=2.278.0,<3.0.0
+constructs>=10.8.1,<11.0.0
+# Test deps (pytest) live in requirements-dev.txt — not installed by the deploy.

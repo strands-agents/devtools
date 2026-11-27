@@ -1,0 +1,58 @@
+{
+  "description": "Act on GitHub \u2014 GraphQL v4 by default, or REST v3 for what GraphQL can't express.\n\n**GraphQL (default).** Pass ``query_type``/``query``/``variables``. Use it for\nrepository/issue/PR/project data and, with a write-scoped token, mutations (commenting,\nreviewing, labelling, merging).\n\n**REST (set ``rest_path``).** GraphQL genuinely cannot do some things; reach for REST only\nfor those:\n\n- a PR's **patch text** \u2014 ``/repos/{o}/{r}/pulls/{n}/files``, or the PR itself with\n  ``rest_accept=\"application/vnd.github.v3.diff\"`` (GraphQL's ``files`` has paths but no\n  ``patch``)\n- **compare two refs** \u2014 ``/repos/{o}/{r}/compare/{base}...{head}``\n- **code search** \u2014 ``/search/code?q=\u2026`` (GraphQL ``search`` has no CODE type)\n- **Actions** runs / jobs / logs \u2014 ``/repos/{o}/{r}/actions/runs``\n- **recursive tree** \u2014 ``/repos/{o}/{r}/git/trees/{ref}?recursive=1``\n- **raw or binary file bodies** \u2014 ``/repos/{o}/{r}/contents/{path}`` with\n  ``rest_accept=\"application/vnd.github.raw\"`` (a GraphQL blob's ``text`` is null for binary\n  and truncated when large)\n- **gists**, and **collaborators/invitations** (no GraphQL mutation exists)\n\n**For a working tree, prefer git over either.** ``git clone`` / ``fetch`` / ``diff`` / ``log``\n/ ``blame`` in your sandbox is the right way to read code and history at scale \u2014 it's faster,\ngives full context, and needs no API budget. Use REST for diffs when you want the patch\n*without* a clone.\n\nThe same guardrails cover both surfaces: an owner allow-list, node-id \u2192 owner resolution for\nGraphQL mutations, an allow-list of mutation fields whose target must resolve to an allowed\nrepository (strict mode), path/resource allow-listing for REST, and a daily external-write\nthrottle. A blocked call returns ``status=\"error\"`` with the reason \u2014 **do not try to work\naround a guardrail** (in particular, never read a credential out of the sandbox to call the\nAPI directly; that bypasses every check here and the sandbox's own token deliberately cannot\ndo these operations).\n\nReturns:\n    ``{\"status\": \"success\"|\"error\", \"content\": [{\"text\": <formatted result or error>}]}``.",
+  "inputSchema": {
+    "json": {
+      "properties": {
+        "label": {
+          "description": "Short human-readable description of the operation (for logs/approval).",
+          "type": "string"
+        },
+        "query": {
+          "description": "The GraphQL query/mutation string. Ignored when ``rest_path`` is set.",
+          "type": "string"
+        },
+        "query_type": {
+          "description": "\"query\" or \"mutation\". Ignored when ``rest_path`` is set.",
+          "type": "string"
+        },
+        "rest_accept": {
+          "default": "",
+          "description": "Optional ``Accept`` override, e.g.\n``\"application/vnd.github.v3.diff\"`` for a unified diff or\n``\"application/vnd.github.raw\"`` for a raw file body.",
+          "type": "string"
+        },
+        "rest_body": {
+          "default": null,
+          "description": "JSON body for a non-GET REST call.",
+          "type": "object"
+        },
+        "rest_method": {
+          "default": "GET",
+          "description": "REST verb \u2014 GET (default), POST, PATCH, PUT, DELETE.",
+          "type": "string"
+        },
+        "rest_path": {
+          "default": "",
+          "description": "A bare REST v3 path to call instead of GraphQL, e.g.\n``\"/repos/strands-agents/harness-sdk/pulls/42/files\"``. Query strings are allowed.",
+          "type": "string"
+        },
+        "use_pat_token": {
+          "default": false,
+          "description": "Prefer the PAT_TOKEN env var over GITHUB_TOKEN (use sparingly \u2014 a PAT\ncan re-trigger workflows).",
+          "type": "boolean"
+        },
+        "variables": {
+          "default": null,
+          "description": "Optional variables for the query.",
+          "type": "object"
+        }
+      },
+      "required": [
+        "query_type",
+        "query",
+        "label"
+      ],
+      "type": "object"
+    }
+  },
+  "name": "use_github"
+}

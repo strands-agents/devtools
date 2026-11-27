@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-ssr
+*.tsbuildinfo
+*.local
+.env
+.env.*
+!.env.example
+!.env.local.example
+.DS_Store
+
+# Vite dev/build cache — never commit
+.vite/

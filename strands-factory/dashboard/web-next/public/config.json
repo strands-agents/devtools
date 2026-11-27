@@ -1,0 +1,7 @@
+{
+  "dataSource": "mock",
+  "apiBase": "",
+  "cognitoDomain": "",
+  "cognitoClientId": "",
+  "redirectUri": ""
+}

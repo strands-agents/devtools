@@ -1,0 +1,137 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="agent-runtime" viewBox="0 0 720 464" width="720" height="464" role="img" aria-labelledby="agent-runtime-title agent-runtime-desc">
+  <title id="agent-runtime-title">Inside a Strands Factory agent run</title>
+  <desc id="agent-runtime-desc">The agent runtime runs the Strands harness agent loop with its plugins (environment, skills, goal check). The loop calls the model on Amazon Bedrock, delegates to subagents that share the same sandbox, and calls two kinds of tools. File and shell tools (shell, read, write, edit) send commands to the sandbox runtime, an EC2 instance with a persistent workspace volume, which clones and pushes with git. Host tools (use_github, use_slack, schedule, MCP tools) run in the agent runtime and write to GitHub as the bot. The run saves its session snapshot to S3 and its transcript to AgentCore Memory.</desc>
+  <!-- Type: architecture with boundary (left to right). Story: the agent decides and holds the credentials; every command it decides to run crosses into the sandbox, which holds none of them. -->
+  <!-- Standalone styles scoped to this diagram's class: light by default, dark under prefers-color-scheme. Plain selectors (not :where) so non-browser renderers such as librsvg and resvg apply them too. -->
+  <style>
+    .agent-runtime { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    .agent-runtime .dg-bg { fill: #ffffff; }
+    .agent-runtime .dg-zone { fill: #f7f7f7; stroke: rgba(0, 0, 0, 0.16); stroke-width: 1; }
+    .agent-runtime .dg-zone.is-boundary { fill: none; stroke: #666464; stroke-dasharray: 4 4; }
+    .agent-runtime .dg-node { fill: #ffffff; stroke: #3d3c3c; stroke-width: 1; }
+    .agent-runtime .dg-node.is-focal { fill: #e8f3ee; stroke: #007a3d; }
+    .agent-runtime .dg-node.is-input { fill: #f2f2f2; stroke: #666464; }
+    .agent-runtime .dg-node.is-optional { stroke-dasharray: 4 3; }
+    .agent-runtime .dg-mask { fill: #ffffff; }
+    .agent-runtime .dg-mask.is-on-zone { fill: #f7f7f7; }
+    .agent-runtime .dg-edge { fill: none; stroke: #666464; stroke-width: 1.25; }
+    .agent-runtime .dg-edge.is-accent { stroke: #007a3d; stroke-width: 1.5; }
+    .agent-runtime .dg-edge.is-dashed { stroke-width: 1; stroke-dasharray: 4 3; }
+    .agent-runtime .dg-lifeline { fill: none; stroke: rgba(0, 0, 0, 0.28); stroke-width: 1; stroke-dasharray: 3 3; }
+    .agent-runtime .dg-head { fill: #666464; }
+    .agent-runtime .dg-head.is-accent { fill: #007a3d; }
+    .agent-runtime .dg-name { fill: #000000; font-size: 14px; font-weight: 600; }
+    .agent-runtime .dg-sub { fill: #666464; font-size: 12px; }
+    .agent-runtime .dg-code { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+    .agent-runtime .dg-msg { fill: #3d3c3c; font-size: 12px; }
+    .agent-runtime .dg-msg.is-accent { fill: #007a3d; font-weight: 500; }
+    .agent-runtime .dg-label { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; }
+    .agent-runtime .dg-label.is-accent { fill: #007a3d; }
+    .agent-runtime .dg-eyebrow { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; }
+    .agent-runtime .dg-note { fill: #666464; font-size: 12px; font-style: italic; }
+    .agent-runtime .is-focal-text { fill: #007a3d; }
+    @media (prefers-color-scheme: dark) {
+    .agent-runtime .dg-bg { fill: #000000; }
+    .agent-runtime .dg-zone { fill: #080808; stroke: rgba(255, 255, 255, 0.16); stroke-width: 1; }
+    .agent-runtime .dg-zone.is-boundary { fill: none; stroke: #999696; stroke-dasharray: 4 4; }
+    .agent-runtime .dg-node { fill: #000000; stroke: #b6b6b6; stroke-width: 1; }
+    .agent-runtime .dg-node.is-focal { fill: #00120a; stroke: #00cc60; }
+    .agent-runtime .dg-node.is-input { fill: #0d0d0d; stroke: #999696; }
+    .agent-runtime .dg-node.is-optional { stroke-dasharray: 4 3; }
+    .agent-runtime .dg-mask { fill: #000000; }
+    .agent-runtime .dg-mask.is-on-zone { fill: #080808; }
+    .agent-runtime .dg-edge { fill: none; stroke: #999696; stroke-width: 1.25; }
+    .agent-runtime .dg-edge.is-accent { stroke: #00cc60; stroke-width: 1.5; }
+    .agent-runtime .dg-edge.is-dashed { stroke-width: 1; stroke-dasharray: 4 3; }
+    .agent-runtime .dg-lifeline { fill: none; stroke: rgba(255, 255, 255, 0.28); stroke-width: 1; stroke-dasharray: 3 3; }
+    .agent-runtime .dg-head { fill: #999696; }
+    .agent-runtime .dg-head.is-accent { fill: #00cc60; }
+    .agent-runtime .dg-name { fill: #ffffff; font-size: 14px; font-weight: 600; }
+    .agent-runtime .dg-sub { fill: #999696; font-size: 12px; }
+    .agent-runtime .dg-code { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+    .agent-runtime .dg-msg { fill: #b6b6b6; font-size: 12px; }
+    .agent-runtime .dg-msg.is-accent { fill: #00cc60; font-weight: 500; }
+    .agent-runtime .dg-label { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; }
+    .agent-runtime .dg-label.is-accent { fill: #00cc60; }
+    .agent-runtime .dg-eyebrow { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; }
+    .agent-runtime .dg-note { fill: #999696; font-size: 12px; font-style: italic; }
+    .agent-runtime .is-focal-text { fill: #00cc60; }
+    }
+  </style>
+  <defs>
+    <marker id="agent-runtime-arrow" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path class="dg-head" d="M0,0 L8,3 L0,6 Z"/>
+    </marker>
+    <marker id="agent-runtime-arrow-accent" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path class="dg-head is-accent" d="M0,0 L8,3 L0,6 Z"/>
+    </marker>
+  </defs>
+  <rect class="dg-bg" width="720" height="464"/>
+
+  <!-- Zones -->
+  <rect class="dg-zone" x="16" y="16" width="448" height="344" rx="8"/>
+  <rect class="dg-zone is-boundary" x="536" y="152" width="168" height="88" rx="8"/>
+  <text class="dg-eyebrow" x="32" y="36">AGENT RUNTIME · AGENTCORE MICROVM</text>
+  <text class="dg-note" x="704" y="140" text-anchor="end">No secrets or agent token</text>
+
+  <!-- Edges (drawn before nodes) -->
+  <path class="dg-edge" d="M232,100 H262" marker-end="url(#agent-runtime-arrow)"/>
+  <path class="dg-edge" d="M92,144 V194" marker-end="url(#agent-runtime-arrow)"/>
+  <path class="dg-edge" d="M200,144 V188 Q200,196 208,196 H262" marker-end="url(#agent-runtime-arrow)"/>
+  <path class="dg-edge" d="M168,144 V296 Q168,304 176,304 H262" marker-end="url(#agent-runtime-arrow)"/>
+  <path class="dg-edge is-accent" d="M448,196 H534" marker-end="url(#agent-runtime-arrow-accent)"/>
+  <path class="dg-edge" d="M448,304 H534" marker-end="url(#agent-runtime-arrow)"/>
+  <path class="dg-edge" d="M620,240 V278" marker-end="url(#agent-runtime-arrow)"/>
+  <path class="dg-edge is-dashed" d="M132,360 V390" marker-end="url(#agent-runtime-arrow)"/>
+  <path class="dg-edge is-dashed" d="M356,360 V390" marker-end="url(#agent-runtime-arrow)"/>
+
+  <!-- Edge labels -->
+  <rect class="dg-mask" x="468" y="176" width="64" height="12" rx="2"/>
+  <text class="dg-label is-accent" x="500" y="185" text-anchor="middle">COMMANDS</text>
+  <rect class="dg-mask" x="628" y="253" width="32" height="12" rx="2"/>
+  <text class="dg-label" x="644" y="262.5" text-anchor="middle">GIT</text>
+  <rect class="dg-mask" x="140" y="369" width="64" height="12" rx="2"/>
+  <text class="dg-label" x="172" y="378.5" text-anchor="middle">SNAPSHOT</text>
+  <rect class="dg-mask" x="364" y="369" width="76" height="12" rx="2"/>
+  <text class="dg-label" x="402" y="378.5" text-anchor="middle">TRANSCRIPT</text>
+
+  <!-- Nodes -->
+
+  <rect class="dg-node is-focal" x="32" y="56" width="200" height="88" rx="6"/>
+  <text class="dg-name is-focal-text" x="132" y="89" text-anchor="middle">Agent loop</text>
+  <text class="dg-sub" x="132" y="107" text-anchor="middle">Strands harness</text>
+  <text class="dg-code" x="132" y="123" text-anchor="middle">skills, goal check</text>
+
+  <rect class="dg-node" x="264" y="68" width="184" height="64" rx="6"/>
+  <text class="dg-name" x="356" y="97" text-anchor="middle">Model</text>
+  <text class="dg-sub" x="356" y="115" text-anchor="middle">Amazon Bedrock</text>
+
+  <rect class="dg-node" x="32" y="196" width="120" height="72" rx="6"/>
+  <text class="dg-name" x="92" y="221" text-anchor="middle">Subagents</text>
+  <text class="dg-sub" x="92" y="239" text-anchor="middle">same factory,</text>
+  <text class="dg-sub" x="92" y="255" text-anchor="middle">shared sandbox</text>
+
+  <rect class="dg-node" x="264" y="164" width="184" height="64" rx="6"/>
+  <text class="dg-name" x="356" y="193" text-anchor="middle">File and shell tools</text>
+  <text class="dg-code" x="356" y="211" text-anchor="middle">shell, read, write, edit</text>
+
+  <rect class="dg-node" x="264" y="268" width="184" height="72" rx="6"/>
+  <text class="dg-name" x="356" y="293" text-anchor="middle">Host tools</text>
+  <text class="dg-code" x="356" y="311" text-anchor="middle">use_github, use_slack</text>
+  <text class="dg-code" x="356" y="327" text-anchor="middle">schedule, MCP tools</text>
+
+  <text class="dg-name" x="620" y="185" text-anchor="middle">Sandbox runtime</text>
+  <text class="dg-sub" x="620" y="203" text-anchor="middle">EC2 instance</text>
+  <text class="dg-code" x="620" y="219" text-anchor="middle">/mnt/workspace</text>
+
+  <rect class="dg-node is-input" x="536" y="280" width="168" height="48" rx="6"/>
+  <text class="dg-name" x="620" y="309" text-anchor="middle">GitHub</text>
+
+  <rect class="dg-node" x="32" y="392" width="200" height="56" rx="6"/>
+  <text class="dg-name" x="132" y="417" text-anchor="middle">Session snapshot</text>
+  <text class="dg-sub" x="132" y="435" text-anchor="middle">S3, KMS-encrypted</text>
+
+  <rect class="dg-node" x="256" y="392" width="200" height="56" rx="6"/>
+  <text class="dg-name" x="356" y="417" text-anchor="middle">AgentCore Memory</text>
+  <text class="dg-sub" x="356" y="435" text-anchor="middle">transcript, long-term</text>
+</svg>

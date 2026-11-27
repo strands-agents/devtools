@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="schedules-lifecycle" viewBox="0 0 720 584" width="720" height="584" role="img" aria-labelledby="schedules-lifecycle-title schedules-lifecycle-desc">
+  <title id="schedules-lifecycle-title">How a Strands Factory schedule runs</title>
+  <desc id="schedules-lifecycle-desc">A verified requester asks for a job in Slack, GitHub, or portal chat. The agent's schedule tool saves the job in the schedules table, the source of truth, and creates one EventBridge schedule for it. Jobs created from GitHub start paused until a new mention confirms them. When the schedule fires, the scheduled invoker re-reads the job, skips it if it is paused or deleted, and invokes a new agent run in the job's session, which posts its results back to the Slack thread or GitHub issue it came from.</desc>
+  <!-- Type: pipeline in two phases (top to bottom). Story: the table, not the timer, decides whether a job runs; each fire is a new run that continues the job's session. -->
+  <!-- Standalone styles scoped to this diagram's class: light by default, dark under prefers-color-scheme. Plain selectors (not :where) so non-browser renderers such as librsvg and resvg apply them too. -->
+  <style>
+    .schedules-lifecycle { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    .schedules-lifecycle .dg-bg { fill: #ffffff; }
+    .schedules-lifecycle .dg-zone { fill: #f7f7f7; stroke: rgba(0, 0, 0, 0.16); stroke-width: 1; }
+    .schedules-lifecycle .dg-zone.is-boundary { fill: none; stroke: #666464; stroke-dasharray: 4 4; }
+    .schedules-lifecycle .dg-node { fill: #ffffff; stroke: #3d3c3c; stroke-width: 1; }
+    .schedules-lifecycle .dg-node.is-focal { fill: #e8f3ee; stroke: #007a3d; }
+    .schedules-lifecycle .dg-node.is-input { fill: #f2f2f2; stroke: #666464; }
+    .schedules-lifecycle .dg-node.is-optional { stroke-dasharray: 4 3; }
+    .schedules-lifecycle .dg-mask { fill: #ffffff; }
+    .schedules-lifecycle .dg-mask.is-on-zone { fill: #f7f7f7; }
+    .schedules-lifecycle .dg-edge { fill: none; stroke: #666464; stroke-width: 1.25; }
+    .schedules-lifecycle .dg-edge.is-accent { stroke: #007a3d; stroke-width: 1.5; }
+    .schedules-lifecycle .dg-edge.is-dashed { stroke-width: 1; stroke-dasharray: 4 3; }
+    .schedules-lifecycle .dg-lifeline { fill: none; stroke: rgba(0, 0, 0, 0.28); stroke-width: 1; stroke-dasharray: 3 3; }
+    .schedules-lifecycle .dg-head { fill: #666464; }
+    .schedules-lifecycle .dg-head.is-accent { fill: #007a3d; }
+    .schedules-lifecycle .dg-name { fill: #000000; font-size: 14px; font-weight: 600; }
+    .schedules-lifecycle .dg-sub { fill: #666464; font-size: 12px; }
+    .schedules-lifecycle .dg-code { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+    .schedules-lifecycle .dg-msg { fill: #3d3c3c; font-size: 12px; }
+    .schedules-lifecycle .dg-msg.is-accent { fill: #007a3d; font-weight: 500; }
+    .schedules-lifecycle .dg-label { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; }
+    .schedules-lifecycle .dg-label.is-accent { fill: #007a3d; }
+    .schedules-lifecycle .dg-eyebrow { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; }
+    .schedules-lifecycle .dg-note { fill: #666464; font-size: 12px; font-style: italic; }
+    .schedules-lifecycle .is-focal-text { fill: #007a3d; }
+    @media (prefers-color-scheme: dark) {
+    .schedules-lifecycle .dg-bg { fill: #000000; }
+    .schedules-lifecycle .dg-zone { fill: #080808; stroke: rgba(255, 255, 255, 0.16); stroke-width: 1; }
+    .schedules-lifecycle .dg-zone.is-boundary { fill: none; stroke: #999696; stroke-dasharray: 4 4; }
+    .schedules-lifecycle .dg-node { fill: #000000; stroke: #b6b6b6; stroke-width: 1; }
+    .schedules-lifecycle .dg-node.is-focal { fill: #00120a; stroke: #00cc60; }
+    .schedules-lifecycle .dg-node.is-input { fill: #0d0d0d; stroke: #999696; }
+    .schedules-lifecycle .dg-node.is-optional { stroke-dasharray: 4 3; }
+    .schedules-lifecycle .dg-mask { fill: #000000; }
+    .schedules-lifecycle .dg-mask.is-on-zone { fill: #080808; }
+    .schedules-lifecycle .dg-edge { fill: none; stroke: #999696; stroke-width: 1.25; }
+    .schedules-lifecycle .dg-edge.is-accent { stroke: #00cc60; stroke-width: 1.5; }
+    .schedules-lifecycle .dg-edge.is-dashed { stroke-width: 1; stroke-dasharray: 4 3; }
+    .schedules-lifecycle .dg-lifeline { fill: none; stroke: rgba(255, 255, 255, 0.28); stroke-width: 1; stroke-dasharray: 3 3; }
+    .schedules-lifecycle .dg-head { fill: #999696; }
+    .schedules-lifecycle .dg-head.is-accent { fill: #00cc60; }
+    .schedules-lifecycle .dg-name { fill: #ffffff; font-size: 14px; font-weight: 600; }
+    .schedules-lifecycle .dg-sub { fill: #999696; font-size: 12px; }
+    .schedules-lifecycle .dg-code { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+    .schedules-lifecycle .dg-msg { fill: #b6b6b6; font-size: 12px; }
+    .schedules-lifecycle .dg-msg.is-accent { fill: #00cc60; font-weight: 500; }
+    .schedules-lifecycle .dg-label { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; }
+    .schedules-lifecycle .dg-label.is-accent { fill: #00cc60; }
+    .schedules-lifecycle .dg-eyebrow { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; }
+    .schedules-lifecycle .dg-note { fill: #999696; font-size: 12px; font-style: italic; }
+    .schedules-lifecycle .is-focal-text { fill: #00cc60; }
+    }
+  </style>
+  <defs>
+    <marker id="schedules-lifecycle-arrow" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path class="dg-head" d="M0,0 L8,3 L0,6 Z"/>
+    </marker>
+    <marker id="schedules-lifecycle-arrow-accent" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path class="dg-head is-accent" d="M0,0 L8,3 L0,6 Z"/>
+    </marker>
+  </defs>
+  <rect class="dg-bg" width="720" height="584"/>
+
+  <!-- Zones -->
+  <rect class="dg-zone" x="16" y="16" width="688" height="208" rx="8"/>
+  <rect class="dg-zone" x="16" y="240" width="688" height="328" rx="8"/>
+  <text class="dg-eyebrow" x="32" y="36">1 · CREATE</text>
+  <text class="dg-eyebrow" x="32" y="260">2 · FIRE</text>
+  <text class="dg-note" x="304" y="72">Jobs created from GitHub start paused</text>
+  <text class="dg-note" x="304" y="88">until a new mention confirms them.</text>
+  <text class="dg-note" x="568" y="332">Paused or deleted</text>
+  <text class="dg-note" x="568" y="348">jobs don't run.</text>
+
+  <!-- Edges (drawn before nodes) -->
+  <path class="dg-edge" d="M152,104 V134" marker-end="url(#schedules-lifecycle-arrow)"/>
+  <path class="dg-edge" d="M272,168 H430" marker-end="url(#schedules-lifecycle-arrow)"/>
+  <path class="dg-edge" d="M152,200 V278" marker-end="url(#schedules-lifecycle-arrow)"/>
+  <path class="dg-edge" d="M152,344 V374" marker-end="url(#schedules-lifecycle-arrow)"/>
+  <path class="dg-edge is-accent" d="M152,440 V470" marker-end="url(#schedules-lifecycle-arrow-accent)"/>
+  <path class="dg-edge is-dashed" d="M272,408 H544 Q552,408 552,400 V202" marker-end="url(#schedules-lifecycle-arrow)"/>
+  <path class="dg-edge" d="M272,512 H430" marker-end="url(#schedules-lifecycle-arrow)"/>
+
+  <!-- Edge labels -->
+  <rect class="dg-mask is-on-zone" x="160" y="113" width="36" height="12" rx="2"/>
+  <text class="dg-label" x="178" y="122.5" text-anchor="middle">ASKS</text>
+  <rect class="dg-mask is-on-zone" x="315" y="148" width="72" height="12" rx="2"/>
+  <text class="dg-label" x="351" y="157" text-anchor="middle">SAVES JOB</text>
+  <rect class="dg-mask is-on-zone" x="160" y="206" width="56" height="12" rx="2"/>
+  <text class="dg-label" x="188" y="215.5" text-anchor="middle">CREATES</text>
+  <rect class="dg-mask is-on-zone" x="160" y="353" width="44" height="12" rx="2"/>
+  <text class="dg-label" x="182" y="362.5" text-anchor="middle">FIRES</text>
+  <rect class="dg-mask is-on-zone" x="160" y="449" width="56" height="12" rx="2"/>
+  <text class="dg-label is-accent" x="188" y="458.5" text-anchor="middle">INVOKES</text>
+  <rect class="dg-mask is-on-zone" x="560" y="294" width="64" height="12" rx="2"/>
+  <text class="dg-label" x="592" y="303.5" text-anchor="middle">RE-READS</text>
+  <rect class="dg-mask is-on-zone" x="323" y="492" width="56" height="12" rx="2"/>
+  <text class="dg-label" x="351" y="501" text-anchor="middle">RESULTS</text>
+
+  <!-- Nodes -->
+
+  <rect class="dg-node is-input" x="32" y="48" width="240" height="56" rx="6"/>
+  <text class="dg-name" x="152" y="73" text-anchor="middle">Verified requester</text>
+  <text class="dg-sub" x="152" y="91" text-anchor="middle">Slack, GitHub, or portal chat</text>
+
+  <rect class="dg-node" x="32" y="136" width="240" height="64" rx="6"/>
+  <text class="dg-name" x="152" y="165" text-anchor="middle">Agent run</text>
+  <text class="dg-sub" x="152" y="183" text-anchor="middle">its schedule tool</text>
+
+  <rect class="dg-node" x="432" y="136" width="240" height="64" rx="6"/>
+  <text class="dg-name" x="552" y="165" text-anchor="middle">Schedules table</text>
+  <text class="dg-sub" x="552" y="183" text-anchor="middle">DynamoDB, source of truth</text>
+
+  <rect class="dg-node" x="32" y="280" width="240" height="64" rx="6"/>
+  <text class="dg-name" x="152" y="309" text-anchor="middle">EventBridge schedule</text>
+  <text class="dg-sub" x="152" y="327" text-anchor="middle">one per job</text>
+
+  <rect class="dg-node" x="32" y="376" width="240" height="64" rx="6"/>
+  <text class="dg-name" x="152" y="405" text-anchor="middle">Scheduled invoker</text>
+  <text class="dg-sub" x="152" y="423" text-anchor="middle">Lambda, one for every job</text>
+
+  <rect class="dg-node is-focal" x="32" y="472" width="240" height="80" rx="6"/>
+  <text class="dg-name is-focal-text" x="152" y="501" text-anchor="middle">New agent run</text>
+  <text class="dg-sub" x="152" y="519" text-anchor="middle">in the job's session</text>
+  <text class="dg-code" x="152" y="535" text-anchor="middle">daily, single, per-run</text>
+
+  <rect class="dg-node is-input is-optional" x="432" y="480" width="240" height="64" rx="6"/>
+  <text class="dg-name" x="552" y="509" text-anchor="middle">Notify target</text>
+  <text class="dg-sub" x="552" y="527" text-anchor="middle">Slack thread or GitHub issue</text>
+</svg>

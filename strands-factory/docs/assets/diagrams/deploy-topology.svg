@@ -1,0 +1,136 @@
+<svg xmlns="http://www.w3.org/2000/svg" class="deploy-topology" viewBox="0 0 720 568" width="720" height="568" role="img" aria-labelledby="deploy-topology-title deploy-topology-desc">
+  <title id="deploy-topology-title">Strands Factory CDK stacks, in deploy order</title>
+  <desc id="deploy-topology-desc">Strands Factory deploys in three rounds. Round one, strands-factory provision, deploys the Data stack (run ledger, people, dedup tables, the session bucket and its KMS key), the Backend stack (config secret, AgentCore Memory), and the Sandbox stack (VPC, EC2 capacity provider, image, sandbox runtime). Round two, strands-factory deploy, deploys the AgentRuntime stack (the microVM runtime and its execution role). Round three, cdk deploy, adds RuntimeIam (the agent role's grants), Ingress (the GitHub mention poller), Scheduler (jobs table and invoker), Slack (the events API, when configured), Dashboard (portal, Cognito, API), and the Monitoring, Audit, Cost, and WebSearch stacks.</desc>
+  <!-- Type: grouped bands (top to bottom). Story: each round deploys stacks that need the previous round's outputs. -->
+  <!-- Standalone styles scoped to this diagram's class: light by default, dark under prefers-color-scheme. Plain selectors (not :where) so non-browser renderers such as librsvg and resvg apply them too. -->
+  <style>
+    .deploy-topology { font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    .deploy-topology .dg-bg { fill: #ffffff; }
+    .deploy-topology .dg-zone { fill: #f7f7f7; stroke: rgba(0, 0, 0, 0.16); stroke-width: 1; }
+    .deploy-topology .dg-zone.is-boundary { fill: none; stroke: #666464; stroke-dasharray: 4 4; }
+    .deploy-topology .dg-node { fill: #ffffff; stroke: #3d3c3c; stroke-width: 1; }
+    .deploy-topology .dg-node.is-focal { fill: #e8f3ee; stroke: #007a3d; }
+    .deploy-topology .dg-node.is-input { fill: #f2f2f2; stroke: #666464; }
+    .deploy-topology .dg-node.is-optional { stroke-dasharray: 4 3; }
+    .deploy-topology .dg-mask { fill: #ffffff; }
+    .deploy-topology .dg-mask.is-on-zone { fill: #f7f7f7; }
+    .deploy-topology .dg-edge { fill: none; stroke: #666464; stroke-width: 1.25; }
+    .deploy-topology .dg-edge.is-accent { stroke: #007a3d; stroke-width: 1.5; }
+    .deploy-topology .dg-edge.is-dashed { stroke-width: 1; stroke-dasharray: 4 3; }
+    .deploy-topology .dg-lifeline { fill: none; stroke: rgba(0, 0, 0, 0.28); stroke-width: 1; stroke-dasharray: 3 3; }
+    .deploy-topology .dg-head { fill: #666464; }
+    .deploy-topology .dg-head.is-accent { fill: #007a3d; }
+    .deploy-topology .dg-name { fill: #000000; font-size: 14px; font-weight: 600; }
+    .deploy-topology .dg-sub { fill: #666464; font-size: 12px; }
+    .deploy-topology .dg-code { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+    .deploy-topology .dg-msg { fill: #3d3c3c; font-size: 12px; }
+    .deploy-topology .dg-msg.is-accent { fill: #007a3d; font-weight: 500; }
+    .deploy-topology .dg-label { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; }
+    .deploy-topology .dg-label.is-accent { fill: #007a3d; }
+    .deploy-topology .dg-eyebrow { fill: #666464; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; }
+    .deploy-topology .dg-note { fill: #666464; font-size: 12px; font-style: italic; }
+    .deploy-topology .is-focal-text { fill: #007a3d; }
+    @media (prefers-color-scheme: dark) {
+    .deploy-topology .dg-bg { fill: #000000; }
+    .deploy-topology .dg-zone { fill: #080808; stroke: rgba(255, 255, 255, 0.16); stroke-width: 1; }
+    .deploy-topology .dg-zone.is-boundary { fill: none; stroke: #999696; stroke-dasharray: 4 4; }
+    .deploy-topology .dg-node { fill: #000000; stroke: #b6b6b6; stroke-width: 1; }
+    .deploy-topology .dg-node.is-focal { fill: #00120a; stroke: #00cc60; }
+    .deploy-topology .dg-node.is-input { fill: #0d0d0d; stroke: #999696; }
+    .deploy-topology .dg-node.is-optional { stroke-dasharray: 4 3; }
+    .deploy-topology .dg-mask { fill: #000000; }
+    .deploy-topology .dg-mask.is-on-zone { fill: #080808; }
+    .deploy-topology .dg-edge { fill: none; stroke: #999696; stroke-width: 1.25; }
+    .deploy-topology .dg-edge.is-accent { stroke: #00cc60; stroke-width: 1.5; }
+    .deploy-topology .dg-edge.is-dashed { stroke-width: 1; stroke-dasharray: 4 3; }
+    .deploy-topology .dg-lifeline { fill: none; stroke: rgba(255, 255, 255, 0.28); stroke-width: 1; stroke-dasharray: 3 3; }
+    .deploy-topology .dg-head { fill: #999696; }
+    .deploy-topology .dg-head.is-accent { fill: #00cc60; }
+    .deploy-topology .dg-name { fill: #ffffff; font-size: 14px; font-weight: 600; }
+    .deploy-topology .dg-sub { fill: #999696; font-size: 12px; }
+    .deploy-topology .dg-code { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+    .deploy-topology .dg-msg { fill: #b6b6b6; font-size: 12px; }
+    .deploy-topology .dg-msg.is-accent { fill: #00cc60; font-weight: 500; }
+    .deploy-topology .dg-label { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; letter-spacing: 0.06em; }
+    .deploy-topology .dg-label.is-accent { fill: #00cc60; }
+    .deploy-topology .dg-eyebrow { fill: #999696; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; font-weight: 500; letter-spacing: 0.12em; }
+    .deploy-topology .dg-note { fill: #999696; font-size: 12px; font-style: italic; }
+    .deploy-topology .is-focal-text { fill: #00cc60; }
+    }
+  </style>
+  <defs>
+    <marker id="deploy-topology-arrow" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path class="dg-head" d="M0,0 L8,3 L0,6 Z"/>
+    </marker>
+    <marker id="deploy-topology-arrow-accent" viewBox="0 0 8 6" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto" markerUnits="userSpaceOnUse">
+      <path class="dg-head is-accent" d="M0,0 L8,3 L0,6 Z"/>
+    </marker>
+  </defs>
+  <rect class="dg-bg" width="720" height="568"/>
+
+  <!-- Zones -->
+  <rect class="dg-zone" x="16" y="16" width="688" height="124" rx="8"/>
+  <rect class="dg-zone" x="16" y="180" width="688" height="124" rx="8"/>
+  <rect class="dg-zone" x="16" y="344" width="688" height="176" rx="8"/>
+  <text class="dg-eyebrow" x="32" y="36">ROUND 1</text>
+  <text class="dg-code" x="100" y="36">strands-factory provision</text>
+  <text class="dg-eyebrow" x="32" y="200">ROUND 2</text>
+  <text class="dg-code" x="100" y="200">strands-factory deploy</text>
+  <text class="dg-eyebrow" x="32" y="364">ROUND 3</text>
+  <text class="dg-code" x="100" y="364">cdk deploy</text>
+  <text class="dg-note" x="488" y="472">Plus the Monitoring, Audit,</text>
+  <text class="dg-note" x="488" y="488">Cost, and WebSearch stacks</text>
+  <text class="dg-note" x="360" y="548" text-anchor="middle">Each round passes its outputs to the next as CDK context, not cross-stack imports.</text>
+
+  <!-- Edges (drawn before nodes) -->
+  <path class="dg-edge" d="M360,140 V178" marker-end="url(#deploy-topology-arrow)"/>
+  <path class="dg-edge is-accent" d="M360,304 V342" marker-end="url(#deploy-topology-arrow-accent)"/>
+
+  <!-- Edge labels -->
+  <rect class="dg-mask" x="368" y="153" width="104" height="12" rx="2"/>
+  <text class="dg-label" x="420" y="162.5" text-anchor="middle">IDS AS CONTEXT</text>
+  <rect class="dg-mask" x="368" y="317" width="84" height="12" rx="2"/>
+  <text class="dg-label is-accent" x="410" y="326.5" text-anchor="middle">RUNTIME ARN</text>
+
+  <!-- Nodes -->
+
+  <rect class="dg-node" x="32" y="52" width="208" height="72" rx="6"/>
+  <text class="dg-name" x="136" y="77" text-anchor="middle">Data</text>
+  <text class="dg-sub" x="136" y="95" text-anchor="middle">run ledger, people, dedup</text>
+  <text class="dg-sub" x="136" y="111" text-anchor="middle">session bucket, KMS key</text>
+
+  <rect class="dg-node" x="256" y="52" width="208" height="72" rx="6"/>
+  <text class="dg-name" x="360" y="77" text-anchor="middle">Backend</text>
+  <text class="dg-sub" x="360" y="95" text-anchor="middle">config secret</text>
+  <text class="dg-sub" x="360" y="111" text-anchor="middle">AgentCore Memory</text>
+
+  <rect class="dg-node" x="480" y="52" width="208" height="72" rx="6"/>
+  <text class="dg-name" x="584" y="77" text-anchor="middle">Sandbox</text>
+  <text class="dg-sub" x="584" y="95" text-anchor="middle">VPC, EC2 capacity provider</text>
+  <text class="dg-sub" x="584" y="111" text-anchor="middle">image, sandbox runtime</text>
+
+  <rect class="dg-node is-focal" x="256" y="216" width="208" height="72" rx="6"/>
+  <text class="dg-name is-focal-text" x="360" y="241" text-anchor="middle">AgentRuntime</text>
+  <text class="dg-sub" x="360" y="259" text-anchor="middle">agent runtime on a microVM</text>
+  <text class="dg-sub" x="360" y="275" text-anchor="middle">execution role</text>
+
+  <rect class="dg-node" x="32" y="380" width="208" height="56" rx="6"/>
+  <text class="dg-name" x="136" y="405" text-anchor="middle">RuntimeIam</text>
+  <text class="dg-sub" x="136" y="423" text-anchor="middle">the agent role's grants</text>
+
+  <rect class="dg-node" x="256" y="380" width="208" height="56" rx="6"/>
+  <text class="dg-name" x="360" y="405" text-anchor="middle">Ingress</text>
+  <text class="dg-sub" x="360" y="423" text-anchor="middle">GitHub mention poller</text>
+
+  <rect class="dg-node" x="480" y="380" width="208" height="56" rx="6"/>
+  <text class="dg-name" x="584" y="405" text-anchor="middle">Scheduler</text>
+  <text class="dg-sub" x="584" y="423" text-anchor="middle">jobs table, invoker</text>
+
+  <rect class="dg-node is-optional" x="32" y="448" width="208" height="56" rx="6"/>
+  <text class="dg-name" x="136" y="473" text-anchor="middle">Slack</text>
+  <text class="dg-sub" x="136" y="491" text-anchor="middle">events API, if configured</text>
+
+  <rect class="dg-node" x="256" y="448" width="208" height="56" rx="6"/>
+  <text class="dg-name" x="360" y="473" text-anchor="middle">Dashboard</text>
+  <text class="dg-sub" x="360" y="491" text-anchor="middle">portal, Cognito, API</text>
+</svg>

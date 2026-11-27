@@ -1,0 +1,31 @@
+.label {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: var(--mantine-radius-sm);
+  font-weight: 600;
+  font-size: var(--mantine-font-size-sm);
+}
+
+.text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pencil {
+  flex: 0 0 auto;
+  opacity: 0.45;
+}
+
+.label:hover .pencil,
+.label:focus-visible .pencil {
+  opacity: 0.9;
+}
+
+.input {
+  flex: 1 1 auto;
+  min-width: 0;
+}

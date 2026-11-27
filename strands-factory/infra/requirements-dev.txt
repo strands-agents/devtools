@@ -1,0 +1,5 @@
+# Test/dev requirements for the CDK app: `cd infra && pip install -r requirements-dev.txt`.
+# Kept separate from requirements.txt, which deploys install beside the harness, so test-only deps
+# never perturb its resolution.
+-r requirements.txt
+pytest>=9.2.0
