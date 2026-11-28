@@ -95,6 +95,11 @@ def test_extract_events_keeps_unparseable_timestamp_failopen():
     assert audit.extract_repos_from_events(events, since=NOW) == {"evil/x"}
 
 
+def test_extract_events_audits_a_fork_against_its_source_repo():
+    events = [{"type": "ForkEvent", "repo": {"name": "evil/x"}, "created_at": "2026-06-27T11:00:00Z"}]
+    assert audit.extract_repos_from_events(events, since=NOW.replace(hour=0)) == {"evil/x"}
+
+
 @pytest.mark.parametrize("events", [None, "x", 7, [{"type": "PushEvent"}], [{"repo": {}}]])
 def test_extract_events_defensive(events):
     assert audit.extract_repos_from_events(events, since=NOW) == set()

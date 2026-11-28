@@ -67,7 +67,7 @@ The snapshot holds what the context manager kept: old turns are summarized, and 
 Strands Factory reduces privilege at each hop. It does not make prompt injection impossible. Review who can invoke a deployment and which repositories it may write to before you give it a write token.
 
 - **Who may call** is decided outside the agent. The ingress Lambdas, the dashboard API among them, hold the only read grant on the people directory (`dynamodb:Query` on its indexes), and the table's name is not in the agent's config. The dashboard API uses it only to find the caller's person ([Portal and CLI users](security.md#portal-and-cli-users)). Nothing the model runs can read or edit the allow-lists.
-- **Where it may write** is the managed repositories list, enforced per call in `use_github`: a REST write by its path, a GraphQL write only through a listed mutation whose target resolves to a managed repository, and an unresolved target is refused. Every write is attributed to the bot account.
+- **Where it may write** is the managed repositories list, enforced per call in `use_github`: a REST write by its path, a GraphQL write only through a listed mutation whose target resolves to a managed repository, and an unresolved target is refused. Every write is attributed to the bot account. A fork of a managed repository lands only in the bot account.
 - **What runs commands** is the sandbox, whose role has no secret, session, ledger, or memory permissions and no copy of the agent's GitHub token.
 - **What it can tell Slack** is limited to the thread that started the run.
 - **What happened** is checked by an independent audit job that asks GitHub what the bot's account did and alarms on writes outside the allowed owners.

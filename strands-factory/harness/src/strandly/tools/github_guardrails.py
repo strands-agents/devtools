@@ -629,9 +629,17 @@ _REST_REPO_FAMILIES = frozenset(
     {
         "pulls", "compare", "contents", "git", "actions", "commits", "issues", "releases",
         "branches", "labels", "milestones", "collaborators", "invitations", "check-runs",
-        "check-suites", "languages", "topics", "tags", "readme",
+        "check-suites", "languages", "topics", "tags", "readme", "forks",
     }
 )
+
+
+# A fork always lands in the token's own account: ``organization`` would redirect it to an org
+# the owner allow-list never checked, so only these body keys are accepted.
+_REST_FORK_BODY_KEYS = frozenset({"name", "default_branch_only"})
+
+
+_REPO_NAME_PATTERN = re.compile(r"^[A-Za-z0-9._-]{1,100}$")
 
 
 _REST_ACCOUNT_FAMILIES = frozenset(
@@ -674,6 +682,8 @@ def parse_rest_path(path: str) -> tuple[str | None, str]:
         if family not in _REST_REPO_FAMILIES:
             allowed = ", ".join(sorted(_REST_REPO_FAMILIES))
             raise ValueError(f"resource '{family}' is not in the allowed set ({allowed})")
+        if family == "forks" and len(segments) != 4:
+            raise ValueError("only /repos/{owner}/{repo}/forks itself is allowed under 'forks'")
         return f"{owner}/{repo}", family
 
     family = segments[0]
@@ -688,6 +698,7 @@ def validate_rest_path(
     method: str,
     *,
     allowed_owners: set[str],
+    body: dict[str, Any] | None = None,
 ) -> tuple[str | None, str | None]:
     """Guardrail a REST call. Returns ``(error, target)`` — ``error`` non-None means blocked.
 
@@ -710,6 +721,11 @@ def validate_rest_path(
     if verb not in {"GET", "POST", "PATCH", "PUT", "DELETE"}:
         return f"Blocked: method '{verb}' is not supported.", None
 
+    if family == "forks":
+        fork_error = _check_fork_request(path, verb, body)
+        if fork_error:
+            return fork_error, None
+
     if target is None:
         if verb != "GET" and family not in _REST_ACCOUNT_WRITABLE:
             return (
@@ -725,3 +741,35 @@ def validate_rest_path(
             f"Blocked: target '{target}' is not in the allowed list ({allowed_str})."
         ), None
     return None, target
+
+
+def _check_fork_request(path: str, verb: str, body: dict[str, Any] | None) -> str | None:
+    """Confine ``/repos/{owner}/{repo}/forks`` to listing forks and forking into the own account."""
+    if verb == "GET":
+        return None
+    if verb != "POST":
+        return f"Blocked: {verb} on 'forks' is not allowed; only GET and POST are."
+    # Fork options go only in the checked body, never in a query string.
+    if "?" in path or "#" in path:
+        return "Blocked: a fork request takes its options in rest_body, not a query string."
+    if body is None:
+        return None
+    if not isinstance(body, dict):
+        return "Blocked: a fork request body must be a JSON object."
+    if "organization" in body:
+        return (
+            "Blocked: a fork always goes to the bot's own account; 'organization' is not allowed."
+        )
+    unknown = sorted(set(body) - _REST_FORK_BODY_KEYS)
+    if unknown:
+        allowed = ", ".join(sorted(_REST_FORK_BODY_KEYS))
+        return f"Blocked: fork body field(s) {', '.join(unknown)} not allowed ({allowed})."
+    name = body.get("name")
+    if name is not None and (
+        not isinstance(name, str) or not _REPO_NAME_PATTERN.match(name) or name in {".", ".."}
+    ):
+        return f"Blocked: fork name {name!r} is not a valid repository name."
+    only = body.get("default_branch_only")
+    if only is not None and not isinstance(only, bool):
+        return "Blocked: fork 'default_branch_only' must be true or false."
+    return None
