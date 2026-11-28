@@ -321,3 +321,160 @@ def test_tool_dispatches_through_moved_http_client(monkeypatch, rest):
         assert request.method == "POST"
         assert request.full_url == "https://api.github.com/graphql"
         assert json.loads(request.data) == {"query": "query { viewer { login } }", "variables": {}}
+
+
+_FORK_ALLOWED = {"example-org", "partner-org/agent-*"}
+
+
+def test_parse_rest_path_admits_only_the_forks_collection():
+    assert guardrails.parse_rest_path("/repos/o/r/forks") == ("o/r", "forks")
+    assert guardrails.parse_rest_path("/repos/o/r/forks?per_page=5") == ("o/r", "forks")
+    with pytest.raises(ValueError, match="only /repos"):
+        guardrails.parse_rest_path("/repos/o/r/forks/extra")
+
+
+@pytest.mark.parametrize(
+    ("path", "target"),
+    [("/repos/example-org/tool/forks", "example-org/tool"),
+     ("/repos/partner-org/agent-kit/forks", "partner-org/agent-kit")],
+)
+def test_rest_fork_of_an_allowed_repo_passes(path, target):
+    for body in (None, {}, {"name": "tool-fork", "default_branch_only": True}):
+        err, got = guardrails.validate_rest_path(
+            path, "POST", allowed_owners=_FORK_ALLOWED, body=body
+        )
+        assert err is None and got == target
+
+
+def test_rest_fork_listing_is_a_read():
+    err, target = guardrails.validate_rest_path(
+        "/repos/example-org/tool/forks?sort=newest", "GET", allowed_owners=_FORK_ALLOWED
+    )
+    assert err is None and target == "example-org/tool"
+
+
+@pytest.mark.parametrize("path", ["/repos/other-org/tool/forks", "/repos/partner-org/x/forks"])
+def test_rest_fork_of_a_disallowed_repo_blocked(path):
+    err, _ = guardrails.validate_rest_path(path, "POST", allowed_owners=_FORK_ALLOWED)
+    assert err is not None and "not in the allowed list" in err
+
+
+def test_rest_fork_without_a_policy_blocked():
+    err, _ = guardrails.validate_rest_path(
+        "/repos/example-org/tool/forks", "POST", allowed_owners=set()
+    )
+    assert err is not None and "no repository access policy" in err
+
+
+@pytest.mark.parametrize("verb", ["PUT", "PATCH", "DELETE"])
+def test_rest_fork_other_verbs_blocked(verb):
+    err, _ = guardrails.validate_rest_path(
+        "/repos/example-org/tool/forks", verb, allowed_owners=_FORK_ALLOWED
+    )
+    assert err is not None and "only GET and POST" in err
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_rest_fork_sub_paths_blocked(method):
+    err, _ = guardrails.validate_rest_path(
+        "/repos/example-org/tool/forks/anything", method, allowed_owners=_FORK_ALLOWED
+    )
+    assert err is not None and "only /repos" in err
+
+
+@pytest.mark.parametrize(
+    ("body", "reason"),
+    [
+        ({"organization": "other-org"}, "own account"),
+        ({"organization": "example-org", "name": "x"}, "own account"),
+        ({"owner": "other-org"}, "not allowed"),
+        ({"name": "bad/name"}, "not a valid repository name"),
+        ({"name": ".."}, "not a valid repository name"),
+        ({"name": ""}, "not a valid repository name"),
+        ({"name": 7}, "not a valid repository name"),
+        ({"default_branch_only": "yes"}, "true or false"),
+    ],
+)
+def test_rest_fork_body_confined_to_own_account(body, reason):
+    err, _ = guardrails.validate_rest_path(
+        "/repos/example-org/tool/forks", "POST", allowed_owners=_FORK_ALLOWED, body=body
+    )
+    assert err is not None and reason in err
+
+
+def test_rest_fork_options_in_a_query_string_blocked():
+    err, _ = guardrails.validate_rest_path(
+        "/repos/example-org/tool/forks?organization=other-org", "POST",
+        allowed_owners=_FORK_ALLOWED,
+    )
+    assert err is not None and "not a query string" in err
+
+
+def _fork_settings(**overrides):
+    return GitHubSettings(
+        token="ghp_x",
+        allowed_owners=tuple(sorted(_FORK_ALLOWED)),
+        internal_owners=("example-org",),
+        throttle_enabled=True,
+        throttle_limit=3,
+        **overrides,
+    )
+
+
+def _fork(path, body=None):
+    return gh._rest_branch(
+        gh=_fork_settings(),
+        allowed_owners=set(_FORK_ALLOWED),
+        path=path,
+        method="POST",
+        body=body,
+        accept="",
+        use_pat_token=False,
+    )
+
+
+def test_rest_fork_with_organization_blocked_before_throttle_or_network(monkeypatch):
+    def _never(*a, **k):
+        raise AssertionError("a refused fork reached the throttle or the network")
+
+    monkeypatch.setattr(gh, "_rest_call", _never)
+    monkeypatch.setattr(guardrails, "count_external_writes", _never)
+    guardrails.invalidate_throttle_cache()
+    out = _fork("/repos/partner-org/agent-kit/forks", {"organization": "other-org"})
+    assert out["status"] == "error" and "own account" in out["content"][0]["text"]
+
+
+def test_rest_fork_of_an_external_repo_is_throttled(monkeypatch):
+    def _no_network(*a, **k):
+        raise AssertionError("network reached past an exhausted throttle")
+
+    monkeypatch.setattr(gh, "_rest_call", _no_network)
+    monkeypatch.setattr(guardrails, "count_external_writes", lambda **k: 3)
+    guardrails.invalidate_throttle_cache()
+    try:
+        out = _fork("/repos/partner-org/agent-kit/forks")
+    finally:
+        guardrails.invalidate_throttle_cache()
+    assert out["status"] == "error" and "SAFETY GUARDRAIL" in out["content"][0]["text"]
+
+
+def test_rest_fork_goes_out_with_its_checked_body(monkeypatch):
+    sent = {}
+
+    def _call(verb, path, token, *, body=None, accept=""):
+        sent.update(verb=verb, path=path, body=body)
+        return {"full_name": "agent-bot/agent-kit"}
+
+    monkeypatch.setattr(gh, "_rest_call", _call)
+    monkeypatch.setattr(guardrails, "count_external_writes", lambda **k: 0)
+    guardrails.invalidate_throttle_cache()
+    try:
+        out = _fork("/repos/partner-org/agent-kit/forks", {"default_branch_only": True})
+    finally:
+        guardrails.invalidate_throttle_cache()
+    assert out["status"] == "success"
+    assert sent == {
+        "verb": "POST",
+        "path": "/repos/partner-org/agent-kit/forks",
+        "body": {"default_branch_only": True},
+    }

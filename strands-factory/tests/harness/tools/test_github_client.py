@@ -267,3 +267,12 @@ def test_anonymous_request_sends_no_authorization(monkeypatch):
     seen = _capture_request(monkeypatch)
     client._request("GET", "https://api.github.com/repos/o/r", None)
     assert seen[0].get_header("Authorization") is None
+
+
+def test_count_external_writes_counts_a_fork_of_an_external_repo(monkeypatch):
+    page1 = [
+        {"type": "ForkEvent", "repo": {"name": "external-org/x"}, "created_at": _ts(5)},
+        {"type": "ForkEvent", "repo": {"name": "example-org/sdk"}, "created_at": _ts(5)},
+    ]
+    _throttle_paged(monkeypatch, {1: page1})
+    assert client.count_external_writes(internal_owners={"example-org"}, token="t") == 1

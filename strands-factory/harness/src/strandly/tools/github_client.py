@@ -198,7 +198,7 @@ def resolve_self_login(token: str | None) -> str | None:
 _THROTTLED_EVENT_TYPES = {
     "IssueCommentEvent", "PullRequestReviewEvent", "PullRequestReviewCommentEvent",
     "IssuesEvent", "PullRequestEvent", "CommitCommentEvent", "CreateEvent",
-    "DeleteEvent", "PushEvent", "DiscussionEvent",
+    "DeleteEvent", "PushEvent", "DiscussionEvent", "ForkEvent",
 }
 
 

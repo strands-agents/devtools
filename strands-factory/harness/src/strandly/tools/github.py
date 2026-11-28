@@ -79,7 +79,9 @@ def _rest_branch(
 
     verb = (method or "GET").upper()
     # Guardrails 1–3 equivalent: path shape + resource allow-list + owner from the path.
-    path_error, target = validate_rest_path(path, verb, allowed_owners=allowed_owners)
+    path_error, target = validate_rest_path(
+        path, verb, allowed_owners=allowed_owners, body=body
+    )
     if path_error:
         return _result("error", f"🛑 {path_error}")
 
@@ -147,6 +149,9 @@ def make_use_github(gh: GitHubSettings) -> Any:
           ``rest_accept="application/vnd.github.raw"`` (a GraphQL blob's ``text`` is null for binary
           and truncated when large)
         - **gists**, and **collaborators/invitations** (no GraphQL mutation exists)
+        - **fork** a repository — ``POST /repos/{o}/{r}/forks``, optionally with ``rest_body``
+          ``name`` and ``default_branch_only``. The fork always lands in your own account
+          (``organization`` is refused), and it counts as a write on the source repository
 
         **For a working tree, prefer git over either.** ``git clone`` / ``fetch`` / ``diff`` / ``log``
         / ``blame`` in your sandbox is the right way to read code and history at scale — it's faster,

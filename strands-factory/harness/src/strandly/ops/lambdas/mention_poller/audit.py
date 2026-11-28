@@ -31,8 +31,8 @@ _USER_AGENT = "strandly-write-audit/1.0"
 
 # Public-events feed types that represent a *write* by the account. Mirrors
 # ``tools/github_client.py::_THROTTLED_EVENT_TYPES``; a parity test pins them. These are the
-# comment/push/branch actions ``contributionsCollection`` either omits (plain comments) or we want a
-# second independent source for. ``DiscussionEvent`` covers only discussion creation; discussion
+# comment/push/branch/fork actions ``contributionsCollection`` either omits (plain comments, forks)
+# or we want a second independent source for. ``DiscussionEvent`` covers only discussion creation; discussion
 # comments come from the viewer's discussion connections in the contributions query.
 WRITE_EVENT_TYPES = frozenset(
     {
@@ -46,6 +46,7 @@ WRITE_EVENT_TYPES = frozenset(
         "DeleteEvent",
         "PushEvent",
         "DiscussionEvent",
+        "ForkEvent",
     }
 )
 
